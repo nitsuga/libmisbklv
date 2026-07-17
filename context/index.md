@@ -18,6 +18,12 @@ Read [`CONVENTIONS.md`](./CONVENTIONS.md) before ingesting or editing.
 
 _(`type: Standard Reference` — per-MISB-standard synthesis, citing the immutable PDFs in `../references/`.)_
 
+* [ST 0107.5](./st0107.md) — KLV core mechanics (the keystone; restates paywalled SMPTE 336).
+* [ST 1201.5](./st1201.md) — IMAPA/IMAPB float↔int mapping + special values.
+* [ST 0601.19](./st0601.md) — UAS Datalink Local Set (~143 items); the core FMV metadata.
+* [ST 0903.6](./st0903.md) — VMTI metadata; nests under 0601.
+* [ST 0604.6](./st0604.md) — Precision/Nano/commercial timestamps in the video ES (SEI/user_data).
+
 ## Encoding Rules
 
 _(`type: Encoding Rule` — KLV mechanics: BER-OID tags, BER length, value encoding, ZLI/Report-on-Change.)_
