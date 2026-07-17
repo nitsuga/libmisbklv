@@ -1,0 +1,514 @@
+                                                                          MISB ST 0604.6
+
+ STANDARD
+
+ Timestamps for Class 1/Class 2 Motion Imagery                             5 October 2017
+
+1 Scope
+The MISP mandates that a timestamp based on Absolute Time be inserted into Class 0/1/2
+Motion Imagery. This standard provides guidance and specifies requirements for inserting a
+Precision Time Stamp into H.262/MPEG-2, H.264/AVC and H.265/HEVC Class 1 and Class 2
+Motion Imagery (compressed imagery). This standard also provides guidance and specific
+requirements for inserting a Nano Precision Time Stamp into H.265/HEVC Class 1 and Class 2
+Motion Imagery.
+These compression standards, approved by the MISP for use in Class1/Class 2 Motion Imagery,
+allocate user-defined data fields. This standard specifies the format, encoding and mapping of
+timestamp information into these user-defined data fields.
+Finally, this standard provides guidance for inserting an optional Commercial Time Stamp in
+reserved fields as identified in the respective compression standard.
+This standard does not address timestamp information within Class 2 Motion Imagery
+JPEG2000.
+
+2 References
+[1] MISB ST 0603.5 MISP Time System and Timestamps, Oct 2017.
+[2] ITU-Rec H.262 Information technology - Generic coding of moving pictures and associated
+    audio information: Video, 2012 Feb.
+[3] ISO/IEC 13818-2:2013 Information Technology - Generic coding of moving pictures and
+    associated audio information: Video.
+[4] ITU-T Rec. H.264 Advanced video coding for generic audiovisual, Oct 2016.
+[5] ISO/IEC 14496-10:2014 Information Technology - Coding of audio-visual objects - Part 10:
+    Advanced Video Coding.
+[6] ITU-T H.265 SERIES H: AUDIOVISUAL AND MULTIMEDIA SYSTEMS - High
+    efficiency video coding.
+[7] ISO/IEC 23008-2:2017 Information Technology - High efficiency coding and media
+    delivery in heterogeneous environments - Part 2: High efficiency video coding.
+[8] SMPTE EG 40:2016 Conversion of Time Values between SMPTE 12-1 Time Code, MPEG-
+    2 PCR Time Base and Absolute Time, 2016.
+[9] MISB ST 0605.8 Class 0 Motion Imagery, Metadata and Audio over SDI, Oct 2017.
+
+
+5 October 2017                 Motion Imagery Standards Board                                    1
+                   ST 0604.6 Timestamps for Class 1/Class 2 Motion Imagery
+
+
+
+3 Revision History
+
+ Revision        Date                            Summary of Changes
+  0604.6    10/05/2017     •   Revised to include the Nano Precision Time Stamp for H.265;
+                               defines a second UUID for H.265 to signal the Nano Precision
+                               Time Stamp
+                           •   Nomenclature change: Precision Time Stamp Status to Time
+                               Status to agree with ST 0603 revisions
+                           •   Reordered for clarity
+                           •   Deprecated REQ -03; Replaced with REQ -21
+                           •   Deprecated REQ’s -13 and -14; Replaced with REQ’s -22 and -23
+                           •   Deprecated REQ -07
+                           •   Add new REQ’s -20, -24, -25
+                           •   References updated; added ITU versions of MPEG-2, H.264,
+                               H.265
+
+
+4 Acronyms
+ AVC             Advanced Video Coding
+ GOP             Group of Pictures
+ HEVC            High Efficiency Video Coding
+ MISB            Motion Imagery Standards Board
+ MISP            Motion Imagery Standards Profile
+ SDI             Serial Digital Interface
+ SEI             Supplemental Enhancement Information
+ ST              Standard
+ UUID            Universally Unique Identifier
+ VANC            Vertical Ancillary Data Space
+
+5 Timestamp Types
+Timestamps, when applied to both Motion Imagery and metadata provide a means for correlating
+the events of both data types in time. MISB ST 0603 [1] defines two timestamps based on
+Absolute Time: The Precision Time Stamp, which is specified with a resolution of microseconds,
+and the Nano Precision Time Stamp, which is specified with a resolution of nanoseconds. Both
+represent a sampling of the MISP Time System since the Epoch of 1970-01-01T00:00:00.0Z –
+not including leap seconds – based on the International System (SI) second. MISB ST 0603
+provides guidance on converting one timestamp type to another.
+The Precision Time Stamp is used in H.262/MPEG-2 [2] [3], H.264/AVC [4] [5]. For
+H.265/HEVC [6] [7], there is a choice between either timestamp depending on application
+requirements.
+
+
+
+
+5 October 2017                 Motion Imagery Standards Board                                  2
+                      ST 0604.6 Timestamps for Class 1/Class 2 Motion Imagery
+
+MISB ST 0603 also defines a Commercial Time Stamp, which is essentially time code widely
+used in the commercial broadcast industry for content processing/editing. Although a non-
+persistent, relative time indicator within a sequence of Motion Imagery, the Commercial Time
+Stamp can be derived from an absolute time reference; such conversions are found in SMPTE
+EG 40 [8].
+
+6 Timestamp Sources
+A timestamp can originate from several possible sources as shown in Figure 1; these include: 1)
+a non-image data space, such as the Defined Data Space of the Vertical Ancillary Data Space
+(VANC) in SMPTE SDI, within a Class 0 Motion Imagery frame, the Chunk Data Space within
+GigE Vision, or other such container; or 2) generated by a local time reference. The commercial
+Motion Imagery compression standards for Class 1 and Class 2 Motion Imagery allocate fields
+for user-defined data. Timestamp information obtained from a time source is mapped into these
+user-defined data fields, typically during the compression process by an encoder.
+
+
+
+            Image                                            Class 1/Class 2 Motion Imagery
+              Image
+                Image
+                  Image
+
+
+        Class 0 Motion Imagery
+
+           1) Source: Defined Data Space      Destination: User Data (MPEG-2), SEI (H.264/H.265)
+
+
+
+
+                                                              Class 1/Class 2 Motion Imagery
+
+
+
+
+         Local Time Reference
+
+
+           2) Source: Local Time Reference       Destination: User Data (MPEG-2), SEI (H.264/H.265)
+
+
+                                 Figure 1: Sources of timestamps
+
+The following requirements apply to the reference source for a timestamp:
+
+                                             Requirement(s)
+ST 0604.5-16 When Class 0 Motion Imagery contains a Precision Time Stamp Pack, the Precision
+             Time Stamp shall be extracted and used as the timestamp in the corresponding
+             compressed Class 1/Class 2 Motion Imagery.
+ST 0604.6-20 When Class 0 Motion Imagery contains the Nano Precision Time Stamp Pack, the
+             Nano Precision Time Stamp shall be extracted and used as the timestamp in the
+             corresponding compressed Class 1/Class 2 Motion Imagery.
+
+
+5 October 2017                   Motion Imagery Standards Board                                       3
+                       ST 0604.6 Timestamps for Class 1/Class 2 Motion Imagery
+
+
+ST 0604.6-21 If Class 0 Motion Imagery does not contain a timestamp based on Absolute Time
+             and one is available, then that time reference shall be used to generate either a
+             Precision Time Stamp or a Nano Precision Time Stamp for compressed Class 1/
+             Class 2 Motion Imagery.
+Because a compression standard precisely defines the syntax and semantics of coded bits,
+measures are taken to prevent user-defined data to be mistakenly interpreted by a decoder –
+which is termed Start Code Emulation Prevention. Thus, added user data is formatted
+specifically to prevent erroneous decoder interpretation. The MISP timestamps are therefore
+formatted as indicated below for this purpose.
+
+7 Precision Time Stamp Information
+Information needed to support the Precision Time Stamp consists of the following three elements
+as shown in Figure 2:
+      1. A Precision Time Stamp Identifier (16 bytes),
+      2. A Time Status (1 byte), and
+      3. A Modified Precision Time Stamp (11 bytes).
+
+
+
+
+                           Figure 2: Precision Time Stamp Information
+
+7.1      Precision Time Stamp Identifier (H.262/MPEG-2 & H.264/AVC)
+The Precision Time Stamp Identifier signals the presence of the Precision Time Stamp when
+parsing the user-defined data field in the compressed data. The Precision Time Stamp Identifier
+for H.262/MPEG-2 and H.264/AVC is the ASCII string “MISPmicrosectime”. The mapping of
+this ASCII string to its byte equivalent is given in Table 1.
+
+                Table 1: Byte Equivalent for ASCII String “MISPmicrosectime”
+              Byte 1     Byte 2   Byte 3    Byte 4    Byte 5    Byte 6    Byte 7    Byte 8
+                M           I        S        P         m          i         c         r
+              0x4D        0x49     0x53      0x50     0x6D       0x69      0x63      0x72
+
+              Byte 9    Byte 10   Byte 11   Byte 12   Byte 13   Byte 14   Byte 15   Byte 16
+                o          s         e         c         t         i        m          e
+               0x6F      0x73      0x65      0x63      0x74      0x69      0x6D      0x65
+
+
+5 October 2017                     Motion Imagery Standards Board                                 4
+                        ST 0604.6 Timestamps for Class 1/Class 2 Motion Imagery
+
+
+7.2       Precision Time Stamp Identifier (H.265/HEVC)
+The Precision Time Stamp Identifier for H.265/HEVC is the following UUID1:
+
+                          a8687dd4-d759-3758-a5ce-f0338b6545f1
+This Precision Time Stamp Identifier signals the presence of the Precision Time Stamp when
+parsing the user-defined data field in H.265 compressed data.
+
+7.3       Time Status
+The Time Status is a one-byte value which precedes a Modified Precision Time Stamp
+(discussed below). It provides information regarding the reference source for the Precision Time
+Stamp. The status byte is used for all compression types described here. Refer to MISB ST 0603
+for the details on the Time Status.
+
+7.4       Modified Precision Time Stamp
+The Precision Time Stamp is an 8-byte, unsigned integer value, as defined in MISB ST 0603.
+For encoding within Class 1/Class 2 Motion Imagery, this 8-byte value is formatted to prevent
+false interpretation of the data by a decoder; the practice is known as Start Code Emulation
+Prevention. The modified 8-byte Precision Time Stamp contains successive two-byte values
+spaced by a 0xFF value, thus forming an 11-byte Modified Precision Time Stamp value.
+Table 2 provides the byte assignment for the one-byte Time Status (Byte 17), and the 11-byte
+(Bytes 18-28) Modified Precision Time Stamp, where Byte 18 is the most significant byte of the
+Precision Time Stamp. The Time Status plus the Modified Precision Time Stamp collectively
+form twelve bytes of data. Along with the 16-byte Precision Time Stamp Identifier, 28 bytes of
+data are then inserted into the compressed Motion Imagery.
+
+              Table 2: Byte Assignment for the Time Status and the Modified Precision
+                       Time Stamp
+       Byte 17           Time Status (see MISB ST 0603 [1])
+       Bytes 18, 19     Byte 1 and 2 (Most significant bytes) of Precision Time Stamp
+       Byte   20        Start Code Emulation Prevention Byte (0xFF)
+       Bytes 21,22      Byte 3 and 4 of Precision Time Stamp
+       Byte   23        Start Code Emulation Prevention Byte (0xFF)
+       Byte   24, 25    Byte 5 and 6 of Precision Time Stamp
+       Byte   26        Start Code Emulation Prevention Byte (0xFF)
+       Byte   27, 28    Byte 7 and 8 (Least significant bytes) of Precision Time Stamp
+
+
+
+
+1
+    UUID generated from the string “MISPmicrosectime-v2” as a version 3 UUID
+
+
+
+5 October 2017                       Motion Imagery Standards Board                             5
+                        ST 0604.6 Timestamps for Class 1/Class 2 Motion Imagery
+
+
+8 Nano Precision Time Stamp Information
+The Nano Precision Time Stamp information consists of the following three elements, shown in
+Figure 3:
+      1. A Nano Precision Time Stamp Identifier (16 bytes),
+      2. A Time Status (1 byte), and
+      3. A Modified Nano Precision Time Stamp (11 bytes).
+
+
+
+
+                          Figure 3: Nano Precision Time Stamp Information
+
+8.1       Nano Precision Time Stamp Identifier (H.265)
+The Nano Precision Time Stamp Identifier for H.265/HEVC is the following UUID2:
+
+                          cf848278-ee23-306c-9265-e8fef22fb8b8
+
+This Nano Precision Time Stamp Identifier signals the presence of the 64-bit unsigned Nano
+Precision Time Stamp when parsing the user-defined data field in H.265.
+
+8.2       Time Status
+The Time Status as already discussed (see Section 7.3) is likewise used to provide timestamp
+status for the Nano Precision Time Stamp. This one-byte value precedes the Modified Nano
+Precision Time Stamp as discussed next.
+
+8.3       Modified Nano Precision Time Stamp
+The Nano Precision Time Stamp is an 8-byte, unsigned integer value as defined in MISB ST
+0603. For encoding within Class 1/Class 2 Motion Imagery, this 8-byte value is modified to
+prevent false interpretation of the data by a decoder; the practice is known as Start Code
+Emulation Prevention. The modified 8-byte Nano Precision Time Stamp contains successive
+two-byte values spaced by a 0xFF value, thus forming an 11-byte Modified Nano Precision Time
+Stamp value.
+
+
+
+2
+    UUID generated from the string “MISPnanosectime-v1” as a version 3 UUID
+
+
+
+5 October 2017                       Motion Imagery Standards Board                            6
+                    ST 0604.6 Timestamps for Class 1/Class 2 Motion Imagery
+
+Table 3 shows the byte assignment for the one-byte Time Status (Byte 17), and the 11-byte
+(Bytes 18-28) Modified Nano Precision Time Stamp, where Byte 18 is the most significant byte
+of the Nano Precision Time Stamp. The Time Status plus the Modified Nano Precision Time
+Stamp collectively form twelve bytes of data. Along with the 16-byte Nano Precision Time
+Stamp Indicator, 28 bytes of data are then inserted into the compressed H.265 Motion Imagery.
+
+           Table 3: Byte Assignment for the Time Status and the Modified Nano
+                    Precision Time Stamp
+    Byte 17         Time Status (see MISB ST 0603 [1])
+    Bytes 18, 19    Byte 1 and 2 (Most significant bytes) of Nano Precision Time
+                    Stamp
+    Byte   20       Start Code Emulation Prevention Byte (0xFF)
+    Bytes 21,22     Byte 3 and 4 of Nano Precision Time Stamp
+    Byte   23       Start Code Emulation Prevention Byte (0xFF)
+    Byte   24, 25   Byte 5 and 6 of Nano Precision Time Stamp
+    Byte   26       Start Code Emulation Prevention Byte (0xFF)
+    Byte   27, 28   Byte 7 and 8 (Least significant bytes) of Nano Precision Time
+                    Stamp
+
+
+9 Commercial Time Stamp
+The Commercial Time Stamp can originate from several sources: 1) the Vertical Ancillary Data
+Space (VANC) in SMPTE SDI, the Chunk Data space in GigE Vision, or other available non-
+image data space within Class 0 Motion Imagery [9]; 2) generated by a local clock reference; or
+3) generated in a downstream process (such as a ground station). The Commercial Time Stamp
+is expressed as HH:MM:SS:FF (hours, minutes, seconds, frames; see MISB ST 0603).
+
+The following requirement applies to the reference used for the Commercial Time Stamp:
+                                            Requirement
+ST 0604.5-17 Where Class 0 Motion Imagery contains a Commercial Time Stamp, the Commercial
+             Time Stamp shall be extracted and used as the Commercial Time Stamp in the
+             corresponding compressed Class 1/Class 2 Motion Imagery.
+
+
+10 Inserting Timestamps into H.262/MPEG-2
+
+10.1 Precision Time Stamp Information
+H.262/MPEG-2 allocates a user_data field for user defined data. The 16-byte Precision Time
+Stamp Identifier, the one-byte Time Status and the 11-byte Modified Precision Time Stamp form
+28 bytes, which are inserted into the user_data field located between the picture header and the
+picture data, so it relates to a specific frame of Motion Imagery.
+
+
+
+
+5 October 2017                   Motion Imagery Standards Board                                   7
+                   ST 0604.6 Timestamps for Class 1/Class 2 Motion Imagery
+
+
+                                         Requirement(s)
+ST 0604.5-18 A Precision Time Stamp Identifier, equal to the ASCII string “MISPmicrosectime,”
+             shall be inserted into the H.262/MPEG-2 user_data field located between the
+             picture header and the picture data.
+ST 0604.5-19 A one-byte Time Status followed by an 11-byte Modified Precision Time Stamp shall
+             be inserted into the H.262/MPEG-2 user_data field after the Precision Time Stamp
+             Identifier, so that it relates to a specific Motion Imagery frame.
+
+
+10.2 Commercial Time Stamp Information
+H.262/MPEG-2 includes a 25-bit field time code (time_code) within the “group of pictures”
+(GOP) header. The Commercial Time Stamp is mapped into the time_code field as
+time_code_hours (5 bits, 0-23), time_code_minutes (6 bits, 0-59), time_code_seconds (6 bits, 0-
+59), and time_code_pictures (6 bits, 0-59). A drop_frame_flag and marker_bit complete the bit
+assignment.
+
+                                           Requirement
+ST 0604.3-09 Where a Commercial Time Stamp is available, it shall be inserted into every Group-
+             of-Pictures (GOP) of H.262/MPEG-2 compressed data.
+
+
+11 Inserting Timestamps into H.264/AVC
+
+11.1 Precision Time Stamp Information
+H.264/AVC provides a Supplemental Enhancement Information (SEI) message – designated the
+user_data_unregistered SEI message field. The user_data_unregistered SEI message consists of
+two subfields: the uuid_iso_iec_11578, which is a 16-byte UUID, and the
+user_data_payload_byte, which is a variable length field. The uuid_iso_iec_11578 is set to the
+16-byte Precision Time Stamp Identifier. The user_data_payload_byte is set to the 12-byte
+combination Time Status and Modified Precision Time Stamp (Bytes 17-28 of Table 2 with Byte
+17 transmitted first).
+
+                                         Requirement(s)
+ST 0604.4-10 A Precision Time Stamp Identifier, equal to the ASCII string “MISPmicrosectime,”
+             shall be inserted into the H.264/AVC compressed user_data_unregistered SEI
+             message field uuid_iso_iec_11578, so that it relates to a specific Motion Imagery
+             frame. Note: although similar in intent there is a non-editorial change in requirement
+             ST 0604.4-10 from ST 0604.3-10, which was deprecated.
+ST 0604.4-12 A one-byte Time Status followed by an 11-byte Modified Precision Time Stamp shall
+             be inserted into the H.264/AVC compressed user_data_unregistered SEI message
+             field user_data_payload_byte, so that it relates to a specific Motion Imagery frame.
+
+
+
+
+5 October 2017                  Motion Imagery Standards Board                                    8
+                   ST 0604.6 Timestamps for Class 1/Class 2 Motion Imagery
+
+
+11.2 Commercial Time Stamp Information
+H.264/AVC provides for time code in the picture timing SEI message. The picture timing SEI
+message (pic_timing) specifies hours_value (5 bits, 0-23), minutes_value (6 bits, 0-59),
+seconds_value (6 bits, 0-59) and n_frames (9 bits) for mapping a Commercial Time Stamp.
+Other flags within the pic_timing field indicate the time of frame capture, drop-frame, and a
+discontinuity in the video time line.
+
+                                         Requirement
+ST 0604.3-11 Where a Commercial Time Stamp is available, it shall be inserted into the
+             H.264/AVC pic_timing SEI message in every Class 1/ Class 2 Motion Imagery frame.
+
+
+12 Inserting Timestamps into H.265/HEVC
+Recognizing the trend towards increased pixel density and higher temporal rate imagery
+supported by H.265/HEVC, users may require greater resolution in applied timestamps. For this
+reason, a Nano Precision Time Stamp is also supported in H.265/HEVC. The selection between
+the Precision Time Stamp and the Nano Precision Time Stamp is signaled by the identifier used
+(indicated in Sections 7.2 and 8.1).
+H.265/HEVC provides a Supplemental Enhancement Information (SEI) message – designated
+the user_data_unregistered SEI message field. The user_data_unregistered message consists of
+two subfields: the uuid_iso_iec_11578, which is a 16-byte field UUID, and the
+user_data_payload_byte, which is a variable length field.
+
+12.1 Precision Time Stamp Information
+The uuid_iso_iec_11578 is set to the 16-byte UUID given in Section 7.2 for the Precision Time
+Stamp.
+
+The user_data_payload_byte is set to the 12-byte combination Time Status and Modified
+Precision Time Stamp (Bytes 17-28 of Table 2 with Byte 17 transmitted first).
+
+                                        Requirement(s)
+ST 0604.6-22 Where a Precision Time Stamp is used, a Precision Time Stamp Identifier equal to
+             the UUID a8687dd4-d759-3758-a5ce-f0338b6545f1 shall be inserted into the
+             H.265/HEVC compressed user_data_unregistered SEI message field
+             uuid_iso_iec_11578, so that it relates to a specific Motion Imagery frame.
+ST 0604.6-23 Where a Precision Time Stamp is used, a one-byte Time Status followed by an 11-
+             byte Modified Precision Time Stamp shall be inserted into the H.265/HEVC
+             compressed user_data_unregistered SEI message field user_data_payload_byte, so
+             that it relates to a specific Motion Imagery frame.
+
+
+
+
+5 October 2017                 Motion Imagery Standards Board                                   9
+                   ST 0604.6 Timestamps for Class 1/Class 2 Motion Imagery
+
+
+12.2 Nano Precision Time Stamp Information
+The uuid_iso_iec_11578 is set to the 16-byte UUID given in Section 8.1 for the Nano Precision
+Time Stamp.
+The user_data_payload_byte is set to the 12-byte combination Time Status and Modified Nano
+Precision Time Stamp (Bytes 17-28 of Table 3 with Byte 17 transmitted first).
+
+
+                                        Requirement(s)
+ST 0604.6-24 Where a Nano Precision Time Stamp is used, a Nano Precision Time Stamp
+             Identifier equal to the UUID cf848278-ee23-306c-9265-e8fef22fb8b8 shall be
+             inserted into the H.265/HEVC compressed user_data_unregistered SEI message
+             field uuid_iso_iec_11578, so that it relates to a specific Motion Imagery frame.
+ST 0604.6-25 Where a Nano Precision Time Stamp is used, a one-byte Times Status followed by
+             an 11-byte Modified Nano Precision Time Stamp shall be inserted into the
+             H.265/HEVC compressed user_data_unregistered SEI message field
+             user_data_payload_byte, so that it relates to a specific Motion Imagery frame.
+
+
+12.3 Commercial Time Stamp Information
+H.265/HEVC provides for time code in the time code SEI message. The time code SEI message
+(time_code) specifies hours_value (5 bits, 0-23), minutes_value (6 bits, 0-59), seconds_value (6
+bits, 0-59) and n_frames (9 bits) for mapping a Commercial Time Stamp. Other flags within the
+time_code field indicate the time of frame capture, drop-frame, and a discontinuity in the video
+time line.
+
+                                          Requirement
+ST 0604.4-15 Where a Commercial Time Stamp is available, it shall be inserted into the
+             H.265/HEVC time_code SEI message in every Class 1/Class 2 Motion Imagery
+             frame.
+
+
+13 Deprecated Requirements
+
+                                        Requirement(s)
+ST 0604.3-02 If an uncompressed motion imagery signal does not contain a Precision Time Stamp
+(Deprecated) but contains a Commercial Time Stamp in the VANC (Vertical Ancillary Data Space)
+             (MISB ST 0605), the Commercial shall be extracted from the VANC and used to
+             calculate the Precision Time Stamp in the compressed Motion Imagery.
+ST 0604.3-04 When Class 0 Motion Imagery contains a Precision Time Stamp in the VANC
+(Deprecated) (Vertical Ancillary Data Space) (MISB ST 0605), the Precision Time Stamp shall be
+             extracted from the VANC and used to calculate the Commercial Time Stamp in the
+             corresponding compressed Class 1/Class 2 Motion Imagery.
+ST 0604.3-06 If Class 0 Motion Imagery does not contain either a Precision Time Stamp or a
+(Deprecated) Commercial Time Stamp and a UTC time reference is available, then that time
+             reference shall be used to generate a Commercial Time Stamp.
+
+
+
+5 October 2017                 Motion Imagery Standards Board                                   10
+                   ST 0604.6 Timestamps for Class 1/Class 2 Motion Imagery
+
+
+ST 0604.3-10 A Precision Time Stamp consisting of Time Stamp Identifier, a Time Stamp Status
+(Deprecated) and a start-code emulation-modified Precision Time Stamp shall be inserted into
+             the H.264 elementary stream user data unregistered SEI Message field
+             uuid_iso_iec_11578, so that it relates to a specific frame.
+ST 0604.3-01 When Class 0 Motion Imagery contains a Precision Time Stamp in the VANC
+(Deprecated) (Vertical Ancillary Data Space) (MISB ST 0605), the Precision Time Stamp shall be
+             extracted from the VANC and used as the Precision Time Stamp in the
+             corresponding compressed Class 1/Class 2 Motion Imagery.
+ST 0604.3-05 If Class 0 Motion Imagery contains a Commercial Time Stamp in the VANC (Vertical
+(Deprecated) Ancillary Data Space) (MISB ST 0605), the Commercial Time Stamp shall be
+             extracted from the VANC and used as the Commercial Time Stamp in the
+             corresponding compressed Class 1/Class 2 Motion Imagery.
+ST 0604.3-08 A Precision Time Stamp Identifier, equal to the ASCII string “MISPmicrosectime”, a
+(Deprecated) Precision Time Stamp Status and a Modified Precision Time Stamp shall be inserted
+             into the MPEG-2 user_data field located between the picture header and the picture
+             data – in order.
+ST 0604.3-03 If Class 0 Motion Imagery does not contain a Precision Time Stamp and an absolute
+(Deprecated) time reference is available, then that time reference shall be used to generate the
+             Precision Time Stamp for the compressed Class 1/ Class 2 Motion Imagery.
+ST 0604.3-07 A Precision Time Stamp as defined in MISB ST 0603 shall be inserted in every
+(Deprecated) Motion Imagery frame.
+ST 0604.4-13 A Precision Time Stamp Identifier, equal to the UUID a8687dd4-d759-3758-a5ce-
+(Deprecated) f0338b6545f1, shall be inserted into the H.265/HEVC compressed
+             user_data_unregistered SEI message field uuid_iso_iec_11578, so that it relates to a
+             specific Motion Imagery frame.
+ST 0604.4-14 A one-byte Precision Time Stamp Status followed by an 11-byte Modified Precision
+(Deprecated) Time Stamp shall be inserted into the H.265/HEVC compressed
+             user_data_unregistered SEI message field user_data_payload_byte, so that it relates
+             to a specific Motion Imagery frame.
+
+
+
+
+5 October 2017                 Motion Imagery Standards Board                                  11
+

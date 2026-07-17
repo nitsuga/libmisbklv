@@ -1,0 +1,341 @@
+                                                                             MISB ST 0107.5
+
+ STANDARD
+                                                                            21 October 2021
+ KLV Metadata in Motion Imagery
+
+
+1 Scope
+This Standard defines the baseline requirements for all implementations of KLV within Motion
+Imagery files and streams.
+
+2 References
+MISB references cited here-in reflect versions current to the publication date of a document. In
+the event of a MISB document correction, the corrected document will have a single letter Minor
+Version appended to the Major Version number per the MISB Document Development Process
+[1]. For example, corrections to ST 0001.2, which has a Major Version of 2, result in a new
+version titled ST 0001.2a, which includes a Minor Version of “a”. The MISB will not update the
+referring document (this document) with the Minor Version number change. When acquiring any
+MISB reference listed below from an NGA repository the latest version may be either a Major or
+Minor Version.
+[1] MISB Document Development Process 7.0, Feb 2020.
+[2] SMPTE ST 336:2017 Data Encoding Protocol Using Key-Length-Value.
+[3] MISB MISP-2022.1: Motion Imagery Handbook, Oct 2021.
+[4] MISB ST 0601.17 UAS Datalink Local Set, Oct 2020.
+[5] ITU-T Rec X.680 (02/21) Abstract Syntax Notation One (ASN.1): Specification of basic
+    notation.
+[6] IEEE 754-2019 Standard for Floating-Point Arithmetic.
+[7] MISB ST 1201.5 Floating Point to Integer Mapping, Jun 2021.
+[8] ISO/IEC 10646:2020 Information technology – Universal Coded Character Set (UCS).
+
+
+3 Revision History
+  Revision       Date                                 Summary of Changes
+ ST 0107.5    10/21/2021      •   Revised Section 6.3.3.1 to allow 16-bit floats along with 32-
+                                  bit & 64-bit floats
+                              •   Added Req -20
+                              •   Updated References [1], [3], [4], [5], [6], [7], [8]
+
+
+
+21 October 2021            Motion Imagery Standards Board                                         1
+                           ST 0107.5 KLV Metadata in Motion Imagery
+
+
+4 Acronyms and Definitions
+ BER              Basic Encoding Rules
+ IEEE             Institute of Electrical and Electronics Engineers
+ ISO              International Organization for Standardization
+ KLV              Key Length Value
+ lsb              least significant bit
+ MISB             Motion Imagery Standards Board
+ MISP             Motion Imagery Standards Profile
+ msb              most significant bit
+ MSB              Most Significant Byte
+ OID              Object IDentifier
+ SMPTE            Society of Motion Pictures and Television Engineers
+ ST               Standard
+ ZLI              Zero-Length Item
+
+5 Introduction
+This Standard defines a baseline set of requirements applicable to all MISB KLV metadata
+standards which promote interoperability amongst Motion Imagery systems, minimize
+bandwidth in transmission, and lessen the storage requirements of Motion Imagery.
+
+6 Baseline Requirements
+
+6.1 Bit and Byte Order
+For systems to understand each other’s data representations it is essential all metadata use the
+same bit and byte order convention in the storage of the data. This does not directly apply to data
+within a communication system, since these systems may change data order along a transmission
+path. The assumption is a communications system delivers data with the same bit or byte order in
+which it was received.
+Computing systems order multiple bytes of data with a specific “endian-ness.” The “big-endian”
+format in this Standard signifies the “big end” (most significant bit or byte value in the sequence)
+is stored first. It is synonymous with the terms most significant bit (msb) first, or most significant
+byte (MSB) first.
+                                          Requirement(s)
+ST 0107.2-01 Bit order shall be big-endian or msb.
+ST 0107.2-02 Byte order shall be big-endian or MSB.
+
+
+6.2 SMPTE KLV
+The transmission of Motion Imagery data is typically limited by a fixed-bandwidth channel, so
+reducing any overhead in the metadata allows more capacity for the Motion Imagery content.
+KLV developed by the SMPTE is a bit-efficient data encoding format for representing metadata
+(see [2]). The MISB standards define requirements which incur limits on the full SMPTE 336,
+
+21 October 2021              Motion Imagery Standards Board                                         2
+                           ST 0107.5 KLV Metadata in Motion Imagery
+
+making the MISB standards a profile of the SMPTE standards. The Motion Imagery Handbook
+[3] discusses various KLV constructs in use throughout MISB standards.
+                                           Requirement
+ST 0107.3-03 All Local Set KLV metadata shall be formatted in compliance with SMPTE ST 336.
+
+
+6.3 KLV Local Sets
+The most common construct in the MISB Standards is the KLV Local Set. A Local Set is a KLV
+construct for encapsulating a list of Local Set items as a single block of data (in bytes). A Local
+Set item is a Key-Length-Value triplet. The “Key” in a Local Set is represented as a “Tag,”
+which only has meaning within the bounds of the Local Set in which it is defined. The Tag
+indicates which item, of the list of items, the Value represents. It provides the identity of the
+item, and via its defining document, provides the method to decode the Value into a software
+data type. The Length defines the number of bytes used by the Value. Lengths are usually
+positive numbers; however, a zero length is possible in unique cases. Values are the binary
+representation describing a specific item. In the case of a zero Length, the Value is not a part of
+the item (see MISB ST 0601 [4]). Please refer to the Motion Imagery Handbook for more details
+on Local Sets.
+One advantage of KLV is the ability to skip or ignore items which may not be known by a
+consumer of the data. For example, suppose a new version of a Local Set introduces new tags
+which an existing decoder does not understand. Instead of crashing, the decoder simply ignores
+any item it does not understand – this makes a decoder “future-proof.” In such cases, the Length
+specified by the Tag is used to skip the correct number of bytes to the next item.
+                                           Requirement
+ST 0107.3-04 Applications which decode MISB KLV Local Sets shall skip unknown Local Set
+             values so as to not impact the decoding of known Local Set items within the same
+             Local Set instance.
+
+
+6.3.1 Tag Encoding
+The Basic Encoding Rules (BER) for an Object Identifier (BER-OID) as defined in ASN.1 [5] is
+the method selected for encoding a Local Set tag. The use of BER-OID for tags provides a means
+to specify a tag number without the need to indicate the quantity of bytes used for the tag (i.e.,
+the tag-length). BER-OID tags are one or more bytes linked together in chain fashion. In BER-
+OID a zero in the Most Significant Bit (msb) position terminates the tag’s chain. For example,
+when the msb is set to zero in the first byte, this forms a one-byte tag number ranging from 0x00
+to 0x7F.
+When the msb of the first byte is set to one, the second successive byte becomes part of the BER-
+OID chain. In continued fashion, if the second byte’s msb is set to one, the next byte becomes
+part of the chain. This pattern continues until the msb of a final byte in the chain is zero.
+Together the seven Least Signification Bits (lsb) of each byte in the chain form the tag number.
+The Motion Imagery Handbook provides further details on BER. Using BER-OID for the tags in
+all MISB local sets enables efficient tag encoding and unlimited future growth.
+
+
+
+21 October 2021             Motion Imagery Standards Board                                         3
+                          ST 0107.5 KLV Metadata in Motion Imagery
+
+To prevent BER-OID from including leading zeros, ASN.1 forbids the use of 0x80 in the first
+byte of a BER-OID value.
+
+6.3.2 Length Encoding
+The Length of a Local Set item uses BER for both short and long form encoding of octets. This
+encoding method provides the greatest degree of flexibility for variable length data contained
+within a KLV packet. BER is an efficient encoding of a length; however, by either using the long
+form for values less than 128, or by prepending a long form value with zero-byte values, BER
+becomes less efficient. For example, encoding the length of two (2), a value less than 128, with
+long form uses two bytes (0x8102) instead of the short form one-byte (0x02) length. Another
+example is encoding the value 128 with padded zeros (0x8300 0080) instead of the optimized
+value with two bytes (0x8180). The Motion Imagery Handbook provides information and
+illustrations for implementing the short and long forms of BER encoding.
+                                          Requirement
+ST 0107.3-05 All instances of item Length fields within a MISB defined KLV Universal or Local Set
+             shall be BER Short form or BER Long form encoded using the fewest possible bytes.
+
+
+6.3.3 Value Encoding
+When encoding individual numeric (i.e., floats and integers) or character items within a Local
+Set, use the fewest number of bytes allowed. Local Set items may have a required or variable
+“value-length.” Items with required value-lengths use the exact number of bytes specified by the
+required Length. Items with variable value-length will adjust in size based on the Value and the
+items may have maximum lengths defined. When encoding a Value do not exceed the maximum
+limits. Reduce variable length items to their smallest length without losing their meaning or
+precision.
+                                         Requirement(s)
+ST 0107.3-06 Where a MISB standard defines a numeric required Length for a Local Set item’s
+             Value, the encoded Value shall match the number of bytes defined by the required
+             Length.
+ST 0107.3-07 Where a MISB standard defines a numeric maximum Length for a Local Set item’s
+             Value, the encoded Value shall not exceed the number of bytes defined by the
+             maximum Length.
+
+
+6.3.3.1 Numeric Items
+Numeric Items consist of Floating-Point Values, IMAP Floating Point Values, Signed Integer,
+Unsigned Integers, BER-OID, and BER Values.
+Items using the “float,” “float16,” “float32,” and “float64” types in the MISB Standards will use
+the IEEE 754 [6] standard to encode their values. The IEEE 754 binary16 (2 bytes), binary32 (4
+bytes) and binary64 (8 bytes) are the three types of Floating-Point Values in use by the MISB
+Standards. However, other types of IEEE 754 are possible in future updates.
+Items using the “IMAPA” or “IMAPB” types in the MISB Standards will use the methods in
+MISB ST 1201 [7] to encode (or map) floating point values into an integer-based format. The
+
+21 October 2021             Motion Imagery Standards Board                                      4
+                           ST 0107.5 KLV Metadata in Motion Imagery
+
+IMAP method save bandwidth on individual floating-point values by converting a floating-point
+value into an integer using less bytes than the original floating-point value. The IMAP algorithm
+uses the allowed value range (i.e., minimum and maximum values) and the desired precision to
+map the value. With some values the precision is based on system requirements and can change
+from system to system, or even packet to packet. To use IMAP efficiently it is important to use
+the fewest number of bytes while maintaining the desired precision of the system.
+Items using the “int” or “uint” prefix (e.g., int8, int16, uint8, etc.) types in the MISB Standards
+will use big-endian integers to encode their values. Some “int” or “uint” values define variable
+lengths that adjust based on their numeric value. With the variable length “int” or “uint” values,
+use the fewest bytes to represent the Value; do not include leading zero (or sign extensions)
+bytes.
+Items using “ber-oid” types in the MISB standards use the ASN.1 [5] Basic Encoding Rules for
+Object Identification (BER-OID) rules. The Motion Imagery Handbook discusses the BER-OID
+encoding technique in detail with examples and figures. This technique adjusts the length based
+on the numeric value and the rules prevent wasted bytes in the encoding.
+Items using “ber” types in the MISB standards use the ASN.1 [5] Basic Encoding Rules for
+Lengths rules. The Motion Imagery Handbook discusses the BER encoding technique in detail
+with examples and figures. Section 6.3.2 above explains the possible inefficiencies that can occur
+when using the BER technique.
+
+                                          Requirement(s)
+ST 0107.3-08 Where a MISB standard defines a Local Set item with a KLV format of, or prefixed
+             with, “float,” the encoded Value shall use the IEEE 754 standard to encode the value.
+ST 0107.5-20 Where a MISB standard defines a Local Set item with a KLV format of “float,” the
+             encoded Value shall be of size binary16, binary32 or binary64.
+ST 0107.3-09 Where a MISB standard defines a Local Set item with a KLV format of “IMAPA” or
+             “IMAPB,” and the Local Set item allows variable length encoding, the encoded Value
+             shall use the fewest number of bytes, while maintaining system precision.
+ST 0107.3-10 Where a MISB standard defines a Local Set item with a KLV format of, or prefixed
+             with, “uint” or “int,” and the Local Set item allows variable length encoding, the
+             encoded value shall remove leading zero or leading sign extension bytes.
+ST 0107.3-11 Where a MISB standard defines a Local Set item with a KLV format of “ber” and the
+             item allows variable length encoding, the encoded Value shall use the fewest
+             number of bytes.
+
+
+6.3.3.2 String Items
+Items with the type “utf8” are strings of characters based on the ISO/IEC 10646:2014 Universal
+Character Set (UCS) [8] standard for interpretation, as discussed in the Motion Imagery
+Handbook. Unless a Local Set item description states otherwise, all strings are variable length.
+The Local Set item’s length determines the length of the string with the one exception of the
+“empty string.”
+The empty string uses a single null character (0x00) with no other characters to indicate the
+string is blank. The length of the empty string within KLV is one (1), for the null character, but
+the decoding software converts the empty string to the software language’s equivalent of an
+
+21 October 2021              Motion Imagery Standards Board                                           5
+                           ST 0107.5 KLV Metadata in Motion Imagery
+
+empty string (e.g., Java interprets an empty string as a String of length zero). The empty string is
+different than an “Unknown” string (see MISB ST 0601 [4]), where the string is undefined (e.g.,
+Java interprets an Unknown string as a String variable set to “null”). A string item with a length
+of zero (0) signifies an “Unknown” string.
+Strings can easily consume a large amount of bandwidth; the recommended practice is to use the
+fewest characters needed to provide the intended meaning. With exception of the single null
+character for an empty string, or if an item definition allows it, do not use the characters in the
+hex ranges (inclusive) of 0x00 through 0x08, 0x0B through 0x0C, 0x0E through 0x1F, and
+character 0x7F. Furthermore, remove any leading or trailing null, tab, line feed, carriage return,
+and space characters (0x00, 0x09, 0x0A, 0x0D, and 0x20, respectively) in the Value unless
+specified by the defining document.
+                                          Requirement(s)
+ST 0107.3-12 Where a MISB standard defines a Local Set item with a KLV format of “utf8” and the
+             Value is not the empty string, the encoded value shall have all leading and trailing,
+             null (0x00), tab (0x09), line feed (0x0A), carriage return (0x0D), and space (0x20)
+             characters removed, unless the item definition allows them.
+ST 0107.3-13 Where a MISB standard defines a Local Set item with a KLV format of “utf8” and the
+             Value is not the empty string, the encoded value shall have all characters in the hex
+             ranges (inclusive) of 0x00 through 0x08, 0x0B, 0x0C, 0x0E through 0x1F, and
+             character 0x7F removed, unless the item definition allows them.
+
+
+6.3.4 Report-on-Change
+Report-on-Change is a bandwidth conservation technique a MISB standard may employ. A
+standard which uses Report-on-Change declares its use; if a standard does not declare its use,
+Report-on-Change is not used within said standard. Report-on-Change is dependent on KLV
+Packets which include a time value. For a standard where its KLV Packets do not include a time
+value, the standard does not have sufficient information to support the Report-on-Change
+technique.
+Report-on-Change serves several functions in the delivery of metadata from sender to receiver:
+   1. Reduces the bandwidth consumed by metadata by including metadata items only at the
+      Minimum Refresh Period or when changes to their value occur.
+   2. Signals to a receiver that a specific metadata item is no longer being transmitted.
+The Motion Imagery Handbook describes the Report-on-Change technique. Receivers treat an
+item as Unknown when the item does not update within a Metadata Refresh Period – defined in
+the Motion Imagery Handbook with a default of a 30-second window of time.
+Based on bandwidth, standards’ requirements, and system requirements, metadata producers
+select which metadata items from the KLV metadata set are reportable. From the perspective of a
+metadata producer, each reportable Local Set item can be in one of three states:
+   1. Known–Changing
+   2. Known–Static
+   3. Unknown
+
+
+21 October 2021              Motion Imagery Standards Board                                        6
+                           ST 0107.5 KLV Metadata in Motion Imagery
+
+It is possible for a Known-Changing or Known-Static item to become Unknown, in which case
+the receiver stops using the last known value after the Metadata Refresh Period . If a metadata
+producer needs to “shut-off” an item (i.e., make it immediately Unknown) the producer sends a
+Zero-Length Item (ZLI) which is a Local Set item with no value (i.e., tag followed by a length of
+zero, with no value). The receiver interprets a ZLI as the value becoming immediately Unknown.
+The intended use of a ZLI comes only after a value has been in the Known state (either Known-
+Changing or Known-Static).
+KLV allows for hierarchies of metadata, where a Local Set (parent) may have an item which is
+itself a Local Set (child). Unless a standard allows it, the use of ZLI for a child Local Set is
+discouraged. Similarly, the use of ZLI for child Packs are likewise discouraged.
+A Local Set may include both single-use or multi-use items (i.e., tags); the Local Set standard
+identifies multi-use items. Single-use items only appear in a Local Set instance once (i.e., the
+Local Set instance includes an item’s tag one time). Multi-use items allow the same item
+multiple times but with different values (i.e., the Local Set instance has two (or more) items with
+the same tag but different values). When using the same tag multiple times within a Local Set, it
+is not possible to determine which of those tags the ZLI (in a subsequent packet) applies.
+Therefore, ZLIs are not applicable to multi-use items.
+
+                                         Requirement(s)
+ST 0107.4-14    Where a standard implements Report-on-Change for reportable items, Known-
+                Changing or Known-Static items shall be reported no less than once every Metadata
+                Refresh Period.
+ST 0107.4-15    Where a standard implements Report-on-Change, metadata items which have not
+                been updated within a Metadata Refresh Period shall be considered Unknown.
+ST 0107.4-16    Required or mandatory items of a Local Set shall always be reported with positive
+                lengths (i.e., Zero-Length Items (ZLI) are not allowed for these items).
+ST 0107.4-17    Where a Local Set item has a length of zero, consumers shall interpret the value of
+                the item as "unknown.”
+ST 0107.4-18    Where a standard implements Report-on-Change, the maximum value for the
+                Metadata Refresh Period shall be 30 seconds.
+ST 0107.4-19    Where a standard implements Report-on-Change, only single-use Local Set items
+                within an instance shall be allowed to specify a Zero-Length Item (ZLI).
+
+
+
+6.3.5 Metadata Distribution
+Within a constrained bandwidth channel, shared by both Motion Imagery and metadata,
+transmitting a large amount of metadata at one time can impact the received quality of the
+Motion Imagery. To prevent this, the MISB recommends distributing the Known-Static metadata
+items over a 30 second refresh period. For example, instead of sending item A, B and C every 30
+seconds at time 00:00:00, send item A every 30 seconds starting at time 00:00:00; send item B
+every thirty seconds starting at time 00:00:05 (five seconds later); send item C every thirty
+seconds starting at time 00:00:10 (10 seconds after the first item); etc. This distributes the
+metadata over time.
+
+
+21 October 2021             Motion Imagery Standards Board                                        7
+                           ST 0107.5 KLV Metadata in Motion Imagery
+
+Further, some list items can be sent as individual list items (or small groups of items) distributed
+over multiple packets instead of all at once. Metadata items which allow this are noted in the
+“Details” section of the item description.
+
+
+
+
+21 October 2021              Motion Imagery Standards Board                                        8
+
