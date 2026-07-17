@@ -70,9 +70,18 @@ fork — context, alternatives considered, the choice, consequences. Carry a
 
 Lifecycle: an open fork starts as a checklist line in
 [`../planning/ROADMAP.md`](../planning/ROADMAP.md) (`OPEN`). Once deliberated,
-write the Decision here with `status: proposed`; on resolution set `accepted`,
+write the Decision in [`./decisions/`](./decisions/index.md) with `status: proposed`; on resolution set `accepted`,
 link it from ROADMAP, and update [`../planning/PROGRESS.md`](../planning/PROGRESS.md).
 Raw open questions live in `../planning/`; only deliberated rationale lives here.
+
+# Subdirectories
+
+Types stay flat in `context/` by default; the root `index.md` groups by type.
+Split a type into its own subdir when flat-listing grows noisy (~10+ files) or
+develops sub-structure, and give the subdir its own `index.md`. `decisions/`
+is pre-created because ADRs accumulate and supersede (a register is useful
+immediately). The likely future split is `items/` if per-item 0601 concepts are
+ever ingested (deferred — see [`../planning/ROADMAP.md`](../planning/ROADMAP.md)).
 
 # Linking
 

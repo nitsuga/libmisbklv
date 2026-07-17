@@ -50,7 +50,9 @@ _(`type: Sample Data` — characterized input assets / test vectors.)_
 
 ## Decisions
 
-_(`type: Decision` — architecture decision records: gstreamer vs ffmpeg, C++ standard, 0604 scope.)_
+_(`type: Decision` — ADRs: the *why* of resolved forks.)_
+
+* [Decisions register](./decisions/index.md) — ADRs grouped under `decisions/`.
 
 ## Components
 

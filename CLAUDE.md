@@ -17,6 +17,22 @@ v0.1 bundle.
 - For the live plan and status, read [`planning/PROGRESS.md`](planning/PROGRESS.md)
   and [`planning/ROADMAP.md`](planning/ROADMAP.md).
 
+## Planning hygiene
+
+Keep `planning/` current as the project moves — it's the non-ephemeral record
+of decisions and status, not chat.
+
+- **On a significant decision** (a fork resolved or changed): write/update the
+  ADR in [`context/decisions/`](context/decisions/index.md) per the lifecycle
+  in [`context/CONVENTIONS.md`](context/CONVENTIONS.md) (status: proposed →
+  accepted / superseded), then update the fork's row in
+  [`planning/ROADMAP.md`](planning/ROADMAP.md) (status + Decision link) and
+  [`planning/PROGRESS.md`](planning/PROGRESS.md).
+- **On implementing a significant change**: update
+  [`planning/PROGRESS.md`](planning/PROGRESS.md) (done / in-progress / next);
+  if it advances or closes a roadmap fork, update ROADMAP too.
+- Routine ingests / lint go to [`context/log.md`](context/log.md), not PROGRESS.
+
 ## Repo layout
 
 - `references/` — MISB standards (PDF + `.txt` extract). Source of truth.

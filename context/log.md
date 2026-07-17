@@ -34,3 +34,16 @@
   [`CONVENTIONS`](./CONVENTIONS.md) with the `status:` vocabulary
   (proposed/accepted/superseded/deferred) and the open-fork → Decision
   lifecycle. Root `CLAUDE.md` now points at `planning/`.
+* **Structure**: Created [`./decisions/`](./decisions/) subdir (with an ADR
+  register, [`./decisions/index.md`](./decisions/index.md)) to group Decision
+  concepts; root `index.md` Decisions section now points to it. Added a
+  `# Subdirectories` policy to [`CONVENTIONS`](./CONVENTIONS.md): types stay
+  flat by default, split only when noisy (~10+) or sub-structured (likely
+  future split: `items/` for per-item 0601 concepts, deferred). Fork 7 in
+  [`../planning/ROADMAP`](../planning/ROADMAP.md) narrowed to ADR
+  format/numbering (location settled).
+* **Process**: Added a `## Planning hygiene` directive to root `CLAUDE.md` —
+  on a significant decision, write/update the ADR in `context/decisions/` and
+  refresh ROADMAP (fork status + link) + PROGRESS; on implementing a
+  significant change, refresh PROGRESS (and ROADMAP if a fork moves); routine
+  ingests/lint stay in `log.md`. Ensures planning stays non-ephemeral.

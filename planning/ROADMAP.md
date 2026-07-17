@@ -42,7 +42,7 @@ Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 | 4 | Core architecture: parser/item-registry split, data-driven tag registry, KLV core data model | OPEN | — |
 | 5 | gstreamer vs ffmpeg backends — shared interface; both in v1 or sequence | OPEN | — |
 | 6 | 0604 ES-timestamp scope — v1 or deferred | OPEN | — |
-| 7 | Decision records — location (flat in `context/` vs `context/decisions/` subdir) & ADR format | OPEN (after 1–3) | — |
+| 7 | Decision records — ADR format & numbering | OPEN (location: `context/decisions/` chosen; format TBD after 1–3) | — |
 
 When a fork is deliberated, write a `type: Decision` concept in `../context/`
 (`status: proposed` → `accepted`), link it here, and update PROGRESS.
