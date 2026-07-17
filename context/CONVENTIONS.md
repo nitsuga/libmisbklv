@@ -23,6 +23,7 @@ and direct the work. On disagreement, the OKF spec wins over this doc.
 | `context/` | This bundle. Agent-owned synthesis. |
 | `../docs/` | Human-facing authored guides (terse). Not agent-maintained. |
 | `../data/` | Sample MPEG-TS test vectors. |
+| `../planning/` | Project management (ROADMAP, PROGRESS). Transient; human + agent read/write. Not OKF concepts. |
 
 The `.txt` next to each standards PDF is a faithful text extract for grep/Read.
 Cite a standard by name and section (`ST 0601 §6.3`), not by extract line
@@ -53,6 +54,25 @@ Current types:
 | `Sample Data` | Characterized input assets (sample streams, test vectors). |
 
 Anticipated but not yet used: `Test Vector`. Add as needed.
+
+# Decisions
+
+A `type: Decision` concept is an ADR: the *why* of a resolved (or proposed)
+fork — context, alternatives considered, the choice, consequences. Carry a
+`status:` frontmatter field:
+
+| `status` | Meaning |
+|---|---|
+| `proposed` | Under deliberation; not yet adopted. |
+| `accepted` | Resolved and in force. |
+| `superseded` | Replaced by a later Decision (link it). |
+| `deferred` | Parked; revisit later. |
+
+Lifecycle: an open fork starts as a checklist line in
+[`../planning/ROADMAP.md`](../planning/ROADMAP.md) (`OPEN`). Once deliberated,
+write the Decision here with `status: proposed`; on resolution set `accepted`,
+link it from ROADMAP, and update [`../planning/PROGRESS.md`](../planning/PROGRESS.md).
+Raw open questions live in `../planning/`; only deliberated rationale lives here.
 
 # Linking
 

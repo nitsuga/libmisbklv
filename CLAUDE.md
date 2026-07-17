@@ -14,6 +14,8 @@ v0.1 bundle.
 - [`context/CONVENTIONS.md`](context/CONVENTIONS.md) — frontmatter, type
   vocabulary, ingest/query/lint rules. Read before editing `context/`.
 - `context/` is agent-owned. `references/` is immutable — read, never modify.
+- For the live plan and status, read [`planning/PROGRESS.md`](planning/PROGRESS.md)
+  and [`planning/ROADMAP.md`](planning/ROADMAP.md).
 
 ## Repo layout
 
@@ -21,3 +23,4 @@ v0.1 bundle.
 - `context/` — agent knowledge bundle (maintain this).
 - `docs/` — human-facing guides (terse).
 - `data/` — sample MPEG-TS test vectors (Day Flight, Night Flight IR).
+- `planning/` — live plan + progress (ROADMAP.md, PROGRESS.md). Read first for "what now".

@@ -1,0 +1,48 @@
+# libklv — Roadmap
+
+The plan: scope, sequencing, and open forks. Living doc — rewrite freely.
+For "where are we right now" see [PROGRESS.md](./PROGRESS.md). Decisions
+(resolved rationale) live in [`../context/`](../context/) as `type: Decision`
+concepts; this file tracks them as a checklist.
+
+## Scope (v1)
+
+libklv: a C++ library to read and write MISB KLV data — ST 0601 (UAS
+Datalink LS), ST 0903 (VMTI), ST 0604 (ES-layer timestamps) — from/to MPEG-TS
+containers via a configurable gstreamer or ffmpeg backend, file or stream.
+
+Out of scope (v1, revisit): ST 0102 security, ST 0807 registry as a data
+product, ST 1607 amend/segment beyond MSID passthrough.
+
+## Phases
+
+- **Phase 0 — Foundation** (done): repo + git/LFS, docs structure, OKF
+  bundle, standards + prior-art + sample ingests.
+- **Phase 1 — Foundational decisions**: build system, C++ standard, license,
+  name collision.
+- **Phase 2 — Core architecture**: KLV core data model; parser / item-registry
+  split; data-driven tag registry.
+- **Phase 3 — Media backends**: gstreamer + ffmpeg; MPEG-TS demux/mux;
+  extract/insert KLV (file + stream), using `../data/` samples as round-trip
+  targets.
+- **Phase 4 — 0604 ES timestamps** (if in v1 scope): SEI / `user_data`
+  injection/extraction, emulation-prevention stuff/de-stuff.
+- **Phase 5 — Hardening**: tests, conformance, packaging, user docs.
+
+## Open forks
+
+Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
+`status: proposed`) · `DECIDED` (`status: accepted`) · `DEFERRED`.
+
+| # | Fork | Status | Decision |
+|---|------|--------|----------|
+| 1 | Build system & C++ standard (CMake; C++17/20/23) | OPEN | — |
+| 2 | Project license | OPEN | — |
+| 3 | `akrutsinger/libklv` name collision — rename or disambiguate | OPEN | — |
+| 4 | Core architecture: parser/item-registry split, data-driven tag registry, KLV core data model | OPEN | — |
+| 5 | gstreamer vs ffmpeg backends — shared interface; both in v1 or sequence | OPEN | — |
+| 6 | 0604 ES-timestamp scope — v1 or deferred | OPEN | — |
+| 7 | Decision records — location (flat in `context/` vs `context/decisions/` subdir) & ADR format | OPEN (after 1–3) | — |
+
+When a fork is deliberated, write a `type: Decision` concept in `../context/`
+(`status: proposed` → `accepted`), link it here, and update PROGRESS.

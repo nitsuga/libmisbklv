@@ -28,3 +28,9 @@
 * **Lint**: Promoted `Sample Data` from anticipated to current type in
   [`CONVENTIONS`](./CONVENTIONS.md) (first use). Added a `Sample Data` section
   to `index.md`.
+* **Structure**: Added [`../planning/`](../planning/) (ROADMAP.md, PROGRESS.md)
+  for transient planning/progress — distinct from this KB (evergreen) and
+  `../docs/` (user-facing). Added a `# Decisions` section to
+  [`CONVENTIONS`](./CONVENTIONS.md) with the `status:` vocabulary
+  (proposed/accepted/superseded/deferred) and the open-fork → Decision
+  lifecycle. Root `CLAUDE.md` now points at `planning/`.
