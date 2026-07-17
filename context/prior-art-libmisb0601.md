@@ -21,7 +21,7 @@ C library (no license, 3★, updated 2024-10) to encode/decode ST 0601.**6**
 - Decode: `unpack_misb(data, size, klvmap)` fills a `KLVMap` whose `KLVs[94]`
   array is indexed by tag; direct access via `klvmap[UNIX_TIME_STAMP]`.
 
-# Relevant to libklv
+# Relevant to libmisbklv
 
 - **Crib:** the encode API shape (init → add → finalize, with a typed value
   union and a tag-name map) and the decode-to-a-tag-indexed-map shape are both

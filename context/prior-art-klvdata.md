@@ -25,7 +25,7 @@ external deps. `pip install klvdata`.
   start runs `ffmpeg -i Day\ Flight.mpg -map data-re -codec copy -f data -`
   to pull the KLV elementary stream, then pipes bytes into `StreamParser`.
 
-# Relevant to libklv
+# Relevant to libmisbklv
 
 - **Crib:** the per-item class names are a ready 0601 item vocabulary; the
   `StreamParser`-yields-packets API shape; the `UnknownElement` future-proofing.
@@ -34,7 +34,7 @@ external deps. `pip install klvdata`.
   Validates the [ffmpeg](#) extraction path; see
   [gstklvplugin](/prior-art-gstklvplugin.md) for the gstreamer equivalent.
 - **Avoid:** Python (we are C++); it externalizes demux — which is precisely
-  libklv's differentiator (integrated, configurable gstreamer/ffmpeg demux).
+  libmisbklv's differentiator (integrated, configurable gstreamer/ffmpeg demux).
 
 # Relationships
 

@@ -2,9 +2,9 @@
 okf_version: "0.1"
 ---
 
-# libklv Knowledge Bundle
+# libmisbklv Knowledge Bundle
 
-Agent-facing knowledge base for libklv, in
+Agent-facing knowledge base for libmisbklv, in
 [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
 v0.1. The agent owns this directory; humans curate sources and direct the work.
 
@@ -40,7 +40,7 @@ _(`type: Prior Art` — existing KLV libraries/plugins analyzed as design input.
 * [jimcavoy/klvp](./prior-art-klvp.md) — C++, no license; parser-vs-item-DB split; closest architectural foil.
 * [n1tsu/libmisb0601](./prior-art-libmisb0601.md) — C, no license; encode/decode 0601.6; fixed 94-tag array (anti-pattern).
 * [mkassimi98/gstklvplugin](./prior-art-gstklvplugin.md) — GStreamer plugin, AGPL-3.0; enc/dec/inject/PMT-rewrite; INI registry; the gstreamer-path reference.
-* [akrutsinger/libklv](./prior-art-libklv-akrutsinger.md) — C stub, 0601.9; **name collides with this project**.
+* [akrutsinger/libklv](./prior-art-libklv-akrutsinger.md) — C stub, 0601.9; **namesake stub (collision resolved — see [0003](./decisions/0003-project-name.md))**.
 
 ## Sample Data
 
@@ -56,4 +56,4 @@ _(`type: Decision` — ADRs: the *why* of resolved forks.)_
 
 ## Components
 
-_(`type: Component` — libklv modules: KLV core, gstreamer backend, ffmpeg backend.)_
+_(`type: Component` — libmisbklv modules: KLV core, gstreamer backend, ffmpeg backend.)_

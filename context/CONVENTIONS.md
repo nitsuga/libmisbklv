@@ -8,7 +8,7 @@ timestamp: 2026-07-17T12:30:00Z
 
 # Purpose
 
-`context/` is the agent-facing knowledge base for libklv, in
+`context/` is the agent-facing knowledge base for libmisbklv, in
 [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
 v0.1. It is the synthesis layer between immutable sources and the working
 agent: knowledge is compiled here once and kept current, not re-derived each
@@ -50,7 +50,7 @@ Current types:
 | `KLV Item` | A single 0601/0903 item: tag, length, units, decode method. |
 | `Prior Art` | Existing KLV libraries/plugins analyzed as design input. |
 | `Decision` | Architecture decision record — the *why* of a fork. |
-| `Component` | A libklv module (KLV core, gstreamer backend, ffmpeg backend). |
+| `Component` | A libmisbklv module (KLV core, gstreamer backend, ffmpeg backend). |
 | `Sample Data` | Characterized input assets (sample streams, test vectors). |
 
 Anticipated but not yet used: `Test Vector`. Add as needed.

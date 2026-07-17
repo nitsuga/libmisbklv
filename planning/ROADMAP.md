@@ -1,4 +1,4 @@
-# libklv — Roadmap
+# libmisbklv — Roadmap
 
 The plan: scope, sequencing, and open forks. Living doc — rewrite freely.
 For "where are we right now" see [PROGRESS.md](./PROGRESS.md). Decisions
@@ -7,7 +7,7 @@ concepts; this file tracks them as a checklist.
 
 ## Scope (v1)
 
-libklv: a C++ library to read and write MISB KLV data — ST 0601 (UAS
+libmisbklv: a C++ library to read and write MISB KLV data — ST 0601 (UAS
 Datalink LS), ST 0903 (VMTI), ST 0604 (ES-layer timestamps) — from/to MPEG-TS
 containers via a configurable gstreamer or ffmpeg backend, file or stream.
 
@@ -38,7 +38,7 @@ Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 |---|------|--------|----------|
 | 1 | Build system & C++ standard (CMake; C++17/20/23) | DECIDED | [0001](../context/decisions/0001-build-system-and-cpp-standard.md) |
 | 2 | Project license | DECIDED | [0002](../context/decisions/0002-license.md) |
-| 3 | `akrutsinger/libklv` name collision — rename or disambiguate | OPEN | — |
+| 3 | `akrutsinger/libklv` name collision — renamed to `libmisbklv` | DECIDED | [0003](../context/decisions/0003-project-name.md) |
 | 4 | Core architecture: parser/item-registry split, data-driven tag registry, KLV core data model | OPEN | — |
 | 5 | gstreamer vs ffmpeg backends — shared interface; both in v1 or sequence | OPEN | — |
 | 6 | 0604 ES-timestamp scope — v1 or deferred | OPEN | — |

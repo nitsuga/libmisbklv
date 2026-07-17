@@ -22,7 +22,7 @@ metadata signaling). Meson (primary) + CMake, gst-check tests, Doxygen.
 | `klvframeinject` | Per-frame KLV injection **synchronized to video** (`video/x-h264`,`video/x-h265` → `video_src` + `klv_src`). |
 | `tspmtrewrite` | Rewrites the PMT to signal KLV metadata for `tsdemux`. |
 
-# Relevant to libklv — high value for the gstreamer path
+# Relevant to libmisbklv — high value for the gstreamer path
 
 - **Element decomposition maps onto our gstreamer backend:** encode, decode,
   frame-inject, and PMT-rewrite are exactly the four surfaces we need. Study

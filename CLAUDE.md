@@ -1,4 +1,4 @@
-# libklv
+# libmisbklv
 
 C++ library to read and write MISB KLV data — ST 0601 (UAS Datalink Local
 Set), ST 0903 (VMTI), ST 0604 (ES-layer timestamps) — from/to MPEG-TS

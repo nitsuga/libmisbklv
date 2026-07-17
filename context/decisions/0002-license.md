@@ -13,7 +13,7 @@ Fork 2 of [`../../planning/ROADMAP.md`](../../planning/ROADMAP.md). Pick the
 license before code lands. Clean-room implementation — no code lifted from
 prior art. Prior-art license landscape: [klvdata](../prior-art-klvdata.md)
 (MIT), [gstklvplugin](../prior-art-gstklvplugin.md) (AGPL-3.0), three others
-unlicensed. libklv is a *library* meant to be embedded by host apps (including
+unlicensed. libmisbklv is a *library* meant to be embedded by host apps (including
 possibly commercial/UAS stacks), and integrates with gstreamer (LGPL) and
 ffmpeg (LGPL/GPL).
 
@@ -39,7 +39,7 @@ they land.
 
 # Consequences
 
-- No copyleft: anyone may embed libklv in proprietary / closed-source apps.
+- No copyleft: anyone may embed libmisbklv in proprietary / closed-source apps.
   We forgo the lever of forcing lib-level modifications back into the open.
 - Apache-2.0's patent grant applies to contributors and users.
 - Compatible with linking LGPL gstreamer / ffmpeg (permissive can comply with

@@ -77,3 +77,16 @@
   License = **Apache-2.0** (permissive, patent grant). Canonical `LICENSE`
   added at repo root; per-file `SPDX-License-Identifier: Apache-2.0` headers
   when code lands. ROADMAP fork 2 → DECIDED.
+* **Decision (proposed)**: Fork 3 →
+  [`0003-project-name`](./decisions/0003-project-name.md) (proposed): resolve
+  the `akrutsinger/libklv` namesake collision. Propose keep `libklv` +
+  disambiguate (collision is with an inactive stub); alternative rename now
+  (cheap — no code yet, docs-only find-replace; candidates `libmisbklv` /
+  `misbklv` / `klvio` / `klvpp`). Defer rejected (renaming cheapest now).
+  Awaiting pick. ROADMAP fork 3 → PROPOSED.
+* **Decision (accepted)**: [`0003`](./decisions/0003-project-name.md) →
+  accepted. Renamed the project `libklv` → **`libmisbklv`** (Option B) to
+  eliminate the `akrutsinger/libklv` collision while rename is free (no code
+  yet). `libklv_cpp` rejected (implies a port; C-ABI-incompatible). Doc
+  self-refs renamed; external `akrutsinger/libklv` refs preserved. ROADMAP
+  fork 3 → DECIDED. Repo dir rename left as a separate optional step.

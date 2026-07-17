@@ -1,13 +1,13 @@
-# libklv — Progress
+# libmisbklv — Progress
 
 Current status. Volatile; rewrite each session. For the plan, see
 [ROADMAP.md](./ROADMAP.md).
 
 ## Now
 
-Phase 0 (Foundation) done. Phase 1 (foundational decisions) in progress —
-forks 1 (build system & C++ standard) and 2 (license) decided; fork 3
-(name collision) next, then core architecture.
+Phase 0 (Foundation) done. Phase 1 (foundational decisions) nearly complete —
+forks 1 (build system & C++ standard), 2 (license), and 3 (name → `libmisbklv`)
+decided; fork 7 (ADR format) next, then core architecture.
 
 ## Done
 
@@ -26,16 +26,20 @@ forks 1 (build system & C++ standard) and 2 (license) decided; fork 3
 - Fork 2 decided (ADR [`0002`](../context/decisions/0002-license.md),
   accepted): **Apache-2.0** (permissive, patent grant); `LICENSE` added;
   per-file SPDX headers when code lands.
+- Fork 3 decided (ADR [`0003`](../context/decisions/0003-project-name.md),
+  accepted): renamed project `libklv` → **`libmisbklv`** (Option B); external
+  `akrutsinger/libklv` references preserved.
 
 ## In progress
 
-(none — fork 3 (name collision) next)
+(none — fork 7 (ADR format) next)
 
 ## Next
 
-- Fork 3 (`akrutsinger/libklv` name collision — rename or disambiguate).
-- Then fork 4 (core architecture); then fork 7 (ADR format).
+- Fork 7 (ADR format & numbering — location settled: `context/decisions/`).
+- Then fork 4 (core architecture).
 
 ## Blockers / notes
 
-- None.
+- Repo directory still `~/workspaces/libklv` (optional `mv` to `libmisbklv`,
+  separate from the name decision).

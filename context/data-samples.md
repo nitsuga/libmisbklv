@@ -55,7 +55,7 @@ registration descriptor`** — *not* `0x15` (the ST 1402 metadata stream type).
 This is exactly the pragmatic signaling
 [gstklvplugin](/prior-art-gstklvplugin.md) chose so GStreamer `tsdemux` (and
 `ffmpeg`) hand up raw KLV; `0x15` would expect metadata access-unit wrapping
-these muxers don't emit. **Implication:** when libklv *inserts* a KLV stream
+these muxers don't emit. **Implication:** when libmisbklv *inserts* a KLV stream
 into MPEG-TS, signal `0x06 + KLVA` to match these samples and the dominant
 demuxers. When *extracting*, accept both `0x06` and `0x15` (and identify the
 KLV PID by the `KLVA` registration descriptor, not by stream_type alone).

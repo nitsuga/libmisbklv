@@ -23,7 +23,7 @@ Two static libraries — the split is the interesting part:
 
 Plus `klv2xml`, an example app that reads a KLV stream and emits XML.
 
-# Relevant to libklv
+# Relevant to libmisbklv
 
 - **Crib:** the parser-vs-item-database split is a clean separation worth
   adopting — keep KLV mechanics (BER-OID tags, BER length, TLV walk) isolated
@@ -32,7 +32,7 @@ Plus `klv2xml`, an example app that reads a KLV stream and emits XML.
 - **Avoid:** **no license** — design reference only, do not copy code; vcpkg
   is a heavyweight dependency; covers 0601+0102, not [0903](/st0903.md) or
   [0604](/st0604.md).
-- Closest in spirit to libklv (C++), so the best architectural foil.
+- Closest in spirit to libmisbklv (C++), so the best architectural foil.
 
 # Relationships
 

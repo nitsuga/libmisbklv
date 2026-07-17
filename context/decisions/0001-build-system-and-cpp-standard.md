@@ -28,7 +28,7 @@ on a Jetson). Multi-arch (x86_64 native + aarch64 cross) is in scope.
   them, and `span` is a header-only template → runtime-safe on JetPack 6's
   libstdc++ 11. So a C++20 `std::span`-based parser API is viable.
 - Orin's GPU (NVENC/NVDEC, GStreamer `nvv4l2` plugins) serves the host app's
-  video path, not libklv core — KLV extraction is CPU `tsdemux`. The GPU
+  video path, not libmisbklv core — KLV extraction is CPU `tsdemux`. The GPU
   doesn't constrain us, but we must coexist with NVIDIA's GStreamer stack
   (relevant to fork 5).
 
