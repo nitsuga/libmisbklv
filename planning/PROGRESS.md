@@ -20,10 +20,13 @@ then core architecture.
   akrutsinger/libklv (`type: Prior Art`).
 - `data/` samples characterized (`type: Sample Data`): verified ST 0601 in
   MPEG-TS, `0x06`+`KLVA` signaling.
+- Fork 1 decided (ADR [`0001`](../context/decisions/0001-build-system-and-cpp-standard.md),
+  accepted): CMake ≥3.20 + **C++20 floor** + cross-compile (native x86_64,
+  `aarch64` for Jetson), JetPack 6+ minimum.
 
 ## In progress
 
-(none — at decision point)
+(none — fork 1 decided; fork 2 (license) next)
 
 ## Next
 

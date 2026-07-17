@@ -47,3 +47,23 @@
   refresh ROADMAP (fork status + link) + PROGRESS; on implementing a
   significant change, refresh PROGRESS (and ROADMAP if a fork moves); routine
   ingests/lint stay in `log.md`. Ensures planning stays non-ephemeral.
+* **Decision (proposed)**: Fork 1 →
+  [`0001-build-system-and-cpp-standard`](./decisions/0001-build-system-and-cpp-standard.md)
+  (proposed): CMake ≥3.20 + C++20 floor. Awaiting accept; flagged the
+  embedded-toolchain assumption as the thing most likely to flip it to C++17.
+  ROADMAP fork 1 → PROPOSED; ADR filename convention `NNNN-slug.md` adopted
+  provisionally (fork 7 to formalize).
+* **Decision (revised)**: Revised
+  [`0001`](./decisions/0001-build-system-and-cpp-standard.md) on the Jetson
+  constraint: JetPack 5 (Orin) ships GCC 9.3, which lacks `std::span` (needs
+  GCC 10), so a C++20 span-based API won't build natively on stock JetPack 5.
+  Floor revised C++20 → **C++17**; added multi-arch/cross-compile (x86_64 +
+  aarch64) as a first-class CMake concern; byte views via `string_view` + a
+  local view type. GPU noted as host-app/video-path, not core. Gate to
+  acceptance: is JetPack-5-native required? (recommend yes → C++17).
+* **Decision (accepted)**: [`0001`](./decisions/0001-build-system-and-cpp-standard.md)
+  → accepted. User resolved the gate: **JetPack 6+ minimum, cross-compile only
+  (no native Jetson builds)**. This removed the C++17 rationale → floor is
+  **C++20** (`std::span` viable: header-only, cross-toolchain ≥ GCC 11). Build
+  = CMake ≥3.20, multi-arch (native x86_64 + `aarch64` cross), C++23 deferred
+  (local `Result<T>`). ROADMAP fork 1 → DECIDED.

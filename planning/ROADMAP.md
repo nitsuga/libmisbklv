@@ -36,7 +36,7 @@ Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 
 | # | Fork | Status | Decision |
 |---|------|--------|----------|
-| 1 | Build system & C++ standard (CMake; C++17/20/23) | OPEN | — |
+| 1 | Build system & C++ standard (CMake; C++17/20/23) | DECIDED | [0001](../context/decisions/0001-build-system-and-cpp-standard.md) |
 | 2 | Project license | OPEN | — |
 | 3 | `akrutsinger/libklv` name collision — rename or disambiguate | OPEN | — |
 | 4 | Core architecture: parser/item-registry split, data-driven tag registry, KLV core data model | OPEN | — |
