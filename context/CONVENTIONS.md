@@ -74,6 +74,23 @@ write the Decision in [`./decisions/`](./decisions/index.md) with `status: propo
 link it from ROADMAP, and update [`../planning/PROGRESS.md`](../planning/PROGRESS.md).
 Raw open questions live in `../planning/`; only deliberated rationale lives here.
 
+## ADR format
+
+- **Filename:** `NNNN-slug.md` — 4-digit zero-padded, hyphenated lowercase slug.
+  Numbering is sequential by **creation order** (not roadmap-fork number; they
+  diverge — fork 7 → ADR 0004); monotonic; never reused (a superseded ADR keeps
+  its number, the superseder takes the next).
+- **Frontmatter:** `type: Decision`, `title`, `status`, `tags` (include
+  `decision`, a topic tag, `phase-N`), `timestamp` (ISO 8601), optional `fork:`
+  (roadmap fork # for traceability).
+- **Body:** `# Context` → `# Decision` → `# Alternatives considered` →
+  `# Consequences` → `# Assumptions / open questions` → `# Citations`
+  (specialized sections allowed between). Use `# Decision` always — `status`
+  carries proposed/accepted, so no header churn on accept.
+- **Register:** [`./decisions/index.md`](./decisions/index.md) lists
+  `Title | Status` by number; updated on every status change.
+- Decided in [`./decisions/0004-adr-format.md`](./decisions/0004-adr-format.md).
+
 # Subdirectories
 
 Types stay flat in `context/` by default; the root `index.md` groups by type.

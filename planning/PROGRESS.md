@@ -5,9 +5,9 @@ Current status. Volatile; rewrite each session. For the plan, see
 
 ## Now
 
-Phase 0 (Foundation) done. Phase 1 (foundational decisions) nearly complete —
-forks 1 (build system & C++ standard), 2 (license), and 3 (name → `libmisbklv`)
-decided; fork 7 (ADR format) next, then core architecture.
+Phase 0 (Foundation) done. Phase 1 (foundational decisions) complete — forks
+1 (build system & C++ standard), 2 (license), 3 (name → `libmisbklv`), and
+7 (ADR format) decided. Next: fork 4 (core architecture).
 
 ## Done
 
@@ -29,15 +29,20 @@ decided; fork 7 (ADR format) next, then core architecture.
 - Fork 3 decided (ADR [`0003`](../context/decisions/0003-project-name.md),
   accepted): renamed project `libklv` → **`libmisbklv`** (Option B); external
   `akrutsinger/libklv` references preserved.
+- Fork 7 decided (ADR [`0004`](../context/decisions/0004-adr-format.md),
+  accepted): ADR format/numbering formalized (Nygard-style `NNNN-slug`,
+  sequential by creation order, `status` frontmatter, body sections); spec in
+  [`CONVENTIONS`](../context/CONVENTIONS.md) § ADR format.
 
 ## In progress
 
-(none — fork 7 (ADR format) next)
+(none — fork 4 (core architecture) next)
 
 ## Next
 
-- Fork 7 (ADR format & numbering — location settled: `context/decisions/`).
-- Then fork 4 (core architecture).
+- Fork 4 (core architecture): KLV core data model; parser / item-registry
+  split; data-driven tag registry.
+- Then forks 5 (gstreamer/ffmpeg backends), 6 (0604 scope).
 
 ## Blockers / notes
 

@@ -90,3 +90,17 @@
   yet). `libklv_cpp` rejected (implies a port; C-ABI-incompatible). Doc
   self-refs renamed; external `akrutsinger/libklv` refs preserved. ROADMAP
   fork 3 → DECIDED. Repo dir rename left as a separate optional step.
+* **Decision (proposed)**: Fork 7 →
+  [`0004-adr-format`](./decisions/0004-adr-format.md) (proposed): formalize the
+  de-facto ADR format (Nygard-style `NNNN-slug.md`, sequential by creation
+  order — fork 7 = ADR 0004; frontmatter + body sections; register).
+  Alternatives rejected: MADR (overhead), ad-hoc, external-tool. Full spec in
+  [`CONVENTIONS`](./CONVENTIONS.md) § ADR format. Awaiting accept. ROADMAP
+  fork 7 → PROPOSED.
+* **Decision (accepted)**: [`0004`](./decisions/0004-adr-format.md) → accepted.
+  ADR format formalized: Nygard-style `NNNN-slug.md`, sequential by creation
+  order (fork 7 = ADR 0004), `status` frontmatter, `# Decision` heading always,
+  body Context/Decision/Alternatives/Consequences/Assumptions/Citations,
+  register in `decisions/index.md`. Spec lives in [`CONVENTIONS`](./CONVENTIONS.md)
+  § ADR format. ROADMAP fork 7 → DECIDED. **Phase 1 (foundational decisions)
+  complete.**
