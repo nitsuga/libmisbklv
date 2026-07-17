@@ -7,3 +7,4 @@ forks live in [`../../planning/ROADMAP.md`](../../planning/ROADMAP.md).
 | Title | Status |
 |-------|--------|
 | [0001 — Build system & C++ standard](./0001-build-system-and-cpp-standard.md) | accepted |
+| [0002 — Project license](./0002-license.md) | accepted |

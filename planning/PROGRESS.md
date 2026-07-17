@@ -5,9 +5,9 @@ Current status. Volatile; rewrite each session. For the plan, see
 
 ## Now
 
-Phase 0 (Foundation) complete. At the Phase 1 decision point — about to work
-through the foundational forks (build system, C++ standard, license, name),
-then core architecture.
+Phase 0 (Foundation) done. Phase 1 (foundational decisions) in progress —
+forks 1 (build system & C++ standard) and 2 (license) decided; fork 3
+(name collision) next, then core architecture.
 
 ## Done
 
@@ -23,15 +23,18 @@ then core architecture.
 - Fork 1 decided (ADR [`0001`](../context/decisions/0001-build-system-and-cpp-standard.md),
   accepted): CMake ≥3.20 + **C++20 floor** + cross-compile (native x86_64,
   `aarch64` for Jetson), JetPack 6+ minimum.
+- Fork 2 decided (ADR [`0002`](../context/decisions/0002-license.md),
+  accepted): **Apache-2.0** (permissive, patent grant); `LICENSE` added;
+  per-file SPDX headers when code lands.
 
 ## In progress
 
-(none — fork 1 decided; fork 2 (license) next)
+(none — fork 3 (name collision) next)
 
 ## Next
 
-- Resolve foundational forks 1–3 (build system, C++ std, license, name).
-- Then fork 4 (core architecture).
+- Fork 3 (`akrutsinger/libklv` name collision — rename or disambiguate).
+- Then fork 4 (core architecture); then fork 7 (ADR format).
 
 ## Blockers / notes
 

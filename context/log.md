@@ -67,3 +67,13 @@
   **C++20** (`std::span` viable: header-only, cross-toolchain ≥ GCC 11). Build
   = CMake ≥3.20, multi-arch (native x86_64 + `aarch64` cross), C++23 deferred
   (local `Result<T>`). ROADMAP fork 1 → DECIDED.
+* **Decision (proposed)**: Fork 2 →
+  [`0002-license`](./decisions/0002-license.md) (proposed): permissive license
+  — Apache-2.0 recommended (patent grant; codec/media-adjacent) with MIT as
+  the lighter alternative. LGPL/AGPL/GPL rejected (user prefers permissive;
+  AGPL blocks closed embedding). Awaiting SPDX pick (Apache-2.0 vs MIT) to
+  accept. ROADMAP fork 2 → PROPOSED.
+* **Decision (accepted)**: [`0002`](./decisions/0002-license.md) → accepted.
+  License = **Apache-2.0** (permissive, patent grant). Canonical `LICENSE`
+  added at repo root; per-file `SPDX-License-Identifier: Apache-2.0` headers
+  when code lands. ROADMAP fork 2 → DECIDED.
