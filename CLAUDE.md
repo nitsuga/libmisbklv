@@ -33,6 +33,11 @@ of decisions and status, not chat.
   if it advances or closes a roadmap fork, update ROADMAP too.
 - Routine ingests / lint go to [`context/log.md`](context/log.md), not PROGRESS.
 
+## Commit messages
+
+No `Co-Authored-By` trailer — keep history clean. When committing on the user's
+behalf, write the message without the Claude co-authorship line.
+
 ## Repo layout
 
 - `references/` — MISB standards (PDF + `.txt` extract). Source of truth.
