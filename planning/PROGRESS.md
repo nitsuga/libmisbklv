@@ -5,9 +5,9 @@ Current status. Volatile; rewrite each session. For the plan, see
 
 ## Now
 
-Phase 0 (Foundation) done. Phase 1 (foundational decisions) complete — forks
-1 (build system & C++ standard), 2 (license), 3 (name → `libmisbklv`), and
-7 (ADR format) decided. Next: fork 4 (core architecture).
+Phase 0 done. Phase 1 complete. Phase 2 (core architecture) decided — fork 4
+(0005 data model / 0006 registry / 0007 error+C ABI) accepted. Remaining:
+forks 5 (backends), 6 (0604 scope).
 
 ## Done
 
@@ -33,16 +33,22 @@ Phase 0 (Foundation) done. Phase 1 (foundational decisions) complete — forks
   accepted): ADR format/numbering formalized (Nygard-style `NNNN-slug`,
   sequential by creation order, `status` frontmatter, body sections); spec in
   [`CONVENTIONS`](../context/CONVENTIONS.md) § ADR format.
+- Fork 4 decided (core architecture; ADRs
+  [`0005`](../context/decisions/0005-klv-core-data-model.md),
+  [`0006`](../context/decisions/0006-tag-registry.md),
+  [`0007`](../context/decisions/0007-error-and-c-abi.md), all accepted):
+  hybrid data model (tag+len+bytes + registry-driven typed view, `std::span`
+  zero-copy); compiled-in `constexpr` tag registry (build-time codegen); local
+  `Result<T>` (no exceptions for routine errors); C ABI deferred.
 
 ## In progress
 
-(none — fork 4 (core architecture) next)
+(none — forks 5 (gstreamer/ffmpeg backends) & 6 (0604 scope) next)
 
 ## Next
 
-- Fork 4 (core architecture): KLV core data model; parser / item-registry
-  split; data-driven tag registry.
-- Then forks 5 (gstreamer/ffmpeg backends), 6 (0604 scope).
+- Fork 5 (gstreamer/ffmpeg backends — shared interface; both in v1 or sequence).
+- Fork 6 (0604 ES-timestamp scope — v1 or deferred).
 
 ## Blockers / notes
 

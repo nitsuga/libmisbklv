@@ -10,3 +10,6 @@ forks live in [`../../planning/ROADMAP.md`](../../planning/ROADMAP.md).
 | [0002 — Project license](./0002-license.md) | accepted |
 | [0003 — Project name collision](./0003-project-name.md) | accepted |
 | [0004 — ADR format & numbering](./0004-adr-format.md) | accepted |
+| [0005 — KLV core data model](./0005-klv-core-data-model.md) | accepted |
+| [0006 — Tag registry (compiled-in)](./0006-tag-registry.md) | accepted |
+| [0007 — Error handling & C ABI](./0007-error-and-c-abi.md) | accepted |

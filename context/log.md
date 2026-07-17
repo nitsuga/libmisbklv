@@ -104,3 +104,17 @@
   register in `decisions/index.md`. Spec lives in [`CONVENTIONS`](./CONVENTIONS.md)
   § ADR format. ROADMAP fork 7 → DECIDED. **Phase 1 (foundational decisions)
   complete.**
+* **Decision (proposed)**: Fork 4 (split) → three proposed ADRs —
+  [`0005`](./decisions/0005-klv-core-data-model.md) (KLV core data model,
+  hybrid: tag+length+raw bytes + registry-driven typed view),
+  [`0006`](./decisions/0006-tag-registry.md) (compiled-in `constexpr`,
+  build-time codegen), [`0007`](./decisions/0007-error-and-c-abi.md) (local
+  `Result<T>`; C ABI deferred). Four-layer architecture agreed. ROADMAP fork 4
+  → PROPOSED. Awaiting accept.
+* **Decision (accepted)**: Fork 4 —
+  [`0005`](./decisions/0005-klv-core-data-model.md)/[`0006`](./decisions/0006-tag-registry.md)/[`0007`](./decisions/0007-error-and-c-abi.md)
+  all accepted. Core architecture locked: hybrid data model (tag+len+raw
+  bytes + registry-driven typed view, `std::span` zero-copy); compiled-in
+  `constexpr` tag registry (build-time codegen); local `Result<T>` (no
+  exceptions for routine errors); C ABI deferred (clean C++ core first).
+  ROADMAP fork 4 → DECIDED. **Phase 2 (core architecture) design complete.**
