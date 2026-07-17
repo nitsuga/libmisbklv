@@ -36,6 +36,18 @@ _(`type: KLV Item` — individual 0601/0903 items: tag, length, units, decode me
 
 _(`type: Prior Art` — existing KLV libraries/plugins analyzed as design input.)_
 
+* [paretech/klvdata](./prior-art-klvdata.md) — Python, MIT; 0601+0102; punts demux to ffmpeg (uses our `Day Flight.mpg`).
+* [jimcavoy/klvp](./prior-art-klvp.md) — C++, no license; parser-vs-item-DB split; closest architectural foil.
+* [n1tsu/libmisb0601](./prior-art-libmisb0601.md) — C, no license; encode/decode 0601.6; fixed 94-tag array (anti-pattern).
+* [mkassimi98/gstklvplugin](./prior-art-gstklvplugin.md) — GStreamer plugin, AGPL-3.0; enc/dec/inject/PMT-rewrite; INI registry; the gstreamer-path reference.
+* [akrutsinger/libklv](./prior-art-libklv-akrutsinger.md) — C stub, 0601.9; **name collides with this project**.
+
+## Sample Data
+
+_(`type: Sample Data` — characterized input assets / test vectors.)_
+
+* [data/ — KLV MPEG-TS samples](./data-samples.md) — Day Flight & Night Flight IR; verified ST 0601 in MPEG-TS, `0x06`+`KLVA` signaling.
+
 ## Decisions
 
 _(`type: Decision` — architecture decision records: gstreamer vs ffmpeg, C++ standard, 0604 scope.)_

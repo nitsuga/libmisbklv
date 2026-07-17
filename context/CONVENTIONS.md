@@ -50,8 +50,9 @@ Current types:
 | `Prior Art` | Existing KLV libraries/plugins analyzed as design input. |
 | `Decision` | Architecture decision record — the *why* of a fork. |
 | `Component` | A libklv module (KLV core, gstreamer backend, ffmpeg backend). |
+| `Sample Data` | Characterized input assets (sample streams, test vectors). |
 
-Anticipated but not yet used: `Sample Data`, `Test Vector`. Add as needed.
+Anticipated but not yet used: `Test Vector`. Add as needed.
 
 # Linking
 
