@@ -34,6 +34,12 @@
   registry range matches jmisb) and targetColor uint24 (RGB 85,136,51=0x558833).
   jmisb's 0601/0903 messages are built dynamically (no single golden packet), so
   this cross-checks per-item codecs; full-packet vectors remain future work.
+* **Research (0604 / post-v1)**: scanned [`jmisb`](./prior-art-jmisb.md) for ST
+  0604 — **none** (no SEI/NAL/H.26x in the whole repo; KLV-only). Confirms 0604
+  is a video-ES subsystem, not KLV. Reusable seam = **ST 0603 time** (jmisb
+  `st0603`, = our 0601 item-2 semantics); only the ES-embedding is new. Recorded
+  on [`0009`](./decisions/0009-st0604-deferred.md) (revisit notes) + the jmisb
+  prior-art doc.
 
 ## 2026-07-17
 

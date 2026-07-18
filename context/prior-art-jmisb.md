@@ -43,6 +43,12 @@ A **generic KLV core** + a **class per item** (the klvdata camp):
   - **Concepts we deferred:** **UDS** (Universal Data Set, UL-keyed — jmisb
     splits `UdsParser` from `LdsParser`; we do Local Sets only) and the **Array
     type** (0903 §9.1.2 `ArrayBuilder`; we did Series in M6, not Arrays).
+  - **ST 0603 time** (`st0603`: `ST0603TimeStamp`, `TimeStatus`) — the timestamp
+    seam shared with our 0601 item-2 and with the deferred
+    [`0604`](/decisions/0009-st0604-deferred.md) (0604 payloads are 0603-based).
+- **Does NOT cover:** **ST 0604** (ES-layer timestamps) — no SEI/NAL/H.26x in the
+  repo; jmisb is KLV-only, confirming 0604 is a separate video-ES subsystem (see
+  [`0009`](/decisions/0009-st0604-deferred.md)).
   - **Breadth/semantics reference** as we grow the registry (item ranges, units,
     special values), a second source alongside the standards.
 - **Avoid:**

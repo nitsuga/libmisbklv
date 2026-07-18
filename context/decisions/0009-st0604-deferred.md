@@ -56,6 +56,15 @@ revisited after v1. The core KLV value proposition does not depend on it.
   together is natural.
 - Scope when revisited: Precision Time Stamp first; Nano (H.265-only) and
   Commercial time-code as follow-ons.
+- **Prior-art scan (2026-07-18):** [`jmisb`](../prior-art-jmisb.md) (broad KLV
+  lib, 20+ standards) implements **no 0604** — no SEI/NAL/H.26x anywhere —
+  independently confirming 0604 is a *video-ES* subsystem, not KLV, and won't
+  come from a KLV library. The one reusable seam is **ST 0603 time** (jmisb has
+  `st0603`; = our [`0601`](../st0601.md) item-2 timestamp semantics): 0604
+  payloads are 0603-based, so timestamp *value* handling is shared and only the
+  ES-embedding is new (SEI / `user_data`, the 16-byte identifiers, `0xFF`
+  stuffing). References for that half: gstreamer/ffmpeg bitstream tooling
+  (h264/h265parse SEI) + [`gstklvplugin`](../prior-art-gstklvplugin.md).
 
 # Citations
 
