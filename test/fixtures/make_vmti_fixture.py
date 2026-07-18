@@ -34,10 +34,12 @@ def bcc16(data):  # ST 0601 §6.6
 
 # --- nested VMTI LS (ST 0903): value of Item 74, no key/length/checksum ------
 vmti = b"".join([
-    tlv(2, TS),          # 02 Precision Time Stamp (uint64)
-    tlv(4, bytes([6])),  # 04 VMTI LS Version Number = 6
-    tlv(5, bytes([3])),  # 05 Total Targets Detected = 3
-    tlv(6, bytes([2])),  # 06 Number Reported = 2
+    tlv(2, TS),                          # 02 Precision Time Stamp (uint64)
+    tlv(4, bytes([6])),                  # 04 VMTI LS Version Number = 6
+    tlv(5, bytes([3])),                  # 05 Total Targets Detected = 3
+    tlv(6, bytes([2])),                  # 06 Number Reported = 2
+    tlv(11, bytes.fromhex("0640")),      # 11 Horizontal FoV = IMAPB(0,180) 12.5°
+    tlv(12, bytes.fromhex("0500")),      # 12 Vertical FoV   = IMAPB(0,180) 10.0°
 ])
 
 # --- outer ST 0601 packet ---------------------------------------------------

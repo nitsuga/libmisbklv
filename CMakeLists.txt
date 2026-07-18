@@ -50,3 +50,7 @@ target_link_libraries(nested_roundtrip_test PRIVATE misbklv)
 add_test(NAME nested_vmti
   COMMAND nested_roundtrip_test
           ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/vmti_nested.klv)
+
+add_executable(imapb_test test/imapb_test.cpp)
+target_link_libraries(imapb_test PRIVATE misbklv)
+add_test(NAME imapb COMMAND imapb_test)

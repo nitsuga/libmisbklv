@@ -10,14 +10,15 @@ decided — forks 4 (0005/0006/0007), 5 (0008) accepted; fork 6 (0604) deferred.
 Phase 3 (implementation) **started with an extraction spike** on `Day
 Flight.mpg`, which validated the read path (BER walk, timestamp, lat/lon,
 checksum) and surfaced two design gaps the "all forks resolved" status missed.
-All design forks (1–10) resolved. **Milestones 1–3 done and passing** (4 CTest
+All design forks (1–10) resolved. **Milestones 1–4 done and passing** (5 CTest
 cases green). M1 = first-packet round-trip. M2 = full-stream round-trip of both
-0601 samples (Day 6/977 B, Night 18/2916 B), full 25-tag registry. M3 = **0903
-nesting**: an ST 0601 packet nesting a VMTI LS in Item 74 round-trips byte-exact,
-validating `childRegistry` routing (RegistryId → `registry_for`) and recursive
-parse+build both directions. Next: the **VTarget Series / Array-Series packs**
-(0903 Item 101) + IMAPB items, then split the header-only core into a real lib
-target + CI drift check, then the gstreamer backend.
+0601 samples (Day 6/977 B, Night 18/2916 B), full 25-tag registry. M3 = 0903
+nesting (Item 74 VMTI, recursive `childRegistry` routing + parse/build). M4 =
+**real ST 1201 IMAPB codec** — validated against the standards' own worked
+examples (ST 1201 Table 7; ST 0903 §10.1.11 FoV) *and* exercised end-to-end via
+VMTI FoV items in the nested fixture. Next: **M5 — VTarget Series / Array-Series
+packs** (0903 Item 101), then split the header-only core into a real lib target +
+CI drift check, then the gstreamer backend.
 
 ## Done
 
@@ -108,18 +109,25 @@ target + CI drift check, then the gstreamer backend.
   value, no key/checksum). A hand-authored fixture (`vmti_nested.klv`, built by
   `make_vmti_fixture.py` from the standard) — an 0601 packet nesting a VMTI LS in
   Item 74 — round-trips byte-exact inner and outer. Validates childRegistry
-  routing + recursive parse/build. Scalar-only: VTarget Series deferred to M4.
+  routing + recursive parse/build. Scalar-only: VTarget Series deferred to M5.
+- **Milestone 4 — ST 1201 IMAPB codec (Phase 3)** — `ValueKind::IMAPB` now uses
+  the real ST 1201 Starting-Point-B mapping (`bPow`/`dPow`/`sF`/`sR`/`Zoffset`),
+  split from the linear path. `imapb_test` checks it against the standards'
+  published values — ST 1201 §10 Table 7 (IMAPB(-900,19000) L=3: 10.0↔0x038E00)
+  and ST 0903 §10.1.11 (IMAPB(0,180) L=2: 12.5°↔0x0640) — plus a round-trip
+  sweep. VMTI FoV items 11/12 added to the registry + nested fixture, decoding
+  12.5°/10.0° and re-encoding byte-exact.
 
 ## In progress
 
-- (nothing active — Milestones 1–3 landed; picking the next target below.)
+- (nothing active — Milestones 1–4 landed; picking the next target below.)
 
 ## Next
 
-- **M4 — VTarget Series / packs (0903 Item 101)**: Array/Series homogeneous VLPs
-  (0903 §9.1.2/3) + the VTarget Pack — the recursive-core case M3 deferred. Also
-  the IMAPB FoV items (11/12) to exercise the ST 1201 codec (`ValueKind::IMAPB`
-  currently shares the linear path; needs the true IMAP mapping).
+- **M5 — VTarget Series / packs (0903 Item 101)**: Array/Series homogeneous VLPs
+  (0903 §9.1.2/3) + the VTarget Pack (BER-OID targetId + nested VTarget LS) — the
+  recursive-core case M3/M4 deferred. Needs a Series/pack representation in the
+  data model + builder and a hand-authored fixture.
 - **Then** split the header-only core into a real library target (`.cpp`), wire
   the CI drift check (ADR 0012) into an actual CI config, and start the gstreamer
   backend incl. the in-library PMT-rewrite element

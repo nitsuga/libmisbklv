@@ -14,6 +14,8 @@ inline constexpr ItemDescriptor vmti_0903_items[] = {
     { .tag = 4, .name = "VMTI LS Version Number", .units = "", .kind = ValueKind::UInt, .variable = true, .fixed_len = 0, .is_signed = false, .map = {0.0, 0.0}, .specials = {}, .flags = kNone, .child = RegistryId::None },
     { .tag = 5, .name = "Total Number of Targets Detected", .units = "", .kind = ValueKind::UInt, .variable = true, .fixed_len = 0, .is_signed = false, .map = {0.0, 0.0}, .specials = {}, .flags = kNone, .child = RegistryId::None },
     { .tag = 6, .name = "Number of Reported Targets", .units = "", .kind = ValueKind::UInt, .variable = true, .fixed_len = 0, .is_signed = false, .map = {0.0, 0.0}, .specials = {}, .flags = kNone, .child = RegistryId::None },
+    { .tag = 11, .name = "VMTI Horizontal Field of View", .units = "deg", .kind = ValueKind::IMAPB, .variable = false, .fixed_len = 2, .is_signed = false, .map = {0.0, 180.0}, .specials = {}, .flags = kNone, .child = RegistryId::None },
+    { .tag = 12, .name = "VMTI Vertical Field of View", .units = "deg", .kind = ValueKind::IMAPB, .variable = false, .fixed_len = 2, .is_signed = false, .map = {0.0, 180.0}, .specials = {}, .flags = kNone, .child = RegistryId::None },
 };
 
 inline constexpr Registry vmti_0903{ "VMTI_0903", vmti_0903_items };

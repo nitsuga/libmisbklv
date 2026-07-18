@@ -34,3 +34,21 @@ kind = "uint"
 tag  = 6
 name = "Number of Reported Targets"
 kind = "uint"
+
+[[item]]                       # §10.1.11 — IMAPB(0,180); e.g. 12.5° -> 0x0640
+tag    = 11
+name   = "VMTI Horizontal Field of View"
+units  = "deg"
+kind   = "imapb"
+length = 2
+min    = 0.0
+max    = 180.0
+
+[[item]]                       # §10.1.12 — IMAPB(0,180)
+tag    = 12
+name   = "VMTI Vertical Field of View"
+units  = "deg"
+kind   = "imapb"
+length = 2
+min    = 0.0
+max    = 180.0

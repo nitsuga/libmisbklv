@@ -59,6 +59,30 @@ inline void linear_encode(const ItemDescriptor& d, double x, Bytes& out, int len
   }
 }
 
+// --- ST 1201 IMAPB (Starting Point B): float [a,b] <-> unsigned L-byte int ---
+struct ImapB {
+  double sF, sR, zoff, a;
+};
+inline ImapB imapb_params(double a, double b, int len) {
+  const double bPow = std::ceil(std::log2(b - a));  // ST 1201 §8, eq. bPow
+  const double dPow = 8.0 * len - 1.0;
+  ImapB p;
+  p.sF = std::exp2(dPow - bPow);                     // forward scaling factor
+  p.sR = std::exp2(bPow - dPow);                     // reverse scaling factor
+  p.zoff = (a < 0.0 && b > 0.0) ? (p.sF * a - std::floor(p.sF * a)) : 0.0;
+  p.a = a;
+  return p;
+}
+inline double imapb_decode(const ItemDescriptor& d, std::span<const std::byte> raw) {
+  const ImapB p = imapb_params(d.map.min, d.map.max, static_cast<int>(raw.size()));
+  return p.sR * (static_cast<double>(rd_uint(raw)) - p.zoff) + p.a;
+}
+inline void imapb_encode(const ItemDescriptor& d, double x, Bytes& out, int len) {
+  const ImapB p = imapb_params(d.map.min, d.map.max, len);
+  const double yf = p.sF * (x - p.a) + p.zoff;       // truncate; x>=a => floor
+  wr_uint(out, static_cast<std::uint64_t>(std::floor(yf)), len);
+}
+
 // --- decode raw bytes -> typed Value ---------------------------------------
 inline Result<Value> decode(const ItemDescriptor& d, std::span<const std::byte> raw) {
   switch (d.kind) {
@@ -67,8 +91,9 @@ inline Result<Value> decode(const ItemDescriptor& d, std::span<const std::byte> 
     case ValueKind::Int:
       return Result<Value>::ok(Value{rd_int(raw)});
     case ValueKind::LinearLDS:
-    case ValueKind::IMAPB:
       return Result<Value>::ok(Value{linear_decode(d, raw)});
+    case ValueKind::IMAPB:
+      return Result<Value>::ok(Value{imapb_decode(d, raw)});
     case ValueKind::Utf8:
       return Result<Value>::ok(Value{std::string_view{
           reinterpret_cast<const char*>(raw.data()), raw.size()}});
@@ -92,8 +117,10 @@ inline Result<Bytes> encode(const ItemDescriptor& d, const Value& v, std::size_t
               static_cast<int>(len));
       return Result<Bytes>::ok(std::move(out));
     case ValueKind::LinearLDS:
-    case ValueKind::IMAPB:
       linear_encode(d, std::get<double>(v), out, static_cast<int>(len));
+      return Result<Bytes>::ok(std::move(out));
+    case ValueKind::IMAPB:
+      imapb_encode(d, std::get<double>(v), out, static_cast<int>(len));
       return Result<Bytes>::ok(std::move(out));
     case ValueKind::Utf8: {
       auto sv = std::get<std::string_view>(v);

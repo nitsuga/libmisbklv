@@ -232,5 +232,14 @@
   LS in Item 74 — passes: childRegistry routing OK, nested + outer both
   byte-exact. Generator extended (`child`/`nested_ls`; variable-length uint from
   omitted length). Fixed a stale 16-vs-17-byte UL-key hex typo in unused TOML
-  `ul_key` fields + the fixture script. Scalar-only; VTarget Series → M4.
+  `ul_key` fields + the fixture script. Scalar-only; VTarget Series → M5.
+  (Detail in PROGRESS.)
+* **Milestone 4 (implementation)**: real ST 1201 IMAPB codec. `ValueKind::IMAPB`
+  now uses the Starting-Point-B mapping (`imapb_params`: bPow/dPow/sF/sR/Zoffset;
+  `imapb_decode`/`imapb_encode`), split from the linear-LDS path in `codec.hpp`.
+  `imapb_test` validates against the standards' own worked examples — ST 1201 §10
+  Table 7 (IMAPB(-900,19000), L=3: enc(10.0)=0x038E00, plus 0.0/-900 vectors) and
+  ST 0903 §10.1.11 (IMAPB(0,180), L=2: 12.5°=0x0640) — plus a full-range
+  round-trip sweep. VMTI FoV items 11/12 (IMAPB) added to the registry + nested
+  fixture for end-to-end coverage; 5th CTest case. VTarget Series → M5.
   (Detail in PROGRESS.)

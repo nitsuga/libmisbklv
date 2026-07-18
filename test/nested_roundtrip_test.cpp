@@ -89,9 +89,14 @@ int main(int argc, char** argv) {
     const ItemDescriptor* d = child->find(it.tag);
     if (!d) continue;
     auto v = codec::decode(*d, it.value);
-    std::printf("  VMTI tag %2u  %-32s = %llu\n", it.tag,
-                std::string(d->name).c_str(),
-                static_cast<unsigned long long>(std::get<std::uint64_t>(*v)));
+    if (d->kind == ValueKind::IMAPB || d->kind == ValueKind::LinearLDS)
+      std::printf("  VMTI tag %2u  %-32s = %.4f %s\n", it.tag,
+                  std::string(d->name).c_str(), std::get<double>(*v),
+                  std::string(d->units).c_str());
+    else
+      std::printf("  VMTI tag %2u  %-32s = %llu\n", it.tag,
+                  std::string(d->name).c_str(),
+                  static_cast<unsigned long long>(std::get<std::uint64_t>(*v)));
   }
 
   // --- recursive rebuild: inner set, then outer packet ----------------------
