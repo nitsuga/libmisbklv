@@ -40,6 +40,16 @@
   `st0603`, = our 0601 item-2 semantics); only the ES-embedding is new. Recorded
   on [`0009`](./decisions/0009-st0604-deferred.md) (revisit notes) + the jmisb
   prior-art doc.
+* **Characterize (Sample Data)**: extracted + walked the three new `data/*.ts`
+  ([`data-samples`](./data-samples.md)). **All ST 0601, no VMTI** (tag 74 absent
+  everywhere — 0903 read path stays on hand-authored + jmisb vectors). Cheyenne
+  (407 pkts), falls (**two** KLV streams: basic ≤tag65 + extended ≤tag91, 1953
+  each), sync (365). **All four streams round-trip byte-exact = 4678 real packets**
+  through parse→codec→builder→checksum — strongest validation to date. Surfaced:
+  registry-breadth items (3/4/10 strings, 26–33 corner offsets, falls-2's 90+
+  IMAPB extended items); **tag 48 = Security LS (ST 0102)** nested instance;
+  multi-byte BER-OID tags (≥128) still unexercised (max tag 91). Not yet wired as
+  CTest (needs committed `.klv` fixtures or build-time ffmpeg extraction).
 
 ## 2026-07-17
 
