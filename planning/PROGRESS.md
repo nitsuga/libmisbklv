@@ -10,14 +10,14 @@ decided — forks 4 (0005/0006/0007), 5 (0008) accepted; fork 6 (0604) deferred.
 Phase 3 (implementation) **started with an extraction spike** on `Day
 Flight.mpg`, which validated the read path (BER walk, timestamp, lat/lon,
 checksum) and surfaced two design gaps the "all forks resolved" status missed.
-All design forks (1–10) resolved. **Milestones 1 and 2 done and passing.**
-M1 = byte-exact round-trip of the first packet. M2 = **full-stream byte-exact
-round-trip** of both samples (Day Flight: 6 packets/977 B; Night Flight IR:
-18 packets/2916 B) with the full 25-tag sample registry populated (26
-descriptors) — every packet reconstructs identically through the typed codecs,
-0 items falling back to raw. Next: **M3 — 0903 nesting** (Item 74 → VMTI
-sub-registry), then split the header-only core into a real lib target + CI
-drift check, then the gstreamer backend.
+All design forks (1–10) resolved. **Milestones 1–3 done and passing** (4 CTest
+cases green). M1 = first-packet round-trip. M2 = full-stream round-trip of both
+0601 samples (Day 6/977 B, Night 18/2916 B), full 25-tag registry. M3 = **0903
+nesting**: an ST 0601 packet nesting a VMTI LS in Item 74 round-trips byte-exact,
+validating `childRegistry` routing (RegistryId → `registry_for`) and recursive
+parse+build both directions. Next: the **VTarget Series / Array-Series packs**
+(0903 Item 101) + IMAPB items, then split the header-only core into a real lib
+target + CI drift check, then the gstreamer backend.
 
 ## Done
 
@@ -101,20 +101,32 @@ drift check, then the gstreamer backend.
   Item 22 Target Width at 4 B — non-canonical vs 0601.19's uint16); mandatory
   enforcement made opt-out on `finalize()` for faithful reserialization. New
   fixtures: `dayflight.klv`, `nightflight_ir.klv`.
+- **Milestone 3 — 0903 nesting (Phase 3)** — restored `RegistryId` +
+  `child` to the descriptor (ADR 0010) and a `registry_for()` resolver; added a
+  second registry (`vmti0903.toml` → generated table), recursive `parse_items`
+  (bare TLV walk for nested sets), and `LocalSetBuilder::serialize_items()` (nested
+  value, no key/checksum). A hand-authored fixture (`vmti_nested.klv`, built by
+  `make_vmti_fixture.py` from the standard) — an 0601 packet nesting a VMTI LS in
+  Item 74 — round-trips byte-exact inner and outer. Validates childRegistry
+  routing + recursive parse/build. Scalar-only: VTarget Series deferred to M4.
 
 ## In progress
 
-- (nothing active — Milestones 1 & 2 landed; M3 is next.)
+- (nothing active — Milestones 1–3 landed; picking the next target below.)
 
 ## Next
 
-- **Milestone 3 — 0903 nesting**: Item 74 → VMTI sub-registry; the recursive
-  core + `childRegistry` routing ([`0010`](../context/decisions/0010-registry-descriptor-schema.md)),
-  Array/Series packs.
+- **M4 — VTarget Series / packs (0903 Item 101)**: Array/Series homogeneous VLPs
+  (0903 §9.1.2/3) + the VTarget Pack — the recursive-core case M3 deferred. Also
+  the IMAPB FoV items (11/12) to exercise the ST 1201 codec (`ValueKind::IMAPB`
+  currently shares the linear path; needs the true IMAP mapping).
 - **Then** split the header-only core into a real library target (`.cpp`), wire
-  the CI drift check (ADR 0012), and start the gstreamer backend incl. the
-  in-library PMT-rewrite element
+  the CI drift check (ADR 0012) into an actual CI config, and start the gstreamer
+  backend incl. the in-library PMT-rewrite element
   ([`0008`](../context/decisions/0008-media-backend-gstreamer.md)).
+- **Known gaps** (need vectors/data): Report-on-Change trimmed packets (samples
+  are all full); a real VMTI stream (M3 uses a hand-authored fixture);
+  multi-byte BER-OID tags (≥128, e.g. Item 143 MSID — none in samples yet).
 
 ## Blockers / notes
 

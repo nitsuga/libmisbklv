@@ -223,3 +223,14 @@
   on `finalize()` for Report-on-Change packets (these samples are all full
   packets, so RoC trimming isn't yet exercised). Fixtures `dayflight.klv` /
   `nightflight_ir.klv` added. (Detail in PROGRESS.)
+* **Milestone 3 (implementation)**: 0903 nesting round-trip. Restored
+  `RegistryId` + descriptor `child` (ADR 0010) + a `registry_for()` resolver;
+  added the VMTI registry (`registry/vmti0903.toml`), recursive `parse_items`
+  (bare TLV walk) and `LocalSetBuilder::serialize_items()` (nested value, no
+  key/checksum). `nested_roundtrip_test` on a hand-authored fixture
+  (`vmti_nested.klv` via `make_vmti_fixture.py`) — a 0601 packet nesting a VMTI
+  LS in Item 74 — passes: childRegistry routing OK, nested + outer both
+  byte-exact. Generator extended (`child`/`nested_ls`; variable-length uint from
+  omitted length). Fixed a stale 16-vs-17-byte UL-key hex typo in unused TOML
+  `ul_key` fields + the fixture script. Scalar-only; VTarget Series → M4.
+  (Detail in PROGRESS.)

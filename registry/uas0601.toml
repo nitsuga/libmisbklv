@@ -8,7 +8,7 @@
 
 registry     = "UAS_0601"
 tag_encoding = "ber_oid"
-ul_key       = "060e2b34020b01010e0103010100000000"
+ul_key       = "060e2b34020b01010e01030101000000"
 
 [[item]]
 tag    = 1
@@ -268,3 +268,9 @@ name   = "UAS Datalink LS Version Number"
 kind   = "uint"
 length = 1
 flags  = ["mandatory"]
+
+[[item]]                       # §8.74 — nested MISB ST 0903 VMTI Local Set
+tag   = 74
+name  = "VMTI Local Set"
+kind  = "nested_ls"
+child = "vmti_0903"

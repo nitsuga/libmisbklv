@@ -57,6 +57,10 @@ enum class ValueKind : std::uint8_t {
 
 enum ItemFlags : std::uint8_t { kNone = 0, kMandatory = 1u << 0 };
 
+// Closed set of registries (ADR 0010). A NestedLS/Pack item routes into a child
+// via its `child` id; `registry_for()` (see registries.hpp) resolves it.
+enum class RegistryId : std::uint8_t { None, Uas0601, Vmti0903 };
+
 struct SpecialValue {
   std::uint64_t pattern;  // raw KLV bits (width = item length)
 };
@@ -77,6 +81,7 @@ struct ItemDescriptor {
   MappingParams map;        // LinearLDS / IMAPB only
   std::span<const SpecialValue> specials;
   std::uint8_t flags;
+  RegistryId child;         // NestedLS / Pack: the sub-registry to descend into
 };
 
 struct Registry {

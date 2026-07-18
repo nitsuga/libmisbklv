@@ -1,0 +1,36 @@
+# ST 0903.6 VMTI Local Set — descriptor source of truth (ADR 0012).
+# Used standalone or nested under ST 0601 Item 74 (see registry/uas0601.toml).
+# M3 subset: scalar items exercised by the nesting fixture. The VTarget Series
+# (Item 101), IMAPB FoV items (11/12), and MIIS ID (13) are follow-on work.
+
+registry     = "VMTI_0903"
+tag_encoding = "ber_oid"
+ul_key       = "060e2b34020b01010e01030306000000"
+
+[[item]]
+tag    = 1
+name   = "Checksum"
+kind   = "uint"
+length = 2
+
+[[item]]
+tag    = 2
+name   = "Precision Time Stamp"
+units  = "microseconds"
+kind   = "uint"
+length = 8
+
+[[item]]                       # variable-length uint (V)
+tag  = 4
+name = "VMTI LS Version Number"
+kind = "uint"
+
+[[item]]                       # variable-length uint (V)
+tag  = 5
+name = "Total Number of Targets Detected"
+kind = "uint"
+
+[[item]]                       # variable-length uint (V)
+tag  = 6
+name = "Number of Reported Targets"
+kind = "uint"

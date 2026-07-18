@@ -24,6 +24,8 @@ KIND = {
 }
 FIXED_KINDS = {"uint", "int", "linear_lds", "imapb"}   # length is meaningful
 MAPPED_KINDS = {"linear_lds", "imapb"}
+NESTED_KINDS = {"nested_ls", "pack"}                    # route into a child registry
+CHILD = {"uas_0601": "Uas0601", "vmti_0903": "Vmti0903"}
 
 
 def die(msg):
@@ -99,10 +101,14 @@ def validate(reg):
         kind = it["kind"]
         if kind not in KIND:
             die(f"tag {tag}: unknown kind '{kind}'")
-        if kind in FIXED_KINDS and "length" not in it:
-            die(f"tag {tag}: kind '{kind}' needs a length")
+        if kind in MAPPED_KINDS and "length" not in it:
+            die(f"tag {tag}: mapped kind '{kind}' needs a length")
         if kind in MAPPED_KINDS and not ("min" in it and "max" in it):
             die(f"tag {tag}: kind '{kind}' needs min and max")
+        if kind in NESTED_KINDS:
+            child = it.get("child")
+            if child not in CHILD:
+                die(f"tag {tag}: kind '{kind}' needs a known child (got {child!r})")
         for sp in it.get("special", []):
             pat = int(str(sp["pattern"]), 0)
             width = it.get("length", 0) * 8
@@ -139,19 +145,21 @@ def emit(reg, out_path):
     lines.append(f"inline constexpr ItemDescriptor {ident}_items[] = {{")
     for it in items:
         kind = it["kind"]
-        variable = kind not in FIXED_KINDS
-        fixed_len = 0 if variable else it["length"]
+        variable = "length" not in it   # no fixed width => variable-length item
+        fixed_len = it.get("length", 0)
         is_signed = it.get("signed", False)
         mn = it.get("min", 0.0)
         mx = it.get("max", 0.0)
         units = it.get("units", "")
         specials = (f"{ident}_specials_{it['tag']}" if it.get("special") else "{}")
         flags = "kMandatory" if "mandatory" in it.get("flags", []) else "kNone"
+        child = CHILD.get(it.get("child"), "None")
         lines.append(
             f'    {{ .tag = {it["tag"]}, .name = "{it["name"]}", .units = "{units}", '
             f".kind = ValueKind::{KIND[kind]}, .variable = {cbool(variable)}, "
             f".fixed_len = {fixed_len}, .is_signed = {cbool(is_signed)}, "
-            f".map = {{{mn!r}, {mx!r}}}, .specials = {specials}, .flags = {flags} }},")
+            f".map = {{{mn!r}, {mx!r}}}, .specials = {specials}, .flags = {flags}, "
+            f".child = RegistryId::{child} }},")
     lines.append("};")
     lines.append("")
     lines.append(

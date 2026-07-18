@@ -38,6 +38,20 @@ class LocalSetBuilder {
     staged_.emplace_back(tag, ber::Bytes(bytes.begin(), bytes.end()));
   }
 
+  // Serialize the staged items as a bare TLV sequence — no UL key, length, or
+  // checksum. This is the value of a nested Local Set (ADR 0005/0010): the
+  // parent stages it via append_raw(child_tag, serialize_items()).
+  ber::Bytes serialize_items() const {
+    ber::Bytes out;
+    for (const auto& [tag, val] : staged_) {
+      if (tag == kChecksumTag) continue;
+      ber::write_oid(out, tag);
+      ber::write_length(out, val.size());
+      out.insert(out.end(), val.begin(), val.end());
+    }
+    return out;
+  }
+
   // Assemble the full packet: key + BER len + items + Item 1 checksum (last).
   // `enforce_mandatory` validates required items when authoring a new packet;
   // pass false to faithfully reserialize an existing (e.g. Report-on-Change)
@@ -51,13 +65,7 @@ class LocalSetBuilder {
           return Result<ber::Bytes>::err(Error::MissingMandatory);
 
     // 2. serialize staged items (skip any staged checksum — we emit it).
-    ber::Bytes items;
-    for (auto& [tag, val] : staged_) {
-      if (tag == kChecksumTag) continue;
-      ber::write_oid(items, tag);
-      ber::write_length(items, val.size());
-      items.insert(items.end(), val.begin(), val.end());
-    }
+    ber::Bytes items = serialize_items();
 
     // 3. checksum item is tag(1) + len(1) + value(2) = 4 bytes of the value field.
     const std::uint64_t value_len = items.size() + 4;

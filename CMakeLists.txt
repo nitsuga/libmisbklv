@@ -21,6 +21,10 @@ if(Python3_Interpreter_FOUND)
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_registry.py
             ${CMAKE_CURRENT_SOURCE_DIR}/registry/uas0601.toml
             ${CMAKE_CURRENT_SOURCE_DIR}/src/registry/uas0601_tables.generated.hpp
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_registry.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/registry/vmti0903.toml
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/registry/vmti0903_tables.generated.hpp
     COMMENT "Regenerating registry tables from registry/*.toml")
 endif()
 
@@ -40,3 +44,9 @@ add_test(NAME stream_dayflight
 add_test(NAME stream_nightflight
   COMMAND stream_roundtrip_test
           ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/nightflight_ir.klv)
+
+add_executable(nested_roundtrip_test test/nested_roundtrip_test.cpp)
+target_link_libraries(nested_roundtrip_test PRIVATE misbklv)
+add_test(NAME nested_vmti
+  COMMAND nested_roundtrip_test
+          ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/vmti_nested.klv)
