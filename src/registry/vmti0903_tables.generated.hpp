@@ -18,6 +18,7 @@ inline constexpr ItemDescriptor vmti_0903_items[] = {
     { .tag = 12, .name = "VMTI Vertical Field of View", .units = "deg", .kind = ValueKind::IMAPB, .variable = false, .fixed_len = 2, .is_signed = false, .map = {0.0, 180.0}, .specials = {}, .flags = kNone, .child = RegistryId::None },
 };
 
-inline constexpr Registry vmti_0903{ "VMTI_0903", vmti_0903_items };
+inline constexpr std::uint8_t vmti_0903_key[] = {0x06, 0x0E, 0x2B, 0x34, 0x02, 0x0B, 0x01, 0x01, 0x0E, 0x01, 0x03, 0x03, 0x06, 0x00, 0x00, 0x00};
+inline constexpr Registry vmti_0903{ "VMTI_0903", vmti_0903_items, vmti_0903_key };
 
 }  // namespace misbklv::gen

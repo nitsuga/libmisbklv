@@ -10,15 +10,17 @@ decided — forks 4 (0005/0006/0007), 5 (0008) accepted; fork 6 (0604) deferred.
 Phase 3 (implementation) **started with an extraction spike** on `Day
 Flight.mpg`, which validated the read path (BER walk, timestamp, lat/lon,
 checksum) and surfaced two design gaps the "all forks resolved" status missed.
-All design forks (1–10) resolved. **Milestones 1–4 done and passing** (5 CTest
+All design forks (1–10) resolved. **Milestones 1–5 done and passing** (6 CTest
 cases green). M1 = first-packet round-trip. M2 = full-stream round-trip of both
 0601 samples (Day 6/977 B, Night 18/2916 B), full 25-tag registry. M3 = 0903
 nesting (Item 74 VMTI, recursive `childRegistry` routing + parse/build). M4 =
-**real ST 1201 IMAPB codec** — validated against the standards' own worked
-examples (ST 1201 Table 7; ST 0903 §10.1.11 FoV) *and* exercised end-to-end via
-VMTI FoV items in the nested fixture. Next: **M5 — VTarget Series / Array-Series
-packs** (0903 Item 101), then split the header-only core into a real lib target +
-CI drift check, then the gstreamer backend.
+real ST 1201 IMAPB codec (validated vs ST 1201 Table 7 + ST 0903 §10.1.11). M5 =
+**standalone VMTI** — a VMTI LS as its own top-level packet (own UL key +
+checksum), round-tripping byte-exact with `registry_by_key()` UL-key dispatch.
+**Both ST 0903 variants — embedded (M3) and standalone (M5) — are now supported
+and tested.** Next: **M6 — VTarget Series / Array-Series packs** (0903 Item 101),
+then split the header-only core into a real lib target + CI drift check, then the
+gstreamer backend.
 
 ## Done
 
@@ -117,17 +119,29 @@ CI drift check, then the gstreamer backend.
   and ST 0903 §10.1.11 (IMAPB(0,180) L=2: 12.5°↔0x0640) — plus a round-trip
   sweep. VMTI FoV items 11/12 added to the registry + nested fixture, decoding
   12.5°/10.0° and re-encoding byte-exact.
+- **Milestone 5 — standalone VMTI (Phase 3)** — restored `ul_key` to the
+  `Registry` (generator emits a 16-byte key array; ADR 0010) and added
+  `registry_by_key()` UL-key → registry dispatch (demux selection).
+  `standalone_roundtrip_test` on a hand-authored `vmti_standalone.klv` (VMTI UL
+  key `06.0E.2B.34…03.03.06…` + items + checksum): UL-key dispatch resolves to
+  VMTI (not 0601), items decode, and `finalize()` re-encodes byte-exact —
+  confirming the VMTI standalone checksum is the ST 0601 algorithm (ST 0903
+  §10.1.1 / req 0903.6-119). **Both 0903 variants (embedded M3 + standalone M5)
+  now covered.** Cross-refs: ATAK delegates KLV to a closed lib (pgscmedia — no
+  source to check); ImpleoTV docs are API-level not byte-level — ST 0903 §10 is
+  the authority used.
 
 ## In progress
 
-- (nothing active — Milestones 1–4 landed; picking the next target below.)
+- (nothing active — Milestones 1–5 landed; picking the next target below.)
 
 ## Next
 
-- **M5 — VTarget Series / packs (0903 Item 101)**: Array/Series homogeneous VLPs
+- **M6 — VTarget Series / packs (0903 Item 101)**: Array/Series homogeneous VLPs
   (0903 §9.1.2/3) + the VTarget Pack (BER-OID targetId + nested VTarget LS) — the
-  recursive-core case M3/M4 deferred. Needs a Series/pack representation in the
-  data model + builder and a hand-authored fixture.
+  recursive-core case deferred so far. Needs a Series/pack representation in the
+  data model + builder and a hand-authored fixture; ST 0903 Figure 13 sketches
+  the structure (two VTarget packs, illustrative). Testable in both 0903 variants.
 - **Then** split the header-only core into a real library target (`.cpp`), wire
   the CI drift check (ADR 0012) into an actual CI config, and start the gstreamer
   backend incl. the in-library PMT-rewrite element

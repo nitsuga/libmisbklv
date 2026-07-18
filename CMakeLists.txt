@@ -54,3 +54,9 @@ add_test(NAME nested_vmti
 add_executable(imapb_test test/imapb_test.cpp)
 target_link_libraries(imapb_test PRIVATE misbklv)
 add_test(NAME imapb COMMAND imapb_test)
+
+add_executable(standalone_roundtrip_test test/standalone_roundtrip_test.cpp)
+target_link_libraries(standalone_roundtrip_test PRIVATE misbklv)
+add_test(NAME standalone_vmti
+  COMMAND standalone_roundtrip_test
+          ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/vmti_standalone.klv)

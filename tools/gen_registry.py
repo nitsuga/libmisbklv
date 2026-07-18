@@ -92,6 +92,9 @@ def load_toml(path):
 
 
 def validate(reg):
+    ul = reg.get("ul_key", "")
+    if ul and len(bytes.fromhex(ul)) != 16:
+        die(f"registry {reg['registry']}: ul_key must be 16 bytes (got {len(bytes.fromhex(ul))})")
     seen = set()
     for it in reg["item"]:
         tag = it["tag"]
@@ -162,8 +165,15 @@ def emit(reg, out_path):
             f".child = RegistryId::{child} }},")
     lines.append("};")
     lines.append("")
+    ul = reg.get("ul_key", "")
+    if ul:
+        key_bytes = ", ".join(f"0x{b:02X}" for b in bytes.fromhex(ul))
+        lines.append(f"inline constexpr std::uint8_t {ident}_key[] = {{{key_bytes}}};")
+        key_ref = f"{ident}_key"
+    else:
+        key_ref = "{}"
     lines.append(
-        f'inline constexpr Registry {ident}{{ "{reg["registry"]}", {ident}_items }};')
+        f'inline constexpr Registry {ident}{{ "{reg["registry"]}", {ident}_items, {key_ref} }};')
     lines.append("")
     lines.append("}  // namespace misbklv::gen")
     lines.append("")

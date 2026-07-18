@@ -243,3 +243,18 @@
   round-trip sweep. VMTI FoV items 11/12 (IMAPB) added to the registry + nested
   fixture for end-to-end coverage; 5th CTest case. VTarget Series → M5.
   (Detail in PROGRESS.)
+* **Milestone 5 (implementation)**: standalone VMTI. Restored `ul_key` to the
+  `Registry` struct (generator emits a 16-byte key array + validates length);
+  added `registry_by_key()` for UL-key → registry demux dispatch. New
+  `standalone_roundtrip_test` on a hand-authored `vmti_standalone.klv` (VMTI UL
+  key + items + checksum): dispatch resolves to VMTI (not 0601), decodes, and
+  re-encodes byte-exact. Confirmed via ST 0903 §10.1.1 / **req 0903.6-119** that
+  the standalone VMTI checksum is the ST 0601 16-bit-BCC algorithm over the whole
+  LS (key..checksum-length) — so `finalize()` was already correct. **Both 0903
+  variants now supported + tested: embedded (M3, Item 74) and standalone (M5).**
+  6th CTest case. Cross-references evaluated per user request: **ATAK**
+  (`VideoDropDownReceiver.java`) delegates KLV to the closed `com.partech.pgscmedia`
+  lib — no parsing source to check against; **ImpleoTV MisbCore** docs are
+  API-level (JSON), not byte-level, and ship no downloadable `vmtiPckt.bin` (that
+  name is only a placeholder path in sample code) — ST 0903 §10 is the authority
+  used. VTarget Series → M6. (Detail in PROGRESS.)

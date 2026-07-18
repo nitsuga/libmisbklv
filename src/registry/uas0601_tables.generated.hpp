@@ -45,6 +45,7 @@ inline constexpr ItemDescriptor uas_0601_items[] = {
     { .tag = 74, .name = "VMTI Local Set", .units = "", .kind = ValueKind::NestedLS, .variable = true, .fixed_len = 0, .is_signed = false, .map = {0.0, 0.0}, .specials = {}, .flags = kNone, .child = RegistryId::Vmti0903 },
 };
 
-inline constexpr Registry uas_0601{ "UAS_0601", uas_0601_items };
+inline constexpr std::uint8_t uas_0601_key[] = {0x06, 0x0E, 0x2B, 0x34, 0x02, 0x0B, 0x01, 0x01, 0x0E, 0x01, 0x03, 0x01, 0x01, 0x00, 0x00, 0x00};
+inline constexpr Registry uas_0601{ "UAS_0601", uas_0601_items, uas_0601_key };
 
 }  // namespace misbklv::gen

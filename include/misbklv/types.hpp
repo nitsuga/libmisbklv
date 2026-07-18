@@ -86,7 +86,8 @@ struct ItemDescriptor {
 
 struct Registry {
   std::string_view id;
-  std::span<const ItemDescriptor> items;  // sorted by tag
+  std::span<const ItemDescriptor> items;    // sorted by tag
+  std::span<const std::uint8_t> ul_key;     // 16-byte UL for a standalone packet
 
   const ItemDescriptor* find(std::uint16_t tag) const {
     const ItemDescriptor* lo = items.data();
