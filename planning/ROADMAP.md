@@ -8,23 +8,26 @@ concepts; this file tracks them as a checklist.
 ## Scope (v1)
 
 libmisbklv: a C++ library to read and write MISB KLV data — ST 0601 (UAS
-Datalink LS), ST 0903 (VMTI), ST 0604 (ES-layer timestamps) — from/to MPEG-TS
-containers via a configurable gstreamer or ffmpeg backend, file or stream.
+Datalink LS) + ST 0903 (VMTI) — from/to MPEG-TS containers via a gstreamer
+backend, file or stream (real-time insertion via `appsrc`). See
+[ADR 0008](../context/decisions/0008-media-backend-gstreamer.md).
 
-Out of scope (v1, revisit): ST 0102 security, ST 0807 registry as a data
-product, ST 1607 amend/segment beyond MSID passthrough.
+Deferred from v1 (revisit): ST 0604 (ES timestamps —
+[ADR 0009](../context/decisions/0009-st0604-deferred.md)), an ffmpeg backend,
+ST 0102 security, ST 0807 registry as a data product, ST 1607 amend/segment
+beyond MSID passthrough.
 
 ## Phases
 
 - **Phase 0 — Foundation** (done): repo + git/LFS, docs structure, OKF
   bundle, standards + prior-art + sample ingests.
-- **Phase 1 — Foundational decisions**: build system, C++ standard, license,
-  name collision.
-- **Phase 2 — Core architecture**: KLV core data model; parser / item-registry
-  split; data-driven tag registry.
-- **Phase 3 — Media backends**: gstreamer + ffmpeg; MPEG-TS demux/mux;
-  extract/insert KLV (file + stream), using `../data/` samples as round-trip
-  targets.
+- **Phase 1 — Foundational decisions** (done): build system, C++ standard,
+  license, name, ADR format (ADRs 0001–0004).
+- **Phase 2 — Core architecture + media-backend decisions** (done): data
+  model, registry, error + C ABI, gstreamer backend (ADRs 0005–0008).
+- **Phase 3 — Implementation** (next): KLV core, registry, `Result<T>`,
+  gstreamer backend incl. the in-library PMT-rewrite element. Round-trip
+  targets: `../data/Day Flight.mpg`, `../data/Night Flight IR.mpg`.
 - **Phase 4 — 0604 ES timestamps** (deferred — [ADR 0009](../context/decisions/0009-st0604-deferred.md)):
   SEI / `user_data` injection/extraction, emulation-prevention stuff/de-stuff.
 - **Phase 5 — Hardening**: tests, conformance, packaging, user docs.
