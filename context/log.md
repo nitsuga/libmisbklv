@@ -134,3 +134,11 @@
   plugin). Sync per-frame (`0x15`) deferred. ffmpeg deferred/optional. Project
   goal narrowed to "gstreamer (v1)"; `CLAUDE.md`/`README` reconciled. ROADMAP
   fork 5 → DECIDED.
+* **Decision (deferred)**: Fork 6 →
+  [`0009-st0604-deferred`](./decisions/0009-st0604-deferred.md) (deferred): ST
+  0604 ES-timestamp layer deferred from v1 (secondary target; separate
+  video-ES layer; NAL/SEI work comparable to the PMT-rewrite + same
+  per-frame-sync shape as deferred sync-KLV; 0601 item 2 covers common
+  correlation). v1 = 0601/0903 KLV via gstreamer. `CLAUDE.md`/`README`
+  reconciled. ROADMAP fork 6 → DEFERRED. **Design complete — all forks
+  resolved.**

@@ -6,8 +6,8 @@ Current status. Volatile; rewrite each session. For the plan, see
 ## Now
 
 Phase 0 done. Phase 1 complete. Phase 2 (core architecture + media backend)
-decided — forks 4 (0005/0006/0007) and 5 (0008) accepted. Remaining: fork 6
-(0604 scope).
+decided — forks 4 (0005/0006/0007), 5 (0008) accepted; fork 6 (0604) deferred.
+**Design complete.** Phase 3 (implementation) next.
 
 ## Done
 
@@ -46,14 +46,24 @@ decided — forks 4 (0005/0006/0007) and 5 (0008) accepted. Remaining: fork 6
   `appsrc`; PMT-rewrite as an in-library gstreamer element (porting
   gstklvplugin's `tspmtrewrite`); ffmpeg deferred. Project goal narrowed to
   "gstreamer (v1)".
+- Fork 6 deferred (ADR [`0009`](../context/decisions/0009-st0604-deferred.md)):
+  ST 0604 ES-timestamp layer deferred from v1 (secondary target; 0601 item 2
+  timestamps cover the common correlation need). v1 = 0601/0903 KLV via
+  gstreamer.
 
 ## In progress
 
-(none — fork 6 (0604 scope) next)
+(none — design complete; Phase 3 implementation next)
 
 ## Next
 
-- Fork 6 (0604 ES-timestamp scope — v1 or deferred).
+- Phase 3: implement against the locked design — KLV core
+  ([`0005`](../context/decisions/0005-klv-core-data-model.md)), registry
+  ([`0006`](../context/decisions/0006-tag-registry.md)), `Result<T>`
+  ([`0007`](../context/decisions/0007-error-and-c-abi.md)), gstreamer backend
+  incl. the in-library PMT-rewrite element
+  ([`0008`](../context/decisions/0008-media-backend-gstreamer.md)). Round-trip
+  targets: `data/Day Flight.mpg`, `data/Night Flight IR.mpg`.
 
 ## Blockers / notes
 

@@ -25,8 +25,8 @@ product, ST 1607 amend/segment beyond MSID passthrough.
 - **Phase 3 — Media backends**: gstreamer + ffmpeg; MPEG-TS demux/mux;
   extract/insert KLV (file + stream), using `../data/` samples as round-trip
   targets.
-- **Phase 4 — 0604 ES timestamps** (if in v1 scope): SEI / `user_data`
-  injection/extraction, emulation-prevention stuff/de-stuff.
+- **Phase 4 — 0604 ES timestamps** (deferred — [ADR 0009](../context/decisions/0009-st0604-deferred.md)):
+  SEI / `user_data` injection/extraction, emulation-prevention stuff/de-stuff.
 - **Phase 5 — Hardening**: tests, conformance, packaging, user docs.
 
 ## Open forks
@@ -41,7 +41,7 @@ Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 | 3 | `akrutsinger/libklv` name collision — renamed to `libmisbklv` | DECIDED | [0003](../context/decisions/0003-project-name.md) |
 | 4 | Core architecture (data model / registry / error+ABI) | DECIDED | [0005](../context/decisions/0005-klv-core-data-model.md) [0006](../context/decisions/0006-tag-registry.md) [0007](../context/decisions/0007-error-and-c-abi.md) |
 | 5 | Media backend — gstreamer (v1); ffmpeg deferred | DECIDED | [0008](../context/decisions/0008-media-backend-gstreamer.md) |
-| 6 | 0604 ES-timestamp scope — v1 or deferred | OPEN | — |
+| 6 | 0604 ES-timestamp layer — deferred from v1 | DEFERRED | [0009](../context/decisions/0009-st0604-deferred.md) |
 | 7 | Decision records — ADR format & numbering | DECIDED | [0004](../context/decisions/0004-adr-format.md) |
 
 When a fork is deliberated, write a `type: Decision` concept in `../context/`
