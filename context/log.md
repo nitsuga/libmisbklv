@@ -189,3 +189,16 @@
   ordering/checksum emission, owned-buffer handoff, `EncodeError` variants.
   ROADMAP fork 9 → DECIDED. **All forks resolved; the design backlog is clear —
   Phase 3 implementation (milestone 1: byte-exact round-trip) is unblocked.**
+* **Decision (proposed)**: Fork 10 →
+  [`0012-registry-codegen`](./decisions/0012-registry-codegen.md) (proposed): the
+  [`0006`](./decisions/0006-tag-registry.md) codegen follow-on. **TOML**
+  source-of-truth per registry (array-of-tables; per-item standard citation in
+  comments) + a **Python generator** (`tools/gen_registry.py`, stdlib `tomllib`,
+  validates tag-uniqueness / mapping-params / childRegistry / special-fit) emitting
+  the [`0010`](./decisions/0010-registry-descriptor-schema.md) `constexpr` tables.
+  **Generated C++ committed** (no Python build dep for consumers; reviewable),
+  with a `regenerate-registry` target + CI drift check. JSON/YAML/hand-C++/
+  build-time-gen rejected. ROADMAP fork 10 → PROPOSED.
+* **Decision (accepted)**: [`0012`](./decisions/0012-registry-codegen.md) →
+  accepted. Registry codegen locked: TOML source + Python generator + committed
+  generated C++ + drift check. ROADMAP fork 10 → DECIDED. **All forks resolved.**

@@ -73,6 +73,12 @@ identical), which locks 0010 + 0011 against real bytes.
   Adds `EncodeError` variants to [`0007`](../context/decisions/0007-error-and-c-abi.md);
   reuses 0010's `MappingParams` for forward mapping. Draws the read-borrows /
   write-owns ownership boundary.
+- Fork 10 decided (ADR [`0012`](../context/decisions/0012-registry-codegen.md),
+  accepted): registry codegen — **TOML** source-of-truth per registry + a
+  **Python generator** (`tools/gen_registry.py`, stdlib `tomllib`, validates)
+  emitting the 0010 `constexpr` tables; **generated C++ committed** (no Python
+  build dep for consumers) + `regenerate-registry` target + CI drift check.
+  JSON/YAML/hand-C++/build-time-gen rejected. **All forks resolved.**
 
 ## In progress
 
@@ -96,9 +102,6 @@ identical), which locks 0010 + 0011 against real bytes.
   nesting, then the gstreamer backend incl. the in-library PMT-rewrite element
   ([`0008`](../context/decisions/0008-media-backend-gstreamer.md)). Round-trip
   targets: `data/Day Flight.mpg`, `data/Night Flight IR.mpg`.
-- **Pending small decision** (0006 follow-on): the descriptor source-of-truth
-  file format + codegen tool (lean: TOML/JSON + Python generator) — settle
-  before the registry table is authored.
 
 ## Blockers / notes
 
