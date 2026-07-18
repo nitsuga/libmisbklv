@@ -1,5 +1,18 @@
 # Knowledge Bundle Log
 
+## 2026-07-18
+
+* **Ingest (Prior Art)**: Added [`jmisb`](./prior-art-jmisb.md) (WestRidgeSystems,
+  Java, **MIT**) — the most complete peer found (0601/0903/1201/0102 + ~20 more).
+  Generic KLV core (Ber*/KlvParser/LdsParser/UdsParser/UniversalLabel/ArrayBuilder)
+  + **class per item** (the [`0006`](./decisions/0006-tag-registry.md)-rejected
+  approach — a foil, not a template). Value: **JUnit byte-array test vectors** as
+  ground truth for our hand-authored fixtures, and `st1201/FpEncoder` +
+  `OutOfRangeBehaviour` to cross-check our IMAP (Zoffset edge + unimplemented IMAP
+  special-value semantics). Flags concepts we deferred: UDS (vs LDS) and Array type
+  (0903 §9.1.2). MIT → reference freely, attribute if lifting a vector verbatim.
+  Index Prior Art section updated. Cross-check of vectors: next.
+
 ## 2026-07-17
 
 * **Initialization**: Established OKF v0.1 bundle — `index.md`, `log.md`, `CONVENTIONS.md`.

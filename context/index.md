@@ -41,6 +41,7 @@ _(`type: Prior Art` — existing KLV libraries/plugins analyzed as design input.
 * [n1tsu/libmisb0601](./prior-art-libmisb0601.md) — C, no license; encode/decode 0601.6; fixed 94-tag array (anti-pattern).
 * [mkassimi98/gstklvplugin](./prior-art-gstklvplugin.md) — GStreamer plugin, AGPL-3.0; enc/dec/inject/PMT-rewrite; INI registry; the gstreamer-path reference.
 * [akrutsinger/libklv](./prior-art-libklv-akrutsinger.md) — C stub, 0601.9; **namesake stub (collision resolved — see [0003](./decisions/0003-project-name.md))**.
+* [WestRidgeSystems/jmisb](./prior-art-jmisb.md) — Java, **MIT**; broadest peer (0601/0903/1201/0102/…); per-item classes (foil); **mine for test vectors + IMAP correctness**.
 
 ## Sample Data
 
