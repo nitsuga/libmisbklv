@@ -46,6 +46,15 @@ Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 | 5 | Media backend — gstreamer (v1); ffmpeg deferred | DECIDED | [0008](../context/decisions/0008-media-backend-gstreamer.md) |
 | 6 | 0604 ES-timestamp layer — deferred from v1 | DEFERRED | [0009](../context/decisions/0009-st0604-deferred.md) |
 | 7 | Decision records — ADR format & numbering | DECIDED | [0004](../context/decisions/0004-adr-format.md) |
+| 8 | Registry descriptor schema — the field set ADR 0006 punted (mapping-kind + params, special values, length, nested-registry routing) | DECIDED | [0010](../context/decisions/0010-registry-descriptor-schema.md) |
+| 9 | Encode / serialization model — owned builder, bottom-up length assembly, forward mapping, checksum/ordering emission | DECIDED | [0011](../context/decisions/0011-encode-model.md) |
+
+Forks 8–9 surfaced during the Phase 3 extraction spike (2026-07-17): the core
+*decoder* design (forks 4/5) was complete, but the registry descriptor
+**schema** and the **encode** path were under-specified. Both are now decided
+(ADRs 0010/0011) and will be **locked by a byte-exact round-trip on the spike
+packet** as the first implementation milestone — see [PROGRESS.md](./PROGRESS.md).
+**All forks resolved; Phase 3 implementation is unblocked.**
 
 When a fork is deliberated, write a `type: Decision` concept in `../context/`
 (`status: proposed` → `accepted`), link it here, and update PROGRESS.

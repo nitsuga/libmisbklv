@@ -15,3 +15,5 @@ forks live in [`../../planning/ROADMAP.md`](../../planning/ROADMAP.md).
 | [0007 — Error handling & C ABI](./0007-error-and-c-abi.md) | accepted |
 | [0008 — Media backend — gstreamer (v1)](./0008-media-backend-gstreamer.md) | accepted |
 | [0009 — ST 0604 deferred from v1](./0009-st0604-deferred.md) | deferred |
+| [0010 — Registry descriptor schema](./0010-registry-descriptor-schema.md) | accepted |
+| [0011 — Encode / serialization model](./0011-encode-model.md) | accepted |

@@ -142,3 +142,50 @@
   correlation). v1 = 0601/0903 KLV via gstreamer. `CLAUDE.md`/`README`
   reconciled. ROADMAP fork 6 → DEFERRED. **Design complete — all forks
   resolved.**
+* **Spike (Phase 3)**: Extracted the KLV elementary stream from
+  [`data-samples`](./data-samples.md) `Day Flight.mpg` (`ffmpeg -map 0:1 -c copy
+  -f data`; KLV PID `0x1F1`) and walked the first ST 0601 packet end-to-end
+  (throwaway parser, not library code) to ground the pending descriptor-schema /
+  encode ADRs in real bytes. Verified: UL key `060e2b34…`, BER long-form length
+  `0x8191` (145 B value / 163 B packet), Item 2 first / Item 1 last (mandatory
+  ordering), Precision Time Stamp = 2009-06-17T16:53:05Z, sensor lat/lon =
+  54.68°, −110.17°, and the **16-bit BCC checksum recomputed and matched
+  (`0x1C5F`)** — the encode-path checksum invariant is implementable as
+  specified.
+* **Lint (correction)**: Spike falsified a claim in [`st0601`](./st0601.md) —
+  legacy core numeric items (lat/lon/angles, tags 5–15) use a **linear LDS map**
+  (explicit int→float range; Item 13 = `int32` `-((2^31)-1)..(2^31)-1` → ±90°,
+  `0x80000000`="Reserved"; §8.13), **not** IMAPB. IMAPB applies to the *extended*
+  items (tags ~90+). Corrected `st0601` § Encoding to discriminate the two
+  mapping kinds — the central input to the descriptor schema (a per-item
+  mapping-kind + params field).
+* **Decision (proposed)**: Fork 8 →
+  [`0010-registry-descriptor-schema`](./decisions/0010-registry-descriptor-schema.md)
+  (proposed): completes the descriptor field set [`0006`](./decisions/0006-tag-registry.md)
+  punted. Flat `constexpr` `ItemDescriptor` (tag, name, `ValueKind` discriminator,
+  `LengthSpec`, `MappingParams`, inline `SpecialValue[]`, `childRegistry`, flags)
+  in per-registry tables (`TagEncoding` BER-OID vs 1-byte-UINT; UL key). `ValueKind`
+  pins the [`0005`](./decisions/0005-klv-core-data-model.md) typed-view variant;
+  codecs are a small shared set parameterized by the descriptor, not per-item.
+  Authoring source-of-truth format + codegen tool left as a 0006 follow-on.
+  ROADMAP fork 8 → PROPOSED.
+* **Decision (accepted)**: [`0010`](./decisions/0010-registry-descriptor-schema.md)
+  → accepted. Descriptor schema locked; unblocks the typed view, the shared codec
+  set, and codegen. ROADMAP fork 8 → DECIDED.
+* **Decision (proposed)**: Fork 9 →
+  [`0011-encode-model`](./decisions/0011-encode-model.md) (proposed): the write
+  half. **Owned builder** (coexists with the borrow-by-default read model),
+  **bottom-up assembly** (a value is serialized before its BER length — no
+  back-patching; nested sets/packs built into child buffers), `finalize()`
+  validates mandatory items + emits Item 2 first / Item 1 checksum last
+  (spike-verified BCC), returns an owned buffer moved to `appsrc`
+  ([`0008`](./decisions/0008-media-backend-gstreamer.md)). Adds `EncodeError`
+  variants to [`0007`](./decisions/0007-error-and-c-abi.md); reuses 0010's
+  `MappingParams` for forward mapping. Draws the read-borrows/write-owns
+  ownership boundary. Acceptance gate = byte-exact round-trip of the spike packet.
+  ROADMAP fork 9 → PROPOSED.
+* **Decision (accepted)**: [`0011`](./decisions/0011-encode-model.md) → accepted.
+  Encode model locked: owned builder, bottom-up assembly, `finalize()` mandatory/
+  ordering/checksum emission, owned-buffer handoff, `EncodeError` variants.
+  ROADMAP fork 9 → DECIDED. **All forks resolved; the design backlog is clear —
+  Phase 3 implementation (milestone 1: byte-exact round-trip) is unblocked.**
