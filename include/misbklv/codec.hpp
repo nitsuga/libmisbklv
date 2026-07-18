@@ -45,8 +45,7 @@ inline double linear_decode(const ItemDescriptor& d, std::span<const std::byte> 
       (len >= 8) ? 18446744073709551615.0 : static_cast<double>((1ull << (8 * len)) - 1);
   return d.map.min + static_cast<double>(rd_uint(raw)) * (d.map.max - d.map.min) / denom;
 }
-inline void linear_encode(const ItemDescriptor& d, double x, Bytes& out) {
-  const int len = d.fixed_len;
+inline void linear_encode(const ItemDescriptor& d, double x, Bytes& out, int len) {
   if (d.is_signed) {
     const double imax = static_cast<double>((1ll << (8 * len - 1)) - 1);
     const auto v = static_cast<std::int64_t>(std::llround(x * imax / d.map.max));
@@ -79,18 +78,22 @@ inline Result<Value> decode(const ItemDescriptor& d, std::span<const std::byte> 
 }
 
 // --- encode typed Value -> raw value bytes ---------------------------------
-inline Result<Bytes> encode(const ItemDescriptor& d, const Value& v) {
+// `len` is the target byte width for fixed/mapped kinds. Callers pass the
+// descriptor's canonical length when authoring, or the source length when
+// reserializing an existing item (0601 has variable-length items; ADR 0011).
+inline Result<Bytes> encode(const ItemDescriptor& d, const Value& v, std::size_t len) {
   Bytes out;
   switch (d.kind) {
     case ValueKind::UInt:
-      wr_uint(out, std::get<std::uint64_t>(v), d.fixed_len);
+      wr_uint(out, std::get<std::uint64_t>(v), static_cast<int>(len));
       return Result<Bytes>::ok(std::move(out));
     case ValueKind::Int:
-      wr_uint(out, static_cast<std::uint64_t>(std::get<std::int64_t>(v)), d.fixed_len);
+      wr_uint(out, static_cast<std::uint64_t>(std::get<std::int64_t>(v)),
+              static_cast<int>(len));
       return Result<Bytes>::ok(std::move(out));
     case ValueKind::LinearLDS:
     case ValueKind::IMAPB:
-      linear_encode(d, std::get<double>(v), out);
+      linear_encode(d, std::get<double>(v), out, static_cast<int>(len));
       return Result<Bytes>::ok(std::move(out));
     case ValueKind::Utf8: {
       auto sv = std::get<std::string_view>(v);

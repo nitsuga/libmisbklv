@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <utility>
 #include <vector>
@@ -20,10 +21,13 @@ class LocalSetBuilder {
   explicit LocalSetBuilder(const Registry& reg) : reg_(reg) {}
 
   // Encode a typed value for `tag` per its descriptor (forward codec) and stage it.
-  Result<std::monostate> set(std::uint16_t tag, const Value& v) {
+  // `len` overrides the target byte width — pass the source length to reserialize
+  // a variable-length or non-canonically-sized item byte-exactly (ADR 0011).
+  Result<std::monostate> set(std::uint16_t tag, const Value& v,
+                             std::optional<std::size_t> len = std::nullopt) {
     const ItemDescriptor* d = reg_.find(tag);
     if (!d) return Result<std::monostate>::err(Error::UnknownTag);
-    auto enc = codec::encode(*d, v);
+    auto enc = codec::encode(*d, v, len.value_or(d->fixed_len));
     if (!enc) return Result<std::monostate>::err(enc.error());
     staged_.emplace_back(tag, std::move(*enc));
     return Result<std::monostate>::ok({});
@@ -35,11 +39,16 @@ class LocalSetBuilder {
   }
 
   // Assemble the full packet: key + BER len + items + Item 1 checksum (last).
-  Result<ber::Bytes> finalize(std::span<const std::uint8_t> ul_key) && {
+  // `enforce_mandatory` validates required items when authoring a new packet;
+  // pass false to faithfully reserialize an existing (e.g. Report-on-Change)
+  // packet that legitimately omits items. (ADR 0011 — see reserialize note.)
+  Result<ber::Bytes> finalize(std::span<const std::uint8_t> ul_key,
+                              bool enforce_mandatory = true) && {
     // 1. mandatory-item check (ADR 0011).
-    for (const auto& d : reg_.items)
-      if ((d.flags & kMandatory) && !staged_contains(d.tag))
-        return Result<ber::Bytes>::err(Error::MissingMandatory);
+    if (enforce_mandatory)
+      for (const auto& d : reg_.items)
+        if ((d.flags & kMandatory) && !staged_contains(d.tag))
+          return Result<ber::Bytes>::err(Error::MissingMandatory);
 
     // 2. serialize staged items (skip any staged checksum — we emit it).
     ber::Bytes items;

@@ -25,6 +25,7 @@ struct Item {
 struct Packet {
   std::span<const std::byte> ul_key;  // 16 bytes
   std::vector<Item> items;            // in wire order
+  std::size_t total_size = 0;         // whole packet: key + len + value
 };
 
 // Parse one KLV packet from the front of `buf`. Borrows into `buf` (ADR 0005).
@@ -51,6 +52,7 @@ inline Result<Packet> parse_packet(std::span<const std::byte> buf) {
         {static_cast<std::uint16_t>(tag->value), buf.subspan(pos, ilen->value)});
     pos += ilen->value;
   }
+  pkt.total_size = end;
   return Result<Packet>::ok(std::move(pkt));
 }
 

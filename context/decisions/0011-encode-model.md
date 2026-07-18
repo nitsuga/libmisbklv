@@ -113,6 +113,15 @@ that special; otherwise it is a `RangeError`. The caller may also set an item
 - Ownership boundary is now explicit: builder owns → moves to the backend; the
   read path keeps borrowing. Resolves the streaming-lifetime ambiguity flagged
   in review.
+- **Length-preserving reserialization** (found during Milestone 2): the encoder
+  is length-parameterized — `set(tag, value, len)` and `codec::encode(d, v, len)`
+  take an explicit width. Authoring uses the descriptor's canonical length;
+  *reserializing* an existing item passes its **source length**, because a
+  wire item's length is not always the standard's canonical length (0601 has
+  variable-length items, and older-revision streams size items differently — e.g.
+  `Day Flight.mpg` encodes Item 22 Target Width as 4 bytes vs 0601.19's uint16).
+  Mandatory-item enforcement is likewise opt-out on `finalize()` so a
+  Report-on-Change packet that omits items can be reserialized faithfully.
 
 # Assumptions / open questions
 

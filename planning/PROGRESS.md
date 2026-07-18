@@ -10,13 +10,14 @@ decided — forks 4 (0005/0006/0007), 5 (0008) accepted; fork 6 (0604) deferred.
 Phase 3 (implementation) **started with an extraction spike** on `Day
 Flight.mpg`, which validated the read path (BER walk, timestamp, lat/lon,
 checksum) and surfaced two design gaps the "all forks resolved" status missed.
-All design forks (1–10) resolved. **Milestone 1 (byte-exact round-trip) is
-done and passing** — it decodes `Day Flight.mpg`'s first packet, re-encodes the
-registered items through the typed codecs (linear-LDS both directions, uint) and
-the rest raw, recomputes the checksum, and reproduces the 163-byte packet
-**byte-identical**. ADRs 0010 + 0011 are now validated against real bytes, not
-just paper. Next: broaden the registry, add 0903 nesting, split the header-only
-core into a real lib target, then the gstreamer backend.
+All design forks (1–10) resolved. **Milestones 1 and 2 done and passing.**
+M1 = byte-exact round-trip of the first packet. M2 = **full-stream byte-exact
+round-trip** of both samples (Day Flight: 6 packets/977 B; Night Flight IR:
+18 packets/2916 B) with the full 25-tag sample registry populated (26
+descriptors) — every packet reconstructs identically through the typed codecs,
+0 items falling back to raw. Next: **M3 — 0903 nesting** (Item 74 → VMTI
+sub-registry), then split the header-only core into a real lib target + CI
+drift check, then the gstreamer backend.
 
 ## Done
 
@@ -92,16 +93,21 @@ core into a real lib target, then the gstreamer backend.
   163-byte fixture. `roundtrip_test` decodes → re-encodes → asserts identical
   bytes: **PASS**. Generator verified byte-identical under `tomli` and the
   embedded fallback reader (ADR 0012 drift check).
+- **Milestone 2 — full-stream round-trip (Phase 3)** — `stream_roundtrip_test`
+  walks every packet in both samples and reconstructs the whole stream
+  byte-identically (Day 6/6, Night 18/18). Registry expanded to the full 25-tag
+  sample set (26 descriptors, §8-sourced ranges); the encoder is now
+  length-parameterized so items reserialize at their **source width** (e.g.
+  Item 22 Target Width at 4 B — non-canonical vs 0601.19's uint16); mandatory
+  enforcement made opt-out on `finalize()` for faithful reserialization. New
+  fixtures: `dayflight.klv`, `nightflight_ir.klv`.
 
-- (nothing active — Milestone 1 landed; picking the next build target below.)
+## In progress
+
+- (nothing active — Milestones 1 & 2 landed; M3 is next.)
 
 ## Next
 
-- **Milestone 2 — full-stream round-trip**: extend beyond the single fixture to
-  every packet in `Day Flight.mpg` (and `Night Flight IR.mpg`), populating the
-  full ~143-item 0601 registry from the standard's Table 1. Surfaces multi-byte
-  BER-OID tags, more mapping kinds, and any special-value cases the first packet
-  didn't hit.
 - **Milestone 3 — 0903 nesting**: Item 74 → VMTI sub-registry; the recursive
   core + `childRegistry` routing ([`0010`](../context/decisions/0010-registry-descriptor-schema.md)),
   Array/Series packs.

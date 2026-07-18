@@ -9,6 +9,11 @@ namespace misbklv::gen {
 
 inline constexpr SpecialValue uas_0601_specials_13[] = {{2147483648ull}};
 inline constexpr SpecialValue uas_0601_specials_14[] = {{2147483648ull}};
+inline constexpr SpecialValue uas_0601_specials_19[] = {{2147483648ull}};
+inline constexpr SpecialValue uas_0601_specials_23[] = {{2147483648ull}};
+inline constexpr SpecialValue uas_0601_specials_24[] = {{2147483648ull}};
+inline constexpr SpecialValue uas_0601_specials_40[] = {{2147483648ull}};
+inline constexpr SpecialValue uas_0601_specials_41[] = {{2147483648ull}};
 
 inline constexpr ItemDescriptor uas_0601_items[] = {
     { .tag = 1, .name = "Checksum", .units = "", .kind = ValueKind::UInt, .variable = false, .fixed_len = 2, .is_signed = false, .map = {0.0, 0.0}, .specials = {}, .flags = kNone },
@@ -21,6 +26,21 @@ inline constexpr ItemDescriptor uas_0601_items[] = {
     { .tag = 13, .name = "Sensor Latitude", .units = "deg", .kind = ValueKind::LinearLDS, .variable = false, .fixed_len = 4, .is_signed = true, .map = {-90.0, 90.0}, .specials = uas_0601_specials_13, .flags = kNone },
     { .tag = 14, .name = "Sensor Longitude", .units = "deg", .kind = ValueKind::LinearLDS, .variable = false, .fixed_len = 4, .is_signed = true, .map = {-180.0, 180.0}, .specials = uas_0601_specials_14, .flags = kNone },
     { .tag = 15, .name = "Sensor True Altitude", .units = "m", .kind = ValueKind::LinearLDS, .variable = false, .fixed_len = 2, .is_signed = false, .map = {-900.0, 19000.0}, .specials = {}, .flags = kNone },
+    { .tag = 16, .name = "Sensor Horizontal Field of View", .units = "deg", .kind = ValueKind::LinearLDS, .variable = false, .fixed_len = 2, .is_signed = false, .map = {0.0, 180.0}, .specials = {}, .flags = kNone },
+    { .tag = 17, .name = "Sensor Vertical Field of View", .units = "deg", .kind = ValueKind::LinearLDS, .variable = false, .fixed_len = 2, .is_signed = false, .map = {0.0, 180.0}, .specials = {}, .flags = kNone },
+    { .tag = 18, .name = "Sensor Relative Azimuth Angle", .units = "deg", .kind = ValueKind::LinearLDS, .variable = false, .fixed_len = 4, .is_signed = false, .map = {0.0, 360.0}, .specials = {}, .flags = kNone },
+    { .tag = 19, .name = "Sensor Relative Elevation Angle", .units = "deg", .kind = ValueKind::LinearLDS, .variable = false, .fixed_len = 4, .is_signed = true, .map = {-180.0, 180.0}, .specials = uas_0601_specials_19, .flags = kNone },
+    { .tag = 20, .name = "Sensor Relative Roll Angle", .units = "deg", .kind = ValueKind::LinearLDS, .variable = false, .fixed_len = 4, .is_signed = false, .map = {0.0, 360.0}, .specials = {}, .flags = kNone },
+    { .tag = 21, .name = "Slant Range", .units = "m", .kind = ValueKind::LinearLDS, .variable = false, .fixed_len = 4, .is_signed = false, .map = {0.0, 5000000.0}, .specials = {}, .flags = kNone },
+    { .tag = 22, .name = "Target Width", .units = "m", .kind = ValueKind::LinearLDS, .variable = false, .fixed_len = 2, .is_signed = false, .map = {0.0, 10000.0}, .specials = {}, .flags = kNone },
+    { .tag = 23, .name = "Frame Center Latitude", .units = "deg", .kind = ValueKind::LinearLDS, .variable = false, .fixed_len = 4, .is_signed = true, .map = {-90.0, 90.0}, .specials = uas_0601_specials_23, .flags = kNone },
+    { .tag = 24, .name = "Frame Center Longitude", .units = "deg", .kind = ValueKind::LinearLDS, .variable = false, .fixed_len = 4, .is_signed = true, .map = {-180.0, 180.0}, .specials = uas_0601_specials_24, .flags = kNone },
+    { .tag = 25, .name = "Frame Center Elevation", .units = "m", .kind = ValueKind::LinearLDS, .variable = false, .fixed_len = 2, .is_signed = false, .map = {-900.0, 19000.0}, .specials = {}, .flags = kNone },
+    { .tag = 40, .name = "Target Location Latitude", .units = "deg", .kind = ValueKind::LinearLDS, .variable = false, .fixed_len = 4, .is_signed = true, .map = {-90.0, 90.0}, .specials = uas_0601_specials_40, .flags = kNone },
+    { .tag = 41, .name = "Target Location Longitude", .units = "deg", .kind = ValueKind::LinearLDS, .variable = false, .fixed_len = 4, .is_signed = true, .map = {-180.0, 180.0}, .specials = uas_0601_specials_41, .flags = kNone },
+    { .tag = 42, .name = "Target Location Elevation", .units = "m", .kind = ValueKind::LinearLDS, .variable = false, .fixed_len = 2, .is_signed = false, .map = {-900.0, 19000.0}, .specials = {}, .flags = kNone },
+    { .tag = 56, .name = "Platform Ground Speed", .units = "m/s", .kind = ValueKind::UInt, .variable = false, .fixed_len = 1, .is_signed = false, .map = {0.0, 0.0}, .specials = {}, .flags = kNone },
+    { .tag = 57, .name = "Ground Range", .units = "m", .kind = ValueKind::LinearLDS, .variable = false, .fixed_len = 4, .is_signed = false, .map = {0.0, 5000000.0}, .specials = {}, .flags = kNone },
     { .tag = 65, .name = "UAS Datalink LS Version Number", .units = "", .kind = ValueKind::UInt, .variable = false, .fixed_len = 1, .is_signed = false, .map = {0.0, 0.0}, .specials = {}, .flags = kMandatory },
 };
 

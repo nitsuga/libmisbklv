@@ -67,7 +67,7 @@ int main(int argc, char** argv) {
     const ItemDescriptor* d = gen::uas_0601.find(it.tag);
     if (d) {
       auto v = codec::decode(*d, it.value);
-      auto r = b.set(it.tag, *v);
+      auto r = b.set(it.tag, *v, it.value.size());  // preserve source length
       if (!r) {
         std::fprintf(stderr, "set(tag %u) failed: %d\n", it.tag,
                      static_cast<int>(r.error()));

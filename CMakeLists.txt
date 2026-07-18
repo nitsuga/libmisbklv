@@ -25,8 +25,18 @@ if(Python3_Interpreter_FOUND)
 endif()
 
 enable_testing()
+
 add_executable(roundtrip_test test/roundtrip_test.cpp)
 target_link_libraries(roundtrip_test PRIVATE misbklv)
 add_test(NAME roundtrip
   COMMAND roundtrip_test
           ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight_first_packet.klv)
+
+add_executable(stream_roundtrip_test test/stream_roundtrip_test.cpp)
+target_link_libraries(stream_roundtrip_test PRIVATE misbklv)
+add_test(NAME stream_dayflight
+  COMMAND stream_roundtrip_test
+          ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight.klv)
+add_test(NAME stream_nightflight
+  COMMAND stream_roundtrip_test
+          ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/nightflight_ir.klv)

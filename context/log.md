@@ -212,3 +212,14 @@
   and reproduces all 163 bytes identically. Validates the descriptor schema +
   encode model against real bytes. Generator output byte-identical under `tomli`
   and the embedded fallback reader (drift check). (Detail in PROGRESS.)
+* **Milestone 2 (implementation)**: full-stream byte-exact round-trip.
+  `stream_roundtrip_test` walks every packet in both samples and reconstructs the
+  whole stream identically (Day Flight 6/6, Night Flight IR 18/18). Registry
+  expanded to the full 25-tag sample set (26 descriptors; ranges from 0601.19
+  §8). Two findings, both faithful to the ADRs: (1) **length-preserving
+  reserialization** — wire length ≠ canonical length (`Day Flight` encodes Item
+  22 Target Width as 4 B vs 0601.19 uint16), so `codec::encode` / `set()` are now
+  length-parameterized (ADR 0011 updated); (2) **mandatory-enforcement opt-out**
+  on `finalize()` for Report-on-Change packets (these samples are all full
+  packets, so RoC trimming isn't yet exercised). Fixtures `dayflight.klv` /
+  `nightflight_ir.klv` added. (Detail in PROGRESS.)

@@ -100,6 +100,168 @@ signed = false
 min    = -900.0
 max    = 19000.0
 
+[[item]]                       # §8.16 — uint16 mapped 0..180
+tag    = 16
+name   = "Sensor Horizontal Field of View"
+units  = "deg"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = 0.0
+max    = 180.0
+
+[[item]]                       # §8.17 — uint16 mapped 0..180
+tag    = 17
+name   = "Sensor Vertical Field of View"
+units  = "deg"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = 0.0
+max    = 180.0
+
+[[item]]                       # §8.18 — uint32 mapped 0..360
+tag    = 18
+name   = "Sensor Relative Azimuth Angle"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = false
+min    = 0.0
+max    = 360.0
+
+[[item]]                       # §8.19 — int32 mapped -180..180
+tag    = 19
+name   = "Sensor Relative Elevation Angle"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -180.0
+max    = 180.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "reserved"
+
+[[item]]                       # §8.20 — uint32 mapped 0..360
+tag    = 20
+name   = "Sensor Relative Roll Angle"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = false
+min    = 0.0
+max    = 360.0
+
+[[item]]                       # §8.21 — uint32 mapped 0..5000000 m
+tag    = 21
+name   = "Slant Range"
+units  = "m"
+kind   = "linear_lds"
+length = 4
+signed = false
+min    = 0.0
+max    = 5000000.0
+
+[[item]]                       # §8.22 — uint16 mapped 0..10000 m
+tag    = 22
+name   = "Target Width"
+units  = "m"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = 0.0
+max    = 10000.0
+
+[[item]]                       # §8.23 — int32 mapped -90..90
+tag    = 23
+name   = "Frame Center Latitude"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -90.0
+max    = 90.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.24 — int32 mapped -180..180
+tag    = 24
+name   = "Frame Center Longitude"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -180.0
+max    = 180.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.25 — uint16 mapped -900..19000 m
+tag    = 25
+name   = "Frame Center Elevation"
+units  = "m"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = -900.0
+max    = 19000.0
+
+[[item]]                       # §8.40 — int32 mapped -90..90
+tag    = 40
+name   = "Target Location Latitude"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -90.0
+max    = 90.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.41 — int32 mapped -180..180
+tag    = 41
+name   = "Target Location Longitude"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -180.0
+max    = 180.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.42 — uint16 mapped -900..19000 m
+tag    = 42
+name   = "Target Location Elevation"
+units  = "m"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = -900.0
+max    = 19000.0
+
+[[item]]                       # §8.56 — uint8, direct (KLVval = SoftVal)
+tag    = 56
+name   = "Platform Ground Speed"
+units  = "m/s"
+kind   = "uint"
+length = 1
+
+[[item]]                       # §8.57 — uint32 mapped 0..5000000 m
+tag    = 57
+name   = "Ground Range"
+units  = "m"
+kind   = "linear_lds"
+length = 4
+signed = false
+min    = 0.0
+max    = 5000000.0
+
 [[item]]
 tag    = 65
 name   = "UAS Datalink LS Version Number"
