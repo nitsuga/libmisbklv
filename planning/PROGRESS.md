@@ -120,7 +120,9 @@ backend (ADR 0008).
   published values — ST 1201 §10 Table 7 (IMAPB(-900,19000) L=3: 10.0↔0x038E00)
   and ST 0903 §10.1.11 (IMAPB(0,180) L=2: 12.5°↔0x0640) — plus a round-trip
   sweep. VMTI FoV items 11/12 added to the registry + nested fixture, decoding
-  12.5°/10.0° and re-encoding byte-exact.
+  12.5°/10.0° and re-encoding byte-exact. **Cross-checked (2026-07-18) against
+  ST 1201 Annex A vectors via [`jmisb`](../context/prior-art-jmisb.md) (MIT) —
+  4 ranges incl. the non-zero-Zoffset `IMAPB(-9.9,110,3)`, all pass.**
 - **Milestone 5 — standalone VMTI (Phase 3)** — restored `ul_key` to the
   `Registry` (generator emits a 16-byte key array; ADR 0010) and added
   `registry_by_key()` UL-key → registry dispatch (demux selection).
@@ -158,13 +160,14 @@ backend (ADR 0008).
   is the big remaining Phase 3 chunk and needs the gstreamer dev libs (installed).
 - **Registry breadth** (incremental): more 0601 extended items (IMAPB, tags 90+),
   the remaining VTarget items, and Array types (0903 §9.1.2) as data needs them.
-- **Then** split the header-only core into a real library target (`.cpp`), wire
-  the CI drift check (ADR 0012) into an actual CI config, and start the gstreamer
-  backend incl. the in-library PMT-rewrite element
-  ([`0008`](../context/decisions/0008-media-backend-gstreamer.md)).
-- **Known gaps** (need vectors/data): Report-on-Change trimmed packets (samples
-  are all full); a real VMTI stream (M3 uses a hand-authored fixture);
-  multi-byte BER-OID tags (≥128, e.g. Item 143 MSID — none in samples yet).
+- **Known gaps**:
+  - **IMAP structural special values** (ST 1201 §7.2.3) — NaN/±∞/below-min/
+    above-max encoded via the top 2 MSBs (e.g. below-min `0xE0…`). Our codec
+    treats these as normal values; jmisb's `OutOfRangeBehaviour` handles them.
+    Surfaced by the 2026-07-18 jmisb cross-check.
+  - Need vectors/data: Report-on-Change trimmed packets (samples are all full);
+    a real VMTI stream (M3/M5/M6 use hand-authored fixtures — the new `data/*.ts`
+    may help); multi-byte BER-OID tags (≥128, e.g. Item 143 MSID).
 
 ## Blockers / notes
 

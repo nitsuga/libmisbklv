@@ -85,6 +85,22 @@ int main() {
     expect_near("dec(0x3A6667)", codec::imapb_decode(off, b), 10.0);
   }
 
+  // cross-check vs ST 1201 Annex A test vectors (transcribed by jmisb,
+  // WestRidgeSystems, MIT) — independent confirmation, incl. the non-zero
+  // Zoffset path (a<0<b) that regressed in M6.
+  std::printf("ST 1201 Annex A cross-check (via jmisb):\n");
+  const ItemDescriptor a0 = imapb(0.0, 100.0);   // Zoffset = 0
+  expect_bytes("IMAPB(0,100,3) enc(10.1)", enc(a0, 10.1, 3), {0x0A, 0x19, 0x99});
+  expect_bytes("IMAPB(0,100,3) enc(50.5)", enc(a0, 50.5, 3), {0x32, 0x80, 0x00});
+  expect_bytes("IMAPB(0,100,3) enc(100.0)", enc(a0, 100.0, 3), {0x64, 0x00, 0x00});
+  const ItemDescriptor az = imapb(-9.9, 110.0);  // Zoffset != 0 (a<0<b)
+  expect_bytes("IMAPB(-9.9,110,3) enc(0.0)", enc(az, 0.0, 3), {0x09, 0xE6, 0x67});
+  expect_bytes("IMAPB(-9.9,110,3) enc(30.6)", enc(az, 30.6, 3), {0x28, 0x80, 0x00});
+  expect_bytes("IMAPB(-9.9,110,3) enc(110)", enc(az, 110.0, 3), {0x77, 0xE6, 0x67});
+  const ItemDescriptor as = imapb(0.1, 0.9);
+  expect_bytes("IMAPB(0.1,0.9,2) enc(0.5)", enc(as, 0.5, 2), {0x33, 0x33});
+  expect_bytes("IMAPB(0.1,0.9,2) enc(0.9)", enc(as, 0.9, 2), {0x66, 0x66});
+
   // round-trip sweep across the range
   std::printf("round-trip sweep:\n");
   bool sweep_ok = true;

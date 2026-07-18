@@ -12,6 +12,16 @@
   special-value semantics). Flags concepts we deferred: UDS (vs LDS) and Array type
   (0903 §9.1.2). MIT → reference freely, attribute if lifting a vector verbatim.
   Index Prior Art section updated. Cross-check of vectors: next.
+* **Cross-check (IMAP)**: ran our `imapb` codec against ST 1201 Annex A vectors
+  transcribed by [`jmisb`](./prior-art-jmisb.md) (`FpEncoderThreeByteTest`,
+  `ST1201AnnexATest`). Added 8 vectors to `imapb_test` across 4 ranges —
+  `IMAPB(0,100,3)`, **`IMAPB(-9.9,110,3)` (non-zero Zoffset)**, `IMAPB(0.1,0.9,2)`
+  — **all pass** (e.g. `IMAPB(-9.9,110,3)` enc(0.0)=0x09E667, enc(110)=0x77E667).
+  Independent confirmation that our IMAP forward mapping + the M6 Zoffset fix are
+  correct. **Gap found**: the vectors include IMAP *structural* special values
+  (NaN=0xD0.., ±∞=0xC8/0xE8.., below/above = 0xE0/0xE1.., top-2-MSB signaling)
+  which our codec does not yet handle (only explicit per-item patterns) — logged
+  to PROGRESS Known gaps; jmisb's `OutOfRangeBehaviour` is the reference.
 
 ## 2026-07-17
 
