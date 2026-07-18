@@ -125,7 +125,12 @@ backend (ADR 0008).
   sweep. VMTI FoV items 11/12 added to the registry + nested fixture, decoding
   12.5°/10.0° and re-encoding byte-exact. **Cross-checked (2026-07-18) against
   ST 1201 Annex A vectors via [`jmisb`](../context/prior-art-jmisb.md) (MIT) —
-  4 ranges incl. the non-zero-Zoffset `IMAPB(-9.9,110,3)`, all pass.**
+  4 ranges incl. the non-zero-Zoffset `IMAPB(-9.9,110,3)`, all pass.** **IMAP
+  structural special values (ST 1201 §7.2.3) now implemented** — encode signals
+  NaN/±∞/below-min/above-max (`0xD0/0xC8/0xE8/0xE0/0xE1`), decode → IEEE or
+  clamped-to-range; validated vs jmisb `IMAPB(0,100,3)` vectors. `is_imap_special`
+  helper lets reserialization raw-pass specials (they decode lossily to min/max,
+  so don't byte-exact round-trip through the codec alone).
 - **Milestone 5 — standalone VMTI (Phase 3)** — restored `ul_key` to the
   `Registry` (generator emits a 16-byte key array; ADR 0010) and added
   `registry_by_key()` UL-key → registry dispatch (demux selection).
@@ -164,10 +169,6 @@ backend (ADR 0008).
 - **Registry breadth** (incremental): more 0601 extended items (IMAPB, tags 90+),
   the remaining VTarget items, and Array types (0903 §9.1.2) as data needs them.
 - **Known gaps**:
-  - **IMAP structural special values** (ST 1201 §7.2.3) — NaN/±∞/below-min/
-    above-max encoded via the top 2 MSBs (e.g. below-min `0xE0…`). Our codec
-    treats these as normal values; jmisb's `OutOfRangeBehaviour` handles them.
-    Surfaced by the 2026-07-18 jmisb cross-check.
   - Need vectors/data: Report-on-Change trimmed packets (samples are all full);
     a real VMTI stream (M3/M5/M6 use hand-authored fixtures — the new `data/*.ts`
     may help); multi-byte BER-OID tags (≥128, e.g. Item 143 MSID).

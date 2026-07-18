@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <vector>
 
 #include "misbklv/codec.hpp"
@@ -43,6 +44,11 @@ static void expect_near(const char* what, double got, double want) {
   const bool ok = std::fabs(got - want) < 1e-6;
   std::printf("  %-28s = %.6f  (want %.6f) -> %s\n", what, got, want,
               ok ? "OK" : "FAIL");
+  if (!ok) ++failures;
+}
+
+static void expect_pred(const char* what, bool ok, double got) {
+  std::printf("  %-28s = %g -> %s\n", what, got, ok ? "OK" : "FAIL");
   if (!ok) ++failures;
 }
 
@@ -113,6 +119,30 @@ int main() {
   }
   std::printf("  sweep within 1 LSB: %s\n", sweep_ok ? "OK" : "FAIL");
   if (!sweep_ok) ++failures;
+
+  // IMAP structural special values (ST 1201 §7.2.3 Tables 2-3); jmisb
+  // IMAPB(0,100,3) vectors. Encode signals; decode -> IEEE / clamped-to-range.
+  const ItemDescriptor sp = imapb(0.0, 100.0);
+  const double kInf = std::numeric_limits<double>::infinity();
+  const double kNaN = std::numeric_limits<double>::quiet_NaN();
+  std::printf("IMAP special values (ST 1201 Tables 2-3):\n");
+  expect_bytes("enc(+inf)", enc(sp, kInf, 3), {0xC8, 0x00, 0x00});
+  expect_bytes("enc(-inf)", enc(sp, -kInf, 3), {0xE8, 0x00, 0x00});
+  expect_bytes("enc(NaN)", enc(sp, kNaN, 3), {0xD0, 0x00, 0x00});
+  expect_bytes("enc(-1.0 below min)", enc(sp, -1.0, 3), {0xE0, 0x00, 0x00});
+  expect_bytes("enc(101.0 above max)", enc(sp, 101.0, 3), {0xE1, 0x00, 0x00});
+  auto dsp = [&](std::initializer_list<int> bytes) {
+    ber::Bytes b;
+    for (int v : bytes) b.push_back(static_cast<std::byte>(v));
+    return codec::imapb_decode(sp, b);
+  };
+  expect_pred("dec(0xC80000)=+inf", std::isinf(dsp({0xC8, 0, 0})) && dsp({0xC8, 0, 0}) > 0,
+              dsp({0xC8, 0, 0}));
+  expect_pred("dec(0xE80000)=-inf", std::isinf(dsp({0xE8, 0, 0})) && dsp({0xE8, 0, 0}) < 0,
+              dsp({0xE8, 0, 0}));
+  expect_pred("dec(0xD00000)=NaN", std::isnan(dsp({0xD0, 0, 0})), 0.0);
+  expect_near("dec(0xE00000)->min", dsp({0xE0, 0, 0}), 0.0);    // below -> min
+  expect_near("dec(0xE10000)->max", dsp({0xE1, 0, 0}), 100.0);  // above -> max
 
   std::printf("IMAPB: %s\n", failures == 0 ? "PASS" : "FAIL");
   return failures == 0 ? 0 : 1;

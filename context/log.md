@@ -55,6 +55,15 @@
   + `add_custom_command` extracts each KLV ES to `build/*.klv` at build time (ALL
   target `extract_ts_klv`); no committed `.klv` bloat. Skipped if ffmpeg absent;
   CI must `git lfs pull` the `.ts` first. 12 CTest cases total, all pass.
+* **IMAP special values (implementation)**: closed the gap the jmisb cross-check
+  found. `codec.hpp` now handles ST 1201 §7.2.3 structural specials (top-2-bits
+  set): `imapb_special_of` classifies by the Table 2/3 patterns; `imapb_encode`
+  signals NaN→`0xD0`, +∞→`0xC8`, −∞→`0xE8`, x<min→`0xE0` (BELOW), x>max→`0xE1`
+  (ABOVE); `imapb_decode` returns IEEE values or clamps below/above→min/max (ST
+  1201 default reverse). Public `is_imap_special()` for reserialization
+  raw-passthrough (below/above decode lossily, so don't round-trip through the
+  codec alone). `imapb_test` gained the jmisb `IMAPB(0,100,3)` special vectors —
+  all pass. No regressions (12/12).
 
 ## 2026-07-17
 
