@@ -66,3 +66,7 @@ target_link_libraries(vtarget_roundtrip_test PRIVATE misbklv)
 add_test(NAME vtarget_series
   COMMAND vtarget_roundtrip_test
           ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/vmti_vtarget.klv)
+
+add_executable(jmisb_crosscheck_test test/jmisb_crosscheck_test.cpp)
+target_link_libraries(jmisb_crosscheck_test PRIVATE misbklv)
+add_test(NAME jmisb_crosscheck COMMAND jmisb_crosscheck_test)

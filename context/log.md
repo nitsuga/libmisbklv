@@ -22,6 +22,18 @@
   (NaN=0xD0.., ±∞=0xC8/0xE8.., below/above = 0xE0/0xE1.., top-2-MSB signaling)
   which our codec does not yet handle (only explicit per-item patterns) — logged
   to PROGRESS Known gaps; jmisb's `OutOfRangeBehaviour` is the reference.
+* **Cross-check (0601/0903)**: new `jmisb_crosscheck_test` (8th CTest case)
+  validates our registered codecs against [`jmisb`](./prior-art-jmisb.md) item
+  test vectors (MIT). **0601 linear-LDS** (not covered by the IMAPB-only ST 1201
+  vectors): SensorLatitude (int32 ±90: −90=0x80000001, 90=0x7FFFFFFF,
+  60.1768229669783=0x5595B66D), SensorTrueAltitude (uint16 −900..19000:
+  14190.72=0xC221), PlatformHeadingAngle (uint16 0..360: 159.9744=0x71C2) — all
+  byte-exact, **independently confirming 0601 lat/lon/angles are legacy linear,
+  not IMAP** (the M-era KB correction to [`st0601`](./st0601.md)). **0903 VTarget**:
+  targetLocationOffsetLat = IMAPB(−19.2,19.2,3) (10.0°=0x3A6667, confirms our
+  registry range matches jmisb) and targetColor uint24 (RGB 85,136,51=0x558833).
+  jmisb's 0601/0903 messages are built dynamically (no single golden packet), so
+  this cross-checks per-item codecs; full-packet vectors remain future work.
 
 ## 2026-07-17
 
