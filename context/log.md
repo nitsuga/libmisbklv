@@ -202,3 +202,13 @@
 * **Decision (accepted)**: [`0012`](./decisions/0012-registry-codegen.md) →
   accepted. Registry codegen locked: TOML source + Python generator + committed
   generated C++ + drift check. ROADMAP fork 10 → DECIDED. **All forks resolved.**
+* **Milestone 1 (implementation)**: byte-exact round-trip landed. Real C++
+  header-only core (`include/misbklv/`: `ber`/`types`/`codec`/`packet`/`builder`,
+  `Result<T>`) per ADRs 0005/0007/0010/0011; TOML→`constexpr` generator
+  (`tools/gen_registry.py`, `registry/uas0601.toml` →
+  `src/registry/uas0601_tables.generated.hpp`) per ADR 0012; CMake + CTest per
+  ADR 0001. `roundtrip_test` decodes `Day Flight.mpg`'s first packet, re-encodes
+  (typed codecs for registered items, raw for the rest), recomputes the checksum,
+  and reproduces all 163 bytes identically. Validates the descriptor schema +
+  encode model against real bytes. Generator output byte-identical under `tomli`
+  and the embedded fallback reader (drift check). (Detail in PROGRESS.)

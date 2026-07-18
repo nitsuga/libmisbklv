@@ -1,0 +1,108 @@
+# ST 0601.19 UAS Datalink Local Set — descriptor source of truth (ADR 0012).
+# Regenerate the constexpr tables with:  tools/gen_registry.py (or the
+# `regenerate-registry` CMake target). Generated output is committed at
+# src/registry/uas0601_tables.generated.hpp — do not hand-edit that file.
+#
+# This is a Milestone-1 subset: the items present in Day Flight.mpg's first
+# packet that carry a typed codec. Unregistered items round-trip as raw bytes.
+
+registry     = "UAS_0601"
+tag_encoding = "ber_oid"
+ul_key       = "060e2b34020b01010e0103010100000000"
+
+[[item]]
+tag    = 1
+name   = "Checksum"
+kind   = "uint"
+length = 2
+
+[[item]]
+tag    = 2
+name   = "Precision Time Stamp"
+units  = "microseconds"
+kind   = "uint"
+length = 8
+flags  = ["mandatory"]
+
+[[item]]                       # 0601.19 §8 — uint16 mapped 0..360
+tag    = 5
+name   = "Platform Heading Angle"
+units  = "deg"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = 0.0
+max    = 360.0
+
+[[item]]                       # int16 mapped -20..20
+tag    = 6
+name   = "Platform Pitch Angle"
+units  = "deg"
+kind   = "linear_lds"
+length = 2
+signed = true
+min    = -20.0
+max    = 20.0
+
+[[item]]                       # int16 mapped -50..50
+tag    = 7
+name   = "Platform Roll Angle"
+units  = "deg"
+kind   = "linear_lds"
+length = 2
+signed = true
+min    = -50.0
+max    = 50.0
+
+[[item]]
+tag    = 11
+name   = "Image Source Sensor"
+kind   = "utf8"
+
+[[item]]
+tag    = 12
+name   = "Image Coordinate System"
+kind   = "utf8"
+
+[[item]]                       # 0601.19 §8.13 — int32 mapped -90..90
+tag    = 13
+name   = "Sensor Latitude"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -90.0
+max    = 90.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "reserved"
+
+[[item]]                       # 0601.19 §8.14 — int32 mapped -180..180
+tag    = 14
+name   = "Sensor Longitude"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -180.0
+max    = 180.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "reserved"
+
+[[item]]                       # uint16 mapped -900..19000
+tag    = 15
+name   = "Sensor True Altitude"
+units  = "m"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = -900.0
+max    = 19000.0
+
+[[item]]
+tag    = 65
+name   = "UAS Datalink LS Version Number"
+kind   = "uint"
+length = 1
+flags  = ["mandatory"]

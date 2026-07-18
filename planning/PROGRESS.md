@@ -10,10 +10,13 @@ decided — forks 4 (0005/0006/0007), 5 (0008) accepted; fork 6 (0604) deferred.
 Phase 3 (implementation) **started with an extraction spike** on `Day
 Flight.mpg`, which validated the read path (BER walk, timestamp, lat/lon,
 checksum) and surfaced two design gaps the "all forks resolved" status missed.
-Forks 8 (descriptor schema, ADR 0010) and 9 (encode model, ADR 0011) are both
-**accepted** — the design backlog is clear. Next is code: the first milestone is
-a byte-exact round-trip of the spike's first packet (decode → re-encode →
-identical), which locks 0010 + 0011 against real bytes.
+All design forks (1–10) resolved. **Milestone 1 (byte-exact round-trip) is
+done and passing** — it decodes `Day Flight.mpg`'s first packet, re-encodes the
+registered items through the typed codecs (linear-LDS both directions, uint) and
+the rest raw, recomputes the checksum, and reproduces the 163-byte packet
+**byte-identical**. ADRs 0010 + 0011 are now validated against real bytes, not
+just paper. Next: broaden the registry, add 0903 nesting, split the header-only
+core into a real lib target, then the gstreamer backend.
 
 ## Done
 
@@ -79,29 +82,33 @@ identical), which locks 0010 + 0011 against real bytes.
   emitting the 0010 `constexpr` tables; **generated C++ committed** (no Python
   build dep for consumers) + `regenerate-registry` target + CI drift check.
   JSON/YAML/hand-C++/build-time-gen rejected. **All forks resolved.**
+- **Extraction spike** — `ffmpeg` demux of `Day Flight.mpg` KLV PID (`0x1F1`) +
+  a throwaway parser walked the first 0601 packet; grounded ADRs 0010/0011 and
+  corrected the [`st0601`](../context/st0601.md) mapping claim.
+- **Milestone 1 — byte-exact round-trip (Phase 3)** — real C++ (`include/misbklv/`
+  header-only core: `ber`, `types`, `codec`, `packet`, `builder`; `Result<T>`),
+  the TOML→constexpr generator (`tools/gen_registry.py` + `registry/uas0601.toml`
+  → committed `src/registry/uas0601_tables.generated.hpp`), CMake + CTest, and a
+  163-byte fixture. `roundtrip_test` decodes → re-encodes → asserts identical
+  bytes: **PASS**. Generator verified byte-identical under `tomli` and the
+  embedded fallback reader (ADR 0012 drift check).
 
-## In progress
-
-- **Extraction spike (done)** — `ffmpeg` demux of `Day Flight.mpg` KLV PID
-  (`0x1F1`) + a throwaway parser walked the first 0601 packet: BER length, TLV
-  walk, Item 2 timestamp, sensor lat/lon, and a **verified 16-bit checksum**.
-  Confirmed the legacy-linear vs IMAPB mapping split (see
-  [`st0601`](../context/st0601.md) § Encoding + `log.md`). Grounds forks 8/9.
+- (nothing active — Milestone 1 landed; picking the next build target below.)
 
 ## Next
 
-- **Milestone 1 — byte-exact round-trip** (the acceptance gate for forks 8 + 9):
-  decode the spike's first `Day Flight.mpg` packet → re-encode via the builder →
-  assert identical bytes (checksum included). Exercises the data model
-  ([`0005`](../context/decisions/0005-klv-core-data-model.md)), a minimal
-  descriptor table ([`0010`](../context/decisions/0010-registry-descriptor-schema.md)),
-  IMAP/linear codecs both directions, and the builder
-  ([`0011`](../context/decisions/0011-encode-model.md)) in one test.
-- **Then build out** against the locked design — KLV core + registry codegen,
-  `Result<T>` ([`0007`](../context/decisions/0007-error-and-c-abi.md)), 0903
-  nesting, then the gstreamer backend incl. the in-library PMT-rewrite element
-  ([`0008`](../context/decisions/0008-media-backend-gstreamer.md)). Round-trip
-  targets: `data/Day Flight.mpg`, `data/Night Flight IR.mpg`.
+- **Milestone 2 — full-stream round-trip**: extend beyond the single fixture to
+  every packet in `Day Flight.mpg` (and `Night Flight IR.mpg`), populating the
+  full ~143-item 0601 registry from the standard's Table 1. Surfaces multi-byte
+  BER-OID tags, more mapping kinds, and any special-value cases the first packet
+  didn't hit.
+- **Milestone 3 — 0903 nesting**: Item 74 → VMTI sub-registry; the recursive
+  core + `childRegistry` routing ([`0010`](../context/decisions/0010-registry-descriptor-schema.md)),
+  Array/Series packs.
+- **Then** split the header-only core into a real library target (`.cpp`), wire
+  the CI drift check (ADR 0012), and start the gstreamer backend incl. the
+  in-library PMT-rewrite element
+  ([`0008`](../context/decisions/0008-media-backend-gstreamer.md)).
 
 ## Blockers / notes
 
