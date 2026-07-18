@@ -9,8 +9,10 @@ and [ADR 0009](context/decisions/0009-st0604-deferred.md).
 
 ## Status
 
-Early design phase. Architecture is captured as ADRs in
-[`context/decisions/`](context/decisions/); see
+Early implementation (Phase 3). Design is complete — all architectural
+decisions are captured as ADRs in [`context/decisions/`](context/decisions/).
+The KLV core now round-trips real ST 0601 streams and nested ST 0903 (VMTI)
+byte-exact (build with CMake ≥ 3.20 / a C++20 compiler; `ctest`). See
 [`planning/ROADMAP.md`](planning/ROADMAP.md) and
 [`planning/PROGRESS.md`](planning/PROGRESS.md) for the plan and current status.
 
