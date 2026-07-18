@@ -50,6 +50,11 @@
   IMAPB extended items); **tag 48 = Security LS (ST 0102)** nested instance;
   multi-byte BER-OID tags (≥128) still unexercised (max tag 91). Not yet wired as
   CTest (needs committed `.klv` fixtures or build-time ffmpeg extraction).
+* **Regression tests (build-time extraction)**: wired the `data/*.ts` as CTest
+  cases (`stream_cheyenne`/`falls`/`falls_ext`/`sync`). CMake `find_program(ffmpeg)`
+  + `add_custom_command` extracts each KLV ES to `build/*.klv` at build time (ALL
+  target `extract_ts_klv`); no committed `.klv` bloat. Skipped if ffmpeg absent;
+  CI must `git lfs pull` the `.ts` first. 12 CTest cases total, all pass.
 
 ## 2026-07-17
 

@@ -70,3 +70,34 @@ add_test(NAME vtarget_series
 add_executable(jmisb_crosscheck_test test/jmisb_crosscheck_test.cpp)
 target_link_libraries(jmisb_crosscheck_test PRIVATE misbklv)
 add_test(NAME jmisb_crosscheck COMMAND jmisb_crosscheck_test)
+
+# --- Regression over real MPEG-TS captures (data/*.ts, git-lfs) --------------
+# The KLV elementary stream is extracted at build time with ffmpeg (a test-only
+# dependency) rather than committing large .klv fixtures. Requires the LFS .ts to
+# be materialized (`git lfs pull`). Skipped entirely if ffmpeg is not found.
+find_program(FFMPEG_EXECUTABLE ffmpeg)
+if(FFMPEG_EXECUTABLE)
+  set(_klv_outputs "")
+  function(add_ts_stream_test name ts_file stream_idx)
+    set(_klv ${CMAKE_CURRENT_BINARY_DIR}/${name}.klv)
+    add_custom_command(OUTPUT ${_klv}
+      COMMAND ${FFMPEG_EXECUTABLE} -y -loglevel error
+              -i ${CMAKE_CURRENT_SOURCE_DIR}/data/${ts_file}
+              -map 0:d:${stream_idx} -c copy -f data ${_klv}
+      DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/data/${ts_file}
+      COMMENT "Extracting KLV: ${ts_file} stream ${stream_idx} -> ${name}.klv"
+      VERBATIM)
+    set(_klv_outputs ${_klv_outputs} ${_klv} PARENT_SCOPE)
+    add_test(NAME stream_${name} COMMAND stream_roundtrip_test ${_klv})
+  endfunction()
+
+  add_ts_stream_test(cheyenne   Cheyenne.ts               0)
+  add_ts_stream_test(falls      falls.ts                  0)
+  add_ts_stream_test(falls_ext  falls.ts                  1)  # extended 0601 (tags 75-91)
+  add_ts_stream_test(sync       klv_metadata_test_sync.ts 0)
+
+  # Extract as part of the default build so `ctest` finds the .klv fixtures.
+  add_custom_target(extract_ts_klv ALL DEPENDS ${_klv_outputs})
+else()
+  message(STATUS "ffmpeg not found -- skipping data/*.ts regression tests")
+endif()

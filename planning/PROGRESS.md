@@ -10,9 +10,11 @@ decided — forks 4 (0005/0006/0007), 5 (0008) accepted; fork 6 (0604) deferred.
 Phase 3 (implementation) **started with an extraction spike** on `Day
 Flight.mpg`, which validated the read path (BER walk, timestamp, lat/lon,
 checksum) and surfaced two design gaps the "all forks resolved" status missed.
-All design forks (1–10) resolved. **Milestones 1–6 done and passing** (8 CTest
-cases green, incl. independent cross-checks vs jmisb/ST 1201 Annex A vectors for
-IMAP and vs jmisb for the 0601 linear-LDS + 0903 VTarget codecs). M1 = first-packet round-trip. M2 = full-stream round-trip of both
+All design forks (1–10) resolved. **Milestones 1–6 done and passing** (12 CTest
+cases green): unit + hand-authored round-trips, jmisb/ST 1201 Annex A IMAP
+cross-checks, jmisb 0601/0903 codec cross-checks, and **real-stream regression**
+over `data/*.ts` (KLV extracted at build time via ffmpeg; 4 streams / ~4678
+packets round-trip byte-exact). M1 = first-packet round-trip. M2 = full-stream round-trip of both
 0601 samples. M3 = 0903 nesting (Item 74 VMTI, recursive `childRegistry`). M4 =
 real ST 1201 IMAPB codec (validated vs ST 1201 Table 7 + ST 0903 examples). M5 =
 standalone VMTI (own UL key + checksum + `registry_by_key()` dispatch) — **both
