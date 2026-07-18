@@ -16,6 +16,7 @@ inline constexpr ItemDescriptor vmti_0903_items[] = {
     { .tag = 6, .name = "Number of Reported Targets", .units = "", .kind = ValueKind::UInt, .variable = true, .fixed_len = 0, .is_signed = false, .map = {0.0, 0.0}, .specials = {}, .flags = kNone, .child = RegistryId::None },
     { .tag = 11, .name = "VMTI Horizontal Field of View", .units = "deg", .kind = ValueKind::IMAPB, .variable = false, .fixed_len = 2, .is_signed = false, .map = {0.0, 180.0}, .specials = {}, .flags = kNone, .child = RegistryId::None },
     { .tag = 12, .name = "VMTI Vertical Field of View", .units = "deg", .kind = ValueKind::IMAPB, .variable = false, .fixed_len = 2, .is_signed = false, .map = {0.0, 180.0}, .specials = {}, .flags = kNone, .child = RegistryId::None },
+    { .tag = 101, .name = "vTargetSeries", .units = "", .kind = ValueKind::Pack, .variable = true, .fixed_len = 0, .is_signed = false, .map = {0.0, 0.0}, .specials = {}, .flags = kNone, .child = RegistryId::Vtarget0903 },
 };
 
 inline constexpr std::uint8_t vmti_0903_key[] = {0x06, 0x0E, 0x2B, 0x34, 0x02, 0x0B, 0x01, 0x01, 0x0E, 0x01, 0x03, 0x03, 0x06, 0x00, 0x00, 0x00};

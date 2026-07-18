@@ -52,3 +52,9 @@ kind   = "imapb"
 length = 2
 min    = 0.0
 max    = 180.0
+
+[[item]]                       # §10.1.101 — Series of VTarget Packs (Item 101)
+tag   = 101
+name  = "vTargetSeries"
+kind  = "pack"
+child = "vtarget_0903"

@@ -41,10 +41,11 @@ class LocalSetBuilder {
   // Serialize the staged items as a bare TLV sequence — no UL key, length, or
   // checksum. This is the value of a nested Local Set (ADR 0005/0010): the
   // parent stages it via append_raw(child_tag, serialize_items()).
+  // Callers exclude the checksum item before staging (finalize() emits a fresh
+  // one); tag 1 is NOT special here — in embedded LSs (e.g. VTarget) it is data.
   ber::Bytes serialize_items() const {
     ber::Bytes out;
     for (const auto& [tag, val] : staged_) {
-      if (tag == kChecksumTag) continue;
       ber::write_oid(out, tag);
       ber::write_length(out, val.size());
       out.insert(out.end(), val.begin(), val.end());

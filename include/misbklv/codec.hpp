@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <span>
 #include <string_view>
 #include <variant>
@@ -79,7 +80,11 @@ inline double imapb_decode(const ItemDescriptor& d, std::span<const std::byte> r
 }
 inline void imapb_encode(const ItemDescriptor& d, double x, Bytes& out, int len) {
   const ImapB p = imapb_params(d.map.min, d.map.max, len);
-  const double yf = p.sF * (x - p.a) + p.zoff;       // truncate; x>=a => floor
+  double yf = p.sF * (x - p.a) + p.zoff;             // truncate; x>=a => floor
+  // A decoded on-grid value re-encodes to an exact integer in real arithmetic;
+  // float error can pull it just below, so floor would drop 1 LSB. Nudge up by
+  // a few ULP (far below a real cell width) to keep IMAPB a stable inverse.
+  yf += (std::fabs(yf) + 1.0) * 8.0 * std::numeric_limits<double>::epsilon();
   wr_uint(out, static_cast<std::uint64_t>(std::floor(yf)), len);
 }
 

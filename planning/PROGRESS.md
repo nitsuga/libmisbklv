@@ -10,17 +10,19 @@ decided — forks 4 (0005/0006/0007), 5 (0008) accepted; fork 6 (0604) deferred.
 Phase 3 (implementation) **started with an extraction spike** on `Day
 Flight.mpg`, which validated the read path (BER walk, timestamp, lat/lon,
 checksum) and surfaced two design gaps the "all forks resolved" status missed.
-All design forks (1–10) resolved. **Milestones 1–5 done and passing** (6 CTest
+All design forks (1–10) resolved. **Milestones 1–6 done and passing** (7 CTest
 cases green). M1 = first-packet round-trip. M2 = full-stream round-trip of both
-0601 samples (Day 6/977 B, Night 18/2916 B), full 25-tag registry. M3 = 0903
-nesting (Item 74 VMTI, recursive `childRegistry` routing + parse/build). M4 =
-real ST 1201 IMAPB codec (validated vs ST 1201 Table 7 + ST 0903 §10.1.11). M5 =
-**standalone VMTI** — a VMTI LS as its own top-level packet (own UL key +
-checksum), round-tripping byte-exact with `registry_by_key()` UL-key dispatch.
-**Both ST 0903 variants — embedded (M3) and standalone (M5) — are now supported
-and tested.** Next: **M6 — VTarget Series / Array-Series packs** (0903 Item 101),
-then split the header-only core into a real lib target + CI drift check, then the
-gstreamer backend.
+0601 samples. M3 = 0903 nesting (Item 74 VMTI, recursive `childRegistry`). M4 =
+real ST 1201 IMAPB codec (validated vs ST 1201 Table 7 + ST 0903 examples). M5 =
+standalone VMTI (own UL key + checksum + `registry_by_key()` dispatch) — **both
+ST 0903 variants (embedded M3 + standalone M5) supported**. M6 = **VTarget
+Series** (0903 Item 101): ST 0903 §9.1.3 Series of VTarget Packs
+(`[BER-OID targetId][LS items]`), routed into the VTarget registry, IMAPB inside
+packs — Series + packet round-trip byte-exact (matches ST 0903 Figure 13
+L=30/13/15). **The core KLV data model is now structurally complete** for
+0601 + 0903 (scalars, nesting, packs/series, linear + IMAPB). Next: split the
+header-only core into a real lib target + wire CI drift check, then the gstreamer
+backend (ADR 0008).
 
 ## Done
 
@@ -130,18 +132,32 @@ gstreamer backend.
   now covered.** Cross-refs: ATAK delegates KLV to a closed lib (pgscmedia — no
   source to check); ImpleoTV docs are API-level not byte-level — ST 0903 §10 is
   the authority used.
+- **Milestone 6 — VTarget Series (Phase 3)** — new `series.hpp` (`parse_vtarget_series`,
+  `build_vtarget_pack`, `build_series`) for ST 0903 §9.1.3 Series of VTarget
+  Packs; new `VTARGET_0903` registry (`RegistryId::Vtarget0903`), Item 101 as
+  `kind = pack` → child. `vtarget_roundtrip_test` on a hand-authored
+  `vmti_vtarget.klv` (matching Figure 13: Item 101 L=30 = two packs L=13/L=15)
+  parses/decodes both packs and re-encodes Series + packet byte-exact. Two bugs
+  fixed: (1) IMAPB with non-zero `Zoffset` (a<0<b, e.g. offsets IMAPB(-19.2,19.2))
+  lost 1 LSB on re-encode — added a few-ULP nudge so IMAPB is a stable inverse;
+  (2) `serialize_items()` dropped tag 1 assuming "checksum", but tag 1 is data in
+  embedded LSs (VTarget targetCentroid) — removed the 0601-centric assumption
+  (checksum handling stays in `finalize()`).
 
 ## In progress
 
-- (nothing active — Milestones 1–5 landed; picking the next target below.)
+- (nothing active — Milestones 1–6 landed; the KLV core is structurally complete.)
 
 ## Next
 
-- **M6 — VTarget Series / packs (0903 Item 101)**: Array/Series homogeneous VLPs
-  (0903 §9.1.2/3) + the VTarget Pack (BER-OID targetId + nested VTarget LS) — the
-  recursive-core case deferred so far. Needs a Series/pack representation in the
-  data model + builder and a hand-authored fixture; ST 0903 Figure 13 sketches
-  the structure (two VTarget packs, illustrative). Testable in both 0903 variants.
+- **Plumbing / real library**: split the header-only core into a proper library
+  target (`.cpp` where it helps), export CMake config for consumers, and wire the
+  ADR 0012 drift check into an actual CI config (GitHub Actions).
+- **Media backend (ADR 0008)**: the gstreamer backend — `tsdemux` KLV extraction
+  (by `KLVA` descriptor) and `appsrc`→`mpegtsmux`→`klvpmtrewrite` insertion. This
+  is the big remaining Phase 3 chunk and needs the gstreamer dev libs (installed).
+- **Registry breadth** (incremental): more 0601 extended items (IMAPB, tags 90+),
+  the remaining VTarget items, and Array types (0903 §9.1.2) as data needs them.
 - **Then** split the header-only core into a real library target (`.cpp`), wire
   the CI drift check (ADR 0012) into an actual CI config, and start the gstreamer
   backend incl. the in-library PMT-rewrite element

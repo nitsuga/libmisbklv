@@ -1,0 +1,42 @@
+# ST 0903.6 VTarget Pack — descriptor source of truth (ADR 0012).
+# Elements of the VMTI vTargetSeries (Item 101). Each VTarget Pack on the wire is
+# [BER-OID targetId][these LS items as TLV] (ST 0903 §10.2). No standalone UL key
+# (a pack, not a top-level LS). M6 subset — see ST 0903 Table for the full set.
+
+registry     = "VTARGET_0903"
+tag_encoding = "ber_oid"
+
+[[item]]                       # §10.2.2.1 — pixel number (row-major), variable uint
+tag  = 1
+name = "targetCentroid"
+kind = "uint"
+
+[[item]]                       # §10.2.2.4 — uint8
+tag    = 4
+name   = "targetPriority"
+kind   = "uint"
+length = 1
+
+[[item]]                       # §10.2.2.8 — uint24 (RGB)
+tag    = 8
+name   = "targetColor"
+kind   = "uint"
+length = 3
+
+[[item]]                       # §10.2.2.10 — IMAPB(-19.2,19.2); 10.0° -> 0x3A6667
+tag    = 10
+name   = "targetLocationOffsetLat"
+units  = "deg"
+kind   = "imapb"
+length = 3
+min    = -19.2
+max    = 19.2
+
+[[item]]                       # §10.2.2.11 — IMAPB(-19.2,19.2)
+tag    = 11
+name   = "targetLocationOffsetLon"
+units  = "deg"
+kind   = "imapb"
+length = 3
+min    = -19.2
+max    = 19.2

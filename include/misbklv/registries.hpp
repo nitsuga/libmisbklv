@@ -9,6 +9,7 @@
 #include "misbklv/types.hpp"
 #include "registry/uas0601_tables.generated.hpp"
 #include "registry/vmti0903_tables.generated.hpp"
+#include "registry/vtarget0903_tables.generated.hpp"
 
 namespace misbklv {
 
@@ -23,6 +24,8 @@ inline const Registry* registry_for(RegistryId id) {
       return &gen::uas_0601;
     case RegistryId::Vmti0903:
       return &gen::vmti_0903;
+    case RegistryId::Vtarget0903:
+      return &gen::vtarget_0903;
     case RegistryId::None:
     default:
       return nullptr;

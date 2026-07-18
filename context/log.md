@@ -258,3 +258,17 @@
   API-level (JSON), not byte-level, and ship no downloadable `vmtiPckt.bin` (that
   name is only a placeholder path in sample code) — ST 0903 §10 is the authority
   used. VTarget Series → M6. (Detail in PROGRESS.)
+* **Milestone 6 (implementation)**: VTarget Series (0903 Item 101). New
+  `series.hpp` (`parse_vtarget_series` / `build_vtarget_pack` / `build_series`)
+  for ST 0903 §9.1.3 Series of VTarget Packs (`[BER-OID targetId][LS items]`);
+  new `VTARGET_0903` registry + `RegistryId::Vtarget0903`; Item 101 = `kind=pack`
+  → child. `vtarget_roundtrip_test` on `vmti_vtarget.klv` (ST 0903 Figure 13:
+  L=30 = two packs L=13/L=15) round-trips Series + packet byte-exact; 7th CTest
+  case. **KLV core now structurally complete for 0601+0903** (scalars, nesting,
+  packs/series, linear + IMAPB). Two bugs found + fixed against real structure:
+  (1) IMAPB non-zero-`Zoffset` re-encode lost 1 LSB — added a few-ULP nudge to
+  `imapb_encode` so decode∘encode is stable (imapb_test gained the IMAPB(-19.2,
+  19.2) 10.0°=0x3A6667 vector); (2) `serialize_items()` skipped tag 1 as
+  "checksum", wrong for embedded LSs where tag 1 is data (VTarget targetCentroid)
+  — removed the assumption; checksum handling stays in `finalize()`. (Detail in
+  PROGRESS.)

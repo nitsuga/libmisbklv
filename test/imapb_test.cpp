@@ -74,6 +74,17 @@ int main() {
     expect_near("dec(0x0640)", codec::imapb_decode(fov, b), 12.5);
   }
 
+  // third vector: ST 0903 §10.2.2.10 VTarget offset — IMAPB(-19.2,19.2) L=3,
+  // exercises the non-zero Zoffset path (a<0<b): 10.0° -> 0x3A6667.
+  const ItemDescriptor off = imapb(-19.2, 19.2);
+  std::printf("ST 0903 IMAPB(-19.2, 19.2), L=3 (VTarget offset §10.2.2.10):\n");
+  expect_bytes("enc(10.0)", enc(off, 10.0, 3), {0x3A, 0x66, 0x67});
+  {
+    ber::Bytes b{static_cast<std::byte>(0x3A), static_cast<std::byte>(0x66),
+                 static_cast<std::byte>(0x67)};
+    expect_near("dec(0x3A6667)", codec::imapb_decode(off, b), 10.0);
+  }
+
   // round-trip sweep across the range
   std::printf("round-trip sweep:\n");
   bool sweep_ok = true;

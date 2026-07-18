@@ -60,3 +60,9 @@ target_link_libraries(standalone_roundtrip_test PRIVATE misbklv)
 add_test(NAME standalone_vmti
   COMMAND standalone_roundtrip_test
           ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/vmti_standalone.klv)
+
+add_executable(vtarget_roundtrip_test test/vtarget_roundtrip_test.cpp)
+target_link_libraries(vtarget_roundtrip_test PRIVATE misbklv)
+add_test(NAME vtarget_series
+  COMMAND vtarget_roundtrip_test
+          ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/vmti_vtarget.klv)
