@@ -5,9 +5,9 @@ Current status. Volatile; rewrite each session. For the plan, see
 
 ## Now
 
-Phase 0 done. Phase 1 complete. Phase 2 (core architecture) decided — fork 4
-(0005 data model / 0006 registry / 0007 error+C ABI) accepted. Remaining:
-forks 5 (backends), 6 (0604 scope).
+Phase 0 done. Phase 1 complete. Phase 2 (core architecture + media backend)
+decided — forks 4 (0005/0006/0007) and 5 (0008) accepted. Remaining: fork 6
+(0604 scope).
 
 ## Done
 
@@ -40,14 +40,19 @@ forks 5 (backends), 6 (0604 scope).
   hybrid data model (tag+len+bytes + registry-driven typed view, `std::span`
   zero-copy); compiled-in `constexpr` tag registry (build-time codegen); local
   `Result<T>` (no exceptions for routine errors); C ABI deferred.
+- Fork 5 decided (ADR [`0008`](../context/decisions/0008-media-backend-gstreamer.md),
+  accepted): single gstreamer backend for v1 (library-style; `MediaBackend`
+  interface kept); extract + insert incl. real-time (async `0x06`) via
+  `appsrc`; PMT-rewrite as an in-library gstreamer element (porting
+  gstklvplugin's `tspmtrewrite`); ffmpeg deferred. Project goal narrowed to
+  "gstreamer (v1)".
 
 ## In progress
 
-(none — forks 5 (gstreamer/ffmpeg backends) & 6 (0604 scope) next)
+(none — fork 6 (0604 scope) next)
 
 ## Next
 
-- Fork 5 (gstreamer/ffmpeg backends — shared interface; both in v1 or sequence).
 - Fork 6 (0604 ES-timestamp scope — v1 or deferred).
 
 ## Blockers / notes

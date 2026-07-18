@@ -2,7 +2,8 @@
 
 C++ library to read and write MISB KLV data — ST 0601 (UAS Datalink Local
 Set), ST 0903 (VMTI), ST 0604 (ES-layer timestamps) — from/to MPEG-TS
-containers, via gstreamer or ffmpeg, file or stream.
+containers via gstreamer (file or stream; real-time insertion via `appsrc`).
+ffmpeg backend is optional/deferred — see ADR 0008.
 
 ## Agent knowledge base
 

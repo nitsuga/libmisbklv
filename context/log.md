@@ -118,3 +118,19 @@
   `constexpr` tag registry (build-time codegen); local `Result<T>` (no
   exceptions for routine errors); C ABI deferred (clean C++ core first).
   ROADMAP fork 4 → DECIDED. **Phase 2 (core architecture) design complete.**
+* **Decision (proposed)**: Fork 5 →
+  [`0008-media-backend-gstreamer`](./decisions/0008-media-backend-gstreamer.md)
+  (proposed): single backend **gstreamer for v1** (library-style; `MediaBackend`
+  interface kept; extract + insert incl. real-time via `appsrc` flow control;
+  **PMT-rewrite component required** for `KLVA` insertion signaling — porting
+  gstklvplugin's `tspmtrewrite`; ffmpeg deferred/optional). Project goal narrows
+  from "gstreamer or ffmpeg" to "gstreamer (v1)". Awaiting accept. ROADMAP fork 5
+  → PROPOSED.
+* **Decision (accepted)**: [`0008`](./decisions/0008-media-backend-gstreamer.md)
+  → accepted. Single **gstreamer backend for v1** (library-style;
+  `MediaBackend` interface kept). Extract + insert incl. **real-time async
+  (`0x06`)** via `appsrc` flow control. **PMT-rewrite = in-library gstreamer
+  element** (option (c), porting gstklvplugin's `tspmtrewrite`; not a shipped
+  plugin). Sync per-frame (`0x15`) deferred. ffmpeg deferred/optional. Project
+  goal narrowed to "gstreamer (v1)"; `CLAUDE.md`/`README` reconciled. ROADMAP
+  fork 5 → DECIDED.

@@ -13,3 +13,4 @@ forks live in [`../../planning/ROADMAP.md`](../../planning/ROADMAP.md).
 | [0005 — KLV core data model](./0005-klv-core-data-model.md) | accepted |
 | [0006 — Tag registry (compiled-in)](./0006-tag-registry.md) | accepted |
 | [0007 — Error handling & C ABI](./0007-error-and-c-abi.md) | accepted |
+| [0008 — Media backend — gstreamer (v1)](./0008-media-backend-gstreamer.md) | accepted |

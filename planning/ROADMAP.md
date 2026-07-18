@@ -40,7 +40,7 @@ Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 | 2 | Project license | DECIDED | [0002](../context/decisions/0002-license.md) |
 | 3 | `akrutsinger/libklv` name collision — renamed to `libmisbklv` | DECIDED | [0003](../context/decisions/0003-project-name.md) |
 | 4 | Core architecture (data model / registry / error+ABI) | DECIDED | [0005](../context/decisions/0005-klv-core-data-model.md) [0006](../context/decisions/0006-tag-registry.md) [0007](../context/decisions/0007-error-and-c-abi.md) |
-| 5 | gstreamer vs ffmpeg backends — shared interface; both in v1 or sequence | OPEN | — |
+| 5 | Media backend — gstreamer (v1); ffmpeg deferred | DECIDED | [0008](../context/decisions/0008-media-backend-gstreamer.md) |
 | 6 | 0604 ES-timestamp scope — v1 or deferred | OPEN | — |
 | 7 | Decision records — ADR format & numbering | DECIDED | [0004](../context/decisions/0004-adr-format.md) |
 
