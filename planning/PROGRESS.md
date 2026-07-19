@@ -62,8 +62,3 @@ done and extending incrementally** — the state today:
   are all 0601, no tag 74).
 - ST 0102 Security LS (seen as tag 48 in `falls`) is opaque passthrough, not a
   typed nested registry yet.
-
-## Blockers / notes
-
-- Repo directory still `~/workspaces/libklv` (optional `mv` to `libmisbklv`,
-  separate from the name decision).
