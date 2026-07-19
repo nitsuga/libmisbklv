@@ -21,7 +21,7 @@ A **generic KLV core** + a **class per item** (the klvdata camp):
 - Core (`api/.../klv/`): `Ber`/`BerDecoder`/`BerEncoder`, `KlvParser`,
   `LdsParser` (Local Set) vs `UdsParser` (Universal Data Set), `UniversalLabel`,
   `ArrayBuilder`, `IKlvValue`/`INestedKlvValue`, `CrcCcitt`. Maps almost 1:1 to
-  our [`ber`](/ber.hpp-conceptual)/[`packet`](/st0107.md) mechanics.
+  our BER/[`packet`](/st0107.md) mechanics (ST 0107 covers BER-OID + BER length).
 - Per-standard packages hold **hand-written classes per item** (e.g. an
   `st0601/` class per tag). This is the anti-pattern
   [`0006`](/decisions/0006-tag-registry.md) rejected in favor of a data-driven
