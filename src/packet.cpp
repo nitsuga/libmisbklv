@@ -16,7 +16,10 @@ Result<std::vector<Item>> parse_items(std::span<const std::byte> buf) {
     auto ilen = ber::read_length(buf, pos);
     if (!ilen) return Result<std::vector<Item>>::err(ilen.error());
     pos += ilen->consumed;
-    if (pos + ilen->value > end)
+    // Overflow-safe: `pos + ilen->value` could wrap for a crafted huge length
+    // (8-byte BER len), passing a naive `> end` check and then over-reading in
+    // subspan. `pos <= end` here, so `end - pos` can't underflow.
+    if (ilen->value > end - pos)
       return Result<std::vector<Item>>::err(Error::Truncated);
     items.push_back(
         {static_cast<std::uint16_t>(tag->value), buf.subspan(pos, ilen->value)});
@@ -32,9 +35,11 @@ Result<Packet> parse_packet(std::span<const std::byte> buf) {
 
   auto len = ber::read_length(buf, 16);
   if (!len) return Result<Packet>::err(len.error());
-  const std::size_t vstart = 16 + len->consumed;
+  const std::size_t vstart = 16 + len->consumed;  // <= buf.size() (read_length)
+  // Overflow-safe bound: `vstart + len->value` could wrap for a crafted huge
+  // length and slip past a naive `> buf.size()` check into an OOB subspan.
+  if (len->value > buf.size() - vstart) return Result<Packet>::err(Error::Truncated);
   const std::size_t end = vstart + len->value;
-  if (end > buf.size()) return Result<Packet>::err(Error::Truncated);
 
   auto items = parse_items(buf.subspan(vstart, len->value));
   if (!items) return Result<Packet>::err(items.error());
@@ -47,8 +52,11 @@ std::size_t packet_frame_length(std::span<const std::byte> buf) {
   if (buf.size() < 17) return 0;  // 16-byte key + at least one length byte
   auto len = ber::read_length(buf, 16);
   if (!len) return 0;             // length not yet parseable -> need more data
-  const std::size_t total = 16 + len->consumed + len->value;
-  return buf.size() >= total ? total : 0;
+  const std::size_t header = 16 + len->consumed;  // <= buf.size() (read_length)
+  // Overflow-safe: a crafted huge length must not wrap `header + value` into a
+  // small "complete" total. Not all here (or absurd) -> need more data.
+  if (len->value > buf.size() - header) return 0;
+  return header + len->value;
 }
 
 }  // namespace misbklv

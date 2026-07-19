@@ -107,6 +107,18 @@
   only on a cross-session gap or revision. (2) **No live tallies** (test-case
   counts, item totals) in present-tense / durable prose — a specific number
   belongs only in a dated log snapshot here (root `CLAUDE.md` Planning hygiene).
+* **Hardening (implementation)**: real-world robustness pass — inputs the clean
+  vendor samples never exercised. Fixed **integer-overflow → OOB** in the length
+  arithmetic (`parse_packet`, `parse_items`, `packet_frame_length`: a crafted
+  8-byte BER length wrapped past a naive bound check into an out-of-range
+  `subspan`), and added **length validation to `codec::decode`** (numeric kinds
+  reject 0- / >8-byte values — a 0-length item drove shift-by-negative UB; also
+  made the signed-linear `imax` shift unsigned to avoid `1ll<<63`). Confirmed
+  **multi-byte BER-OID tags (≥128)** already parse/build correctly (test gap, not
+  a bug — `read_oid`/`write_oid` handle base-128) and **Report-on-Change trimmed**
+  packets round-trip. New `hardening_test` covers all three; the core builds clean
+  under **ASan+UBSan** (`MISBKLV_SANITIZE` option + a CI sanitizer job, gstreamer
+  off). Verified the test has teeth: reintroducing the overflow flips it to FAIL.
 
 ## 2026-07-18
 

@@ -20,9 +20,14 @@ done and extending incrementally** — the state today:
   unnecessary — [ADR 0015](../context/decisions/0015-no-pmt-rewrite.md)). File
   extraction needs no gstreamer at all ([ADR 0016](../context/decisions/0016-ts-0x15-extraction.md)).
   Design/scope: [`backend-scope.md`](../context/backend-scope.md).
+- **Real-world hardening** done: multi-byte BER-OID tags (≥128), Report-on-Change
+  trimmed packets, and adversarial/malformed input (integer-overflow OOB guards in
+  the length arithmetic, length validation in `codec::decode`) — all covered by
+  `hardening_test`, and the core is clean under ASan+UBSan (`MISBKLV_SANITIZE`).
 - **Packaging**: compiled `libmisbklv.a` (`find_package(misbklv)` →
   `misbklv::misbklv`) + optional `misbklv-gst` target; **the full CTest suite
-  green**; CI runs build/test + the ADR 0012 registry drift check.
+  green**; CI runs build/test, a **sanitizer job** (ASan+UBSan core), and the
+  ADR 0012 registry drift check.
 
 ## In progress
 
@@ -39,9 +44,12 @@ done and extending incrementally** — the state today:
 
 ## Known gaps
 
-- Need vectors/data: Report-on-Change trimmed packets (samples are all full); a
-  real VMTI stream (M3/M5/M6 use hand-authored fixtures — the `data/*.ts` may
-  help); multi-byte BER-OID tags (≥128, e.g. Item 143 MSID).
+- Report-on-Change, multi-byte BER-OID tags, and malformed-input robustness are
+  now **covered synthetically** by `hardening_test`; still worth a *real*
+  RoC-trimmed or multi-byte-tag capture if one turns up (current coverage is
+  hand-constructed, not vendor data).
+- Need a real VMTI stream (M3/M5/M6 use hand-authored fixtures — the `data/*.ts`
+  are all 0601, no tag 74).
 - ST 0102 Security LS (seen as tag 48 in `falls`) is opaque passthrough, not a
   typed nested registry yet.
 

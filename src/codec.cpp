@@ -25,7 +25,9 @@ std::int64_t rd_int(std::span<const std::byte> b) {
 double linear_decode(const ItemDescriptor& d, std::span<const std::byte> raw) {
   const int len = static_cast<int>(raw.size());
   if (d.is_signed) {
-    const double imax = static_cast<double>((1ll << (8 * len - 1)) - 1);
+    // Unsigned shift: for len==8 a signed `1ll << 63` overflows into the sign
+    // bit (UB). len is validated to 1..8 by decode(), so 8*len-1 is 7..63.
+    const double imax = static_cast<double>((1ull << (8 * len - 1)) - 1);
     return static_cast<double>(rd_int(raw)) * d.map.max / imax;  // min == -max
   }
   const double denom =
@@ -34,7 +36,7 @@ double linear_decode(const ItemDescriptor& d, std::span<const std::byte> raw) {
 }
 void linear_encode(const ItemDescriptor& d, double x, Bytes& out, int len) {
   if (d.is_signed) {
-    const double imax = static_cast<double>((1ll << (8 * len - 1)) - 1);
+    const double imax = static_cast<double>((1ull << (8 * len - 1)) - 1);
     const auto v = static_cast<std::int64_t>(std::llround(x * imax / d.map.max));
     wr_uint(out, static_cast<std::uint64_t>(v), len);
   } else {
@@ -128,6 +130,20 @@ bool is_imap_special(std::span<const std::byte> raw) {
 }
 
 Result<Value> decode(const ItemDescriptor& d, std::span<const std::byte> raw) {
+  // Numeric kinds need 1..8 bytes. Reject a crafted 0-length item (would drive
+  // shift-by-negative UB in the int/linear/IMAP math) or an over-8-byte one
+  // (rd_uint would silently wrap) before touching the value.
+  switch (d.kind) {
+    case ValueKind::UInt:
+    case ValueKind::Int:
+    case ValueKind::LinearLDS:
+    case ValueKind::IMAPB:
+      if (raw.empty() || raw.size() > 8)
+        return Result<Value>::err(Error::BadLength);
+      break;
+    default:
+      break;
+  }
   switch (d.kind) {
     case ValueKind::UInt:
       return Result<Value>::ok(Value{rd_uint(raw)});

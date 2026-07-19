@@ -9,6 +9,15 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 include(GNUInstallDirs)  # defines CMAKE_INSTALL_INCLUDEDIR/LIBDIR (used below)
 find_package(Threads REQUIRED)  # gst_stream_test's loopback receiver thread (B4)
 
+# Address+UB sanitizers for the hardening pass (off by default; CI/dev opt-in).
+# Applied to all targets so instrumentation is consistent across the lib + tests.
+option(MISBKLV_SANITIZE "Build with -fsanitize=address,undefined" OFF)
+if(MISBKLV_SANITIZE)
+  add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=address,undefined)
+  message(STATUS "sanitizers enabled (address,undefined)")
+endif()
+
 # Compiled core library (ADR 0005/0010/0011). All public headers — including the
 # generated constexpr registry tables (include/misbklv/registry/) — under include/.
 add_library(misbklv STATIC
@@ -107,6 +116,11 @@ add_test(NAME vtarget_series
 add_executable(jmisb_crosscheck_test test/jmisb_crosscheck_test.cpp)
 target_link_libraries(jmisb_crosscheck_test PRIVATE misbklv)
 add_test(NAME jmisb_crosscheck COMMAND jmisb_crosscheck_test)
+
+add_executable(hardening_test test/hardening_test.cpp)  # real-world hardening
+target_link_libraries(hardening_test PRIVATE misbklv)
+add_test(NAME hardening COMMAND hardening_test
+  ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight_first_packet.klv)
 
 add_executable(mock_backend_test test/mock_backend_test.cpp)
 target_link_libraries(mock_backend_test PRIVATE misbklv)
