@@ -25,9 +25,11 @@ Series** (0903 Item 101): ST 0903 §9.1.3 Series of VTarget Packs
 (`[BER-OID targetId][LS items]`), routed into the VTarget registry, IMAPB inside
 packs — Series + packet round-trip byte-exact (matches ST 0903 Figure 13
 L=30/13/15). **The core KLV data model is now structurally complete** for
-0601 + 0903 (scalars, nesting, packs/series, linear + IMAPB). Next: split the
-header-only core into a real lib target + wire CI drift check, then the gstreamer
-backend (ADR 0008).
+0601 + 0903 (scalars, nesting, packs/series, linear + IMAPB). The core is a
+compiled installable lib with CI; **the gstreamer media backend (ADR 0008) is now
+complete through B4** — extraction (0x06 + 0x15, file + live udp/srt) and
+insertion (file + live, clock-paced), all on stock gstreamer with no custom
+element (19 CTest cases). Next: registry breadth + follow-ons (see below).
 
 ## Done
 
@@ -202,14 +204,26 @@ backend (ADR 0008).
   gst-free core extractor `extract_ts_klv` (`ts.hpp`/`ts.cpp`) finds the KLV PID
   by content and handles **both 0x06 and 0x15** — byte-exact vs ffmpeg on
   Cheyenne/sync (0x15, 407/365 pkts) and Day Flight (0x06). **Bonus: file KLV
-  extraction needs no gstreamer.** 18 CTest cases. Next: **B4** — real-time
-  (udp/srt) streaming (make_sink already wired; needs a live push/pace test).
+  extraction needs no gstreamer.** 18 CTest cases.
+- **B4 done** (real-time streaming, fork 15 / ADR
+  [`0017`](../context/decisions/0017-realtime-streaming.md)): live-sink clock
+  pacing (`InsertConfig::realtime` → `appsrc is-live` + sink `sync`) and live
+  extraction (`udp:`/`srt:` source via `make_src`) that ends on a `udpsrc` idle
+  timeout (no EOS crosses the wire; the timeout is ignored until ≥1 packet has
+  flowed, so startup can't truncate). `gst_stream_test`: a one-process **udp
+  loopback** — receiver `extract()` on a thread, realtime `push` on the main
+  thread — recovers KLV **byte-exact**, 6 packets in ~165 ms (5×33 ms, i.e.
+  genuinely clock-paced). 19 CTest cases. **Backend phase B0–B4 complete** —
+  extraction (0x06 + 0x15, file + live) and insertion (file + live) all work with
+  stock gstreamer, no custom element.
 
 ## Next
 
-- **Media backend (ADR 0008)** — implement per [`backend-scope.md`](./backend-scope.md)
-  phased plan B0–B4 (extraction spike → interface+mock → insertion+`klvpmtrewrite`
-  → 0x15 → real-time). Forks 11–14 to decide as they come up.
+- **Media backend (ADR 0008) — done (B0–B4)**. The v1 backend is complete:
+  extraction (0x06 + 0x15, file + live udp/srt) and insertion (file + live,
+  clock-paced) on stock gstreamer, no custom element. Possible follow-ons (not
+  yet scoped): a cooperative stop-token to end a live `extract()` early (ADR 0017
+  deferred it); SRT-specific hermetic test; RTP payloading option.
 - **Registry breadth** (incremental): more 0601 extended items (IMAPB, tags 90+),
   the remaining VTarget items, and Array types (0903 §9.1.2) as data needs them.
 - **Known gaps**:

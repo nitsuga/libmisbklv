@@ -53,6 +53,7 @@ Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 | 12 | 0x15 metadata extraction — gst-free TS demuxer (`extract_ts_klv`) handles 0x06 + 0x15 AU cells (F-B) | DECIDED | [0016](../context/decisions/0016-ts-0x15-extraction.md) |
 | 13 | `klvpmtrewrite` — NOT needed: stock `mpegtsmux` (gst ≥1.20) emits 0x06+KLVA (F-C) | DECIDED | [0015](../context/decisions/0015-no-pmt-rewrite.md) |
 | 14 | Backend optional-dependency build — `option()` + separate `misbklv-gst` target (F-D) | DECIDED | [0014](../context/decisions/0014-backend-optional-dependency.md) |
+| 15 | Real-time streaming (B4) — live-sink clock pacing (`is-live`+`sync`) + live-source idle-timeout termination (udp/srt) | DECIDED | [0017](../context/decisions/0017-realtime-streaming.md) |
 
 Forks 8–9 surfaced during the Phase 3 extraction spike (2026-07-17): the core
 *decoder* design (forks 4/5) was complete, but the registry descriptor

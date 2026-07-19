@@ -102,8 +102,13 @@ sync-KLV mode (its samples are the `*_sync` file).
   both 0x06 and 0x15 (metadata AU cells), byte-exact vs ffmpeg (ADR
   [`0016`](../context/decisions/0016-ts-0x15-extraction.md), F-B resolved). Bonus:
   file extraction needs no gstreamer.
-- **B4 — real-time streaming**: `udpsink`/`srtsink` + appsrc backpressure; the
-  push-KLV API blocking on flow control (the ADR 0008 ergonomic win).
+- **B4 — real-time streaming** (done): live-sink clock pacing (`InsertConfig::realtime`
+  → `appsrc is-live` + sink `sync`) and live-source extraction (`udp:`/`srt:` src)
+  ending on a `udpsrc` idle timeout (no EOS crosses the wire). `gst_stream_test`:
+  udp loopback (receiver `extract()` on a thread, realtime `push` on main) →
+  byte-exact, 6 packets in ~165 ms (clock-paced). ADR
+  [`0017`](../context/decisions/0017-realtime-streaming.md), fork 15. **B0–B4
+  complete.**
 
 ## Risks
 

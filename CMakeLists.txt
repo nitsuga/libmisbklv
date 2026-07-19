@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(GNUInstallDirs)  # defines CMAKE_INSTALL_INCLUDEDIR/LIBDIR (used below)
+find_package(Threads REQUIRED)  # gst_stream_test's loopback receiver thread (B4)
 
 # Compiled core library (ADR 0005/0010/0011). All public headers — including the
 # generated constexpr registry tables (include/misbklv/registry/) — under include/.
@@ -123,6 +124,11 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
   add_test(NAME gst_insert COMMAND gst_insert_test
     "${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight.klv"
     "${CMAKE_CURRENT_BINARY_DIR}/insert_roundtrip.ts")
+
+  add_executable(gst_stream_test test/gst_stream_test.cpp)  # B4 real-time udp round-trip
+  target_link_libraries(gst_stream_test PRIVATE misbklv-gst Threads::Threads)
+  add_test(NAME gst_stream COMMAND gst_stream_test
+    "${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight.klv")
 endif()
 
 # --- Regression over real MPEG-TS captures (data/*.ts, git-lfs) --------------

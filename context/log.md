@@ -76,6 +76,21 @@
   vs ffmpeg** on Day Flight (0x06), Cheyenne + sync (0x15); each unit
   `parse_packet`-able. 18 CTest cases. **Bonus: file KLV extraction is now
   gstreamer-free** — gstreamer only needed for live sources + mux.
+* **Decision (accepted)**: Fork 15 →
+  [`0017-realtime-streaming`](./decisions/0017-realtime-streaming.md) (accepted):
+  live-sink clock pacing + live-source idle-timeout termination. Rejected a
+  handler stop-token (changes the ADR 0013 signature), over-the-wire EOS (udp has
+  none), always-on `sync`, and RTP payloading (deferred).
+* **B4 (implementation)**: real-time streaming, closing the ADR 0008 goal.
+  `open_insert` honors `InsertConfig::realtime` (`appsrc is-live` + sink `sync` →
+  clock-paced, `push` blocks at stream rate); `extract` gained `make_src` so a
+  `udp:`/`srt:` source uses `udpsrc`/`srtsrc` and ends on a `udpsrc` idle timeout
+  (500 ms, ignored until ≥1 packet flows so startup can't truncate) since no EOS
+  crosses the wire. `gst_stream_test`: one-process **udp loopback** (receiver
+  `extract()` on a thread, realtime `push` on main) → **byte-exact**, 6 packets in
+  ~165 ms (5×33 ms = genuinely clock-paced), stable across repeated runs.
+  19 CTest cases. **Backend B0–B4 complete**; extraction + insertion, file + live,
+  all on stock gstreamer with no custom element.
 
 ## 2026-07-18
 

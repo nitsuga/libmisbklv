@@ -30,7 +30,8 @@ struct KlvPacket {
 using PacketHandler = std::function<void(const KlvPacket&)>;
 
 struct InsertConfig {
-  std::string sink;  // "file:out.ts" | "udp:host:port" | "srt:uri"
+  std::string sink;        // "file:out.ts" | "udp:host:port" | "srt:uri"
+  bool realtime = false;   // pace output against the clock (live sinks; B4)
   // v1 signals 0x06 async (0x15 sync deferred, ADR 0008).
 };
 
@@ -45,8 +46,10 @@ class Inserter {
 
 class MediaBackend {
  public:
-  // Drive a demux pipeline; call `on_packet` for each complete KLV packet until
-  // EOS (file) or stop. Blocking; the handler runs on the backend's thread.
+  // Drive a demux pipeline; call `on_packet` for each complete KLV packet.
+  // Blocking; the handler runs on the backend's thread. `source` is a bare path
+  // / "file:PATH" (ends at EOS) or a live "udp:host:port" / "srt:uri" (ends when
+  // the source goes idle after delivering data — no EOS crosses the network, B4).
   virtual Result<std::monostate> extract(std::string_view source,
                                          const PacketHandler& on_packet) = 0;
   virtual Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig&) = 0;

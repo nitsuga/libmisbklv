@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-// gstreamer MediaBackend (ADR 0013). Extraction: filesrc ! tsdemux ! appsink;
-// reassemble appsink fragments and frame whole KLV packets (B0 spike). Insertion
-// is B2 (returns Unsupported for now).
+// gstreamer MediaBackend (ADR 0013). Extraction: {file|udp|srt}src ! tsdemux !
+// appsink; reassemble appsink fragments and frame whole KLV packets (B0 spike).
+// Insertion (B2): appsrc ! mpegtsmux ! {file|udp|srt}sink. Live sources/sinks
+// (udp/srt) add real-time pacing + idle-timeout termination (B4, ADR 0017).
 #include "misbklv/gst_backend.hpp"
 
 #include <cstdlib>
@@ -24,6 +25,7 @@ struct ExtractCtx {
   GstElement* sink = nullptr;
   const PacketHandler* on_packet = nullptr;
   std::vector<std::byte> reassembly;
+  std::size_t packets = 0;  // whole KLV packets emitted (gates the idle timeout)
 
   void drain() {
     std::size_t pos = 0;
@@ -32,6 +34,7 @@ struct ExtractCtx {
       const std::size_t n = packet_frame_length(rest);
       if (n == 0) break;  // need more data
       (*on_packet)(KlvPacket{rest.subspan(0, n), kNoPts});
+      ++packets;
       pos += n;
     }
     if (pos) reassembly.erase(reassembly.begin(), reassembly.begin() + pos);
@@ -65,6 +68,47 @@ GstFlowReturn on_new_sample(GstElement* sink, gpointer user) {
   }
   gst_sample_unref(sample);
   return GST_FLOW_OK;
+}
+
+// A live source that has delivered data but then goes quiet this long is treated
+// as ended (no EOS crosses udp/srt). Longer than the ~33 ms inter-packet gap, so
+// it never trips mid-stream; short enough to end the extract promptly (B4).
+inline constexpr guint64 kIdleTimeoutNs = 500'000'000;  // 500 ms
+
+// Build the source element from a spec: a bare path / "file:PATH" (EOS-ending),
+// or a live "udp:HOST:PORT" / "srt:URI". Sets `*live` for the live schemes.
+// Returns nullptr on a malformed spec.
+GstElement* make_src(const std::string& spec, bool* live) {
+  *live = false;
+  const auto colon = spec.find(':');
+  const std::string scheme =
+      (colon == std::string::npos) ? std::string() : spec.substr(0, colon);
+  if (scheme == "udp") {  // udp:HOST:PORT
+    const std::string rest = spec.substr(colon + 1);
+    const auto p = rest.rfind(':');
+    if (p == std::string::npos) return nullptr;
+    GstElement* s = gst_element_factory_make("udpsrc", "src");
+    if (s) {
+      GstCaps* caps = gst_caps_from_string(
+          "video/mpegts, systemstream=(boolean)true, packetsize=(int)188");
+      g_object_set(s, "address", rest.substr(0, p).c_str(), "port",
+                   std::atoi(rest.substr(p + 1).c_str()), "caps", caps, "timeout",
+                   kIdleTimeoutNs, nullptr);
+      gst_caps_unref(caps);
+      *live = true;
+    }
+    return s;
+  }
+  if (scheme == "srt") {
+    GstElement* s = gst_element_factory_make("srtsrc", "src");
+    if (s) g_object_set(s, "uri", spec.c_str(), nullptr);  // srt://...
+    if (s) *live = true;
+    return s;
+  }
+  const std::string path = (scheme == "file") ? spec.substr(colon + 1) : spec;
+  GstElement* s = gst_element_factory_make("filesrc", "src");
+  if (s) g_object_set(s, "location", path.c_str(), nullptr);
+  return s;
 }
 
 // Build the sink element from an InsertConfig spec: "file:PATH" | "udp:HOST:PORT"
@@ -151,15 +195,17 @@ class GstBackend : public MediaBackend {
                                  const PacketHandler& on_packet) override {
     gst_init(nullptr, nullptr);  // idempotent
     GstElement* pipeline = gst_pipeline_new("misbklv-extract");
-    GstElement* src = gst_element_factory_make("filesrc", "src");
+    bool live = false;
+    GstElement* src = make_src(std::string(source), &live);
     GstElement* demux = gst_element_factory_make("tsdemux", "demux");
     GstElement* sink = gst_element_factory_make("appsink", "sink");
     if (!pipeline || !src || !demux || !sink) {
+      if (src) gst_object_unref(src);
+      if (demux) gst_object_unref(demux);
+      if (sink) gst_object_unref(sink);
       if (pipeline) gst_object_unref(pipeline);
       return Result<std::monostate>::err(Error::Backend);
     }
-    const std::string loc(source);
-    g_object_set(src, "location", loc.c_str(), nullptr);
     g_object_set(sink, "emit-signals", TRUE, "sync", FALSE, nullptr);
     gst_bin_add_many(GST_BIN(pipeline), src, demux, sink, nullptr);
     gst_element_link(src, demux);
@@ -175,12 +221,28 @@ class GstBackend : public MediaBackend {
       ok = false;
     } else {
       GstBus* bus = gst_element_get_bus(pipeline);
-      GstMessage* msg = gst_bus_timed_pop_filtered(
-          bus, GST_CLOCK_TIME_NONE,
-          static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
-      if (msg) {
-        if (GST_MESSAGE_TYPE(msg) == GST_MESSAGE_ERROR) ok = false;
+      // A file source ends at EOS; a live source never does, so udpsrc posts a
+      // GstUDPSrcTimeout ELEMENT message once it idles — we treat that as end,
+      // but only after data has flowed (an early timeout during startup, before
+      // the sender is up, is ignored so it can't truncate the stream).
+      for (;;) {
+        GstMessage* msg = gst_bus_timed_pop_filtered(
+            bus, GST_CLOCK_TIME_NONE,
+            static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR |
+                                        GST_MESSAGE_ELEMENT));
+        if (!msg) continue;
+        const GstMessageType t = GST_MESSAGE_TYPE(msg);
+        bool done = (t == GST_MESSAGE_EOS);
+        if (t == GST_MESSAGE_ERROR) {
+          ok = false;
+          done = true;
+        } else if (t == GST_MESSAGE_ELEMENT && live) {
+          const GstStructure* s = gst_message_get_structure(msg);
+          if (s && gst_structure_has_name(s, "GstUDPSrcTimeout") && ctx.packets > 0)
+            done = true;
+        }
         gst_message_unref(msg);
+        if (done) break;
       }
       gst_object_unref(bus);
     }
@@ -207,9 +269,14 @@ class GstBackend : public MediaBackend {
                                                          : Error::Unsupported);
     }
     GstCaps* caps = gst_caps_from_string("meta/x-klv, parsed=(boolean)true");
+    // realtime: the appsrc is a live source and the sink renders on the clock, so
+    // output is paced to the per-buffer PTS (~30 fps) instead of pushed as fast as
+    // the sink drains — the real-time streaming behavior (B4). Off = fast, for a
+    // filesink round-trip.
     g_object_set(appsrc, "caps", caps, "format", GST_FORMAT_TIME, "block", TRUE,
-                 nullptr);
+                 "is-live", cfg.realtime ? TRUE : FALSE, nullptr);
     gst_caps_unref(caps);
+    if (cfg.realtime) g_object_set(sink, "sync", TRUE, nullptr);
     gst_bin_add_many(GST_BIN(pipeline), appsrc, mux, sink, nullptr);
     if (!gst_element_link_many(appsrc, mux, sink, nullptr) ||
         gst_element_set_state(pipeline, GST_STATE_PLAYING) ==
