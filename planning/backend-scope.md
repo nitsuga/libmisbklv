@@ -11,10 +11,9 @@ a phased plan. Empirical probes done 2026-07-19.
 - **gstreamer 1.20.3**; `gstreamer-app-1.0` (appsrc/appsink) present; all pipeline
   elements present (`tsdemux`, `tsparse`, `mpegtsmux`, `appsrc/appsink`,
   `filesrc/sink`, `udpsink`, `srtsink`, `souphttpsrc`).
-- **`gstreamer-mpegts-1.0` dev/pkg-config is MISSING** — the library for PMT /
-  descriptor manipulation (`GstMpegtsSection`, registration descriptor), needed
-  for the KLVA PMT-rewrite. Install `libgstreamer-plugins-bad1.0-dev` (ships
-  `gstreamer-mpegts-1.0.pc`).
+- **`gstreamer-mpegts-1.0` 1.20.3 installed** (`libgstreamer-plugins-bad1.0-dev`)
+  — the library for PMT / descriptor manipulation (`GstMpegtsSection`,
+  registration descriptor), needed for the KLVA PMT-rewrite. Headers resolve.
 - **python-gi + Gst** available — used for the probes; handy for further spikes.
 
 ## Key finding — extraction is two regimes
@@ -57,9 +56,12 @@ sync-KLV mode (its samples are the `*_sync` file).
 ## Open decisions (need ADRs before/*during* implementation)
 
 - **F-A — `MediaBackend` interface**: pull vs push; callback vs iterator for
-  extraction; buffer ownership (the read-borrows boundary from ADR 0011 — the
-  appsink `GstBuffer` is the owned backing store, core spans borrow into it);
-  how PTS/timestamps surface. *The keystone; decide first.*
+  extraction; **buffer ownership** — B0 showed appsink yields sub-packet
+  fragments, so the backend owns a **reassembly buffer** (concatenated appsink
+  data), runs `parse_packet` over it, and yields per-packet `KlvUnit`s whose core
+  spans borrow into that owned buffer (the ADR 0011 read-borrows boundary); how
+  PTS/timestamps surface (B0: PES PTS unreliable → prefer KLV Item 2). *The
+  keystone; decide first.*
 - **F-B — 0x15 extraction**: stock `tsdemux` won't surface it. Options: (a) a
   custom path — `tsparse` + a pad probe / manual PID demux by the KLV PID; (b)
   defer 0x15 *extraction* to post-v1 (v1 extracts 0x06 only); (c) investigate a
@@ -70,12 +72,25 @@ sync-KLV mode (its samples are the `*_sync` file).
 - **F-D — optional-dependency build**: `option()` + `find_package`/pkg-config;
   keep the core target dependency-free; a separate `misbklv-gst` target/component.
 
+## B0 spike results (2026-07-19, python-gi)
+
+`tsdemux ! meta/x-klv ! appsink` on `Day Flight.mpg` (0x06):
+
+- **Extraction is byte-identical to the ffmpeg-extracted `.klv`** (977 B) — so
+  gstreamer feeds the core exactly what our round-trip tests already accept.
+  The core↔gst path is de-risked.
+- **appsink buffers are byte-fragments, NOT packet-aligned** — 203 buffers for a
+  6-packet stream. So the backend must **reassemble** appsink buffers into a byte
+  stream and run `parse_packet` to recover packet boundaries; it cannot assume
+  one buffer = one KLV packet. (Shapes F-A.)
+- **PES PTS came back invalid** (`CLOCK_TIME_NONE`). Correlation should rely on
+  the KLV's own Item 2 Precision Time Stamp, not PES PTS — consistent with
+  [`0009`](../context/decisions/0009-st0604-deferred.md). (Confirm on more
+  samples; may be a demux-config detail.)
+
 ## Phased plan
 
-- **B0 — extraction spike** (mostly de-risked already): `tsdemux ! meta/x-klv !
-  appsink` on a 0x06 sample → feed buffers to `parse_packet` → confirm the same
-  byte-exact round-trip we get from the ffmpeg-extracted `.klv`. Proves the
-  core↔gst buffer handoff + the borrow-ownership boundary.
+- **B0 — extraction spike**: done (above).
 - **B1 — extraction (0x06) + interface + mock**: land `MediaBackend` (F-A),
   `GstBackend` extraction, the mock backend, and the optional-dep CMake (F-D).
   Test: extract from `Day Flight.mpg` → core, vs the committed `.klv`.

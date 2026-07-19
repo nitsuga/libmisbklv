@@ -171,8 +171,11 @@ backend (ADR 0008).
   `tsdemux` exposes `0x06`+KLVA as `meta/x-klv` (Day/Night/falls) but **silently
   drops `0x15` metadata** (Cheyenne, sync) — extraction is two regimes. Opened
   backend forks 11–14 (interface / 0x15 extraction / `klvpmtrewrite` / optional-dep
-  build). Next: install the dev lib, decide fork 11 (interface, ADR), do the B0
-  extraction spike (`tsdemux ! meta/x-klv ! appsink` → `parse_packet`).
+  build). `gstreamer-mpegts-1.0` dev **now installed**. **B0 extraction spike
+  done**: `tsdemux ! meta/x-klv ! appsink` on Day Flight is **byte-identical** to
+  the ffmpeg `.klv` the core already round-trips; appsink yields sub-packet
+  fragments (backend reassembles → `parse_packet`); PES PTS unreliable (prefer KLV
+  Item 2). Next: decide **fork 11** (interface, ADR) → B1 (GstBackend + mock).
 
 ## Next
 

@@ -13,6 +13,13 @@
   and ADR 0008's "accept both on extract" is a real requirement. Opened ROADMAP
   forks 11–14 (interface / 0x15 extraction / `klvpmtrewrite` / optional-dep build).
   Resolved the `0x15` signaling caveat in [`data-samples`](./data-samples.md).
+* **B0 extraction spike (backend)**: installed `gstreamer-mpegts-1.0` dev; ran
+  `tsdemux ! meta/x-klv ! appsink` on Day Flight via python-gi. Extraction is
+  **byte-identical** to the ffmpeg-extracted `.klv` the core already round-trips —
+  the core↔gst path is proven. Two interface inputs (recorded in
+  [`backend-scope`](../planning/backend-scope.md)): appsink yields sub-packet
+  fragments (203 buffers / 6 packets → backend reassembles + `parse_packet`), and
+  PES PTS is unreliable (`CLOCK_TIME_NONE`) so correlation should use KLV Item 2.
 
 ## 2026-07-18
 
