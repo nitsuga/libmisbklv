@@ -165,13 +165,20 @@ backend (ADR 0008).
 
 ## In progress
 
-- (nothing active — Milestones 1–6 landed; the KLV core is structurally complete.)
+- **gstreamer backend — scoping** (see [`backend-scope.md`](./backend-scope.md)).
+  Environment probed (gst 1.20.3; all elements present; **`gstreamer-mpegts-1.0`
+  dev MISSING** — need `libgstreamer-plugins-bad1.0-dev`). **Key finding**: stock
+  `tsdemux` exposes `0x06`+KLVA as `meta/x-klv` (Day/Night/falls) but **silently
+  drops `0x15` metadata** (Cheyenne, sync) — extraction is two regimes. Opened
+  backend forks 11–14 (interface / 0x15 extraction / `klvpmtrewrite` / optional-dep
+  build). Next: install the dev lib, decide fork 11 (interface, ADR), do the B0
+  extraction spike (`tsdemux ! meta/x-klv ! appsink` → `parse_packet`).
 
 ## Next
 
-- **Media backend (ADR 0008)**: the gstreamer backend — `tsdemux` KLV extraction
-  (by `KLVA` descriptor) and `appsrc`→`mpegtsmux`→`klvpmtrewrite` insertion. This
-  is the big remaining Phase 3 chunk and needs the gstreamer dev libs (installed).
+- **Media backend (ADR 0008)** — implement per [`backend-scope.md`](./backend-scope.md)
+  phased plan B0–B4 (extraction spike → interface+mock → insertion+`klvpmtrewrite`
+  → 0x15 → real-time). Forks 11–14 to decide as they come up.
 - **Registry breadth** (incremental): more 0601 extended items (IMAPB, tags 90+),
   the remaining VTarget items, and Array types (0903 §9.1.2) as data needs them.
 - **Known gaps**:

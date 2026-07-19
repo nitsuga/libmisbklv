@@ -1,5 +1,19 @@
 # Knowledge Bundle Log
 
+## 2026-07-19
+
+* **Scope (gstreamer backend)**: probed the environment + extraction path to
+  ground ADR [`0008`](./decisions/0008-media-backend-gstreamer.md); wrote
+  [`../planning/backend-scope.md`](../planning/backend-scope.md). gst 1.20.3, all
+  elements present, **`gstreamer-mpegts-1.0` dev missing** (need
+  `libgstreamer-plugins-bad1.0-dev` for the PMT rewrite). **Key finding** (via
+  python-gi `tsdemux` pad probe across all samples): stock `tsdemux` exposes
+  `0x06`+KLVA as `meta/x-klv` (Day/Night/`falls`) but **silently drops `0x15`
+  metadata** (`Cheyenne`, `klv_metadata_test_sync`) — extraction is two regimes,
+  and ADR 0008's "accept both on extract" is a real requirement. Opened ROADMAP
+  forks 11–14 (interface / 0x15 extraction / `klvpmtrewrite` / optional-dep build).
+  Resolved the `0x15` signaling caveat in [`data-samples`](./data-samples.md).
+
 ## 2026-07-18
 
 * **Ingest (Prior Art)**: Added [`jmisb`](./prior-art-jmisb.md) (WestRidgeSystems,

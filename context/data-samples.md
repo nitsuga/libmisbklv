@@ -95,11 +95,11 @@ Findings worth acting on:
 - **Tag 48 = Security Local Set (ST 0102)** appears in Cheyenne, `falls`, and
   sync — a genuine *nested-LS* instance (like VMTI-under-74). 0102 is out of v1
   scope, so we carry it raw, but it's a real recursive-nesting sample if wanted.
-- **Signaling caveat:** all three signal the KLV PID with the `KLVA` registration
-  descriptor (consistent with the `0x06`+`KLVA` convention above). Whether
-  `klv_metadata_test_sync` uses `stream_type 0x15` (the deferred frame-sync mode)
-  vs `0x06` is **not** determinable from `ffprobe` here — needs a raw PMT read if
-  the sync variant matters.
+- **Signaling (resolved 2026-07-19 via `tsdemux` debug):** all three use the
+  `KLVA` registration descriptor, but split on `stream_type`: **`falls` = `0x06`**
+  (like Day/Night Flight); **`Cheyenne` and `klv_metadata_test_sync` = `0x15`**
+  (metadata). This matters for extraction — stock `tsdemux` exposes `0x06`+KLVA as
+  `meta/x-klv` but **drops `0x15`** (see [`../planning/backend-scope.md`](../planning/backend-scope.md)).
 - **Not yet exercised anywhere:** multi-byte BER-OID tags (≥128, e.g. Item 143
   MSID) — max tag across all samples is 91.
 
