@@ -16,7 +16,8 @@ add_library(misbklv STATIC
   src/packet.cpp
   src/builder.cpp
   src/series.cpp
-  src/registries.cpp)
+  src/registries.cpp
+  src/ts.cpp)
 add_library(misbklv::misbklv ALIAS misbklv)
 target_include_directories(misbklv PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -153,6 +154,21 @@ if(FFMPEG_EXECUTABLE)
   add_custom_target(extract_ts_klv ALL DEPENDS ${_klv_outputs})
 else()
   message(STATUS "ffmpeg not found -- skipping data/*.ts regression tests")
+endif()
+
+# --- gst-free MPEG-TS KLV extractor (fork 12 / B3): 0x06 + 0x15 --------------
+add_executable(ts_extract_test test/ts_extract_test.cpp)
+target_link_libraries(ts_extract_test PRIVATE misbklv)
+add_test(NAME ts_extract_dayflight COMMAND ts_extract_test  # 0x06, committed ref
+  "${CMAKE_CURRENT_SOURCE_DIR}/data/Day Flight.mpg"
+  "${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight.klv")
+if(FFMPEG_EXECUTABLE)  # 0x15 streams: compare against the ffmpeg-extracted ES
+  add_test(NAME ts_extract_cheyenne COMMAND ts_extract_test
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/Cheyenne.ts"
+    "${CMAKE_CURRENT_BINARY_DIR}/cheyenne.klv")
+  add_test(NAME ts_extract_sync COMMAND ts_extract_test
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/klv_metadata_test_sync.ts"
+    "${CMAKE_CURRENT_BINARY_DIR}/sync.klv")
 endif()
 
 # --- Install / export: consumers do find_package(misbklv) -> misbklv::misbklv -

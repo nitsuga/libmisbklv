@@ -98,7 +98,10 @@ sync-KLV mode (its samples are the `*_sync` file).
   stock `mpegtsmux` (gst 1.20.3) already emits `0x06`+KLVA, so **`klvpmtrewrite`
   is not needed** (ADR [`0015`](../context/decisions/0015-no-pmt-rewrite.md), F-C
   resolved). `GstInserter` + `gst_insert_test`: insert→re-extract byte-exact.
-- **B3 — 0x15 extraction** (per F-B outcome): custom PID path, or defer.
+- **B3 — 0x15 extraction** (done): gst-free `extract_ts_klv` in the core handles
+  both 0x06 and 0x15 (metadata AU cells), byte-exact vs ffmpeg (ADR
+  [`0016`](../context/decisions/0016-ts-0x15-extraction.md), F-B resolved). Bonus:
+  file extraction needs no gstreamer.
 - **B4 — real-time streaming**: `udpsink`/`srtsink` + appsrc backpressure; the
   push-KLV API blocking on flow control (the ADR 0008 ergonomic win).
 

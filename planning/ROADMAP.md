@@ -50,7 +50,7 @@ Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 | 9 | Encode / serialization model — owned builder, bottom-up length assembly, forward mapping, checksum/ordering emission | DECIDED | [0011](../context/decisions/0011-encode-model.md) |
 | 10 | Registry codegen — descriptor source format (TOML) + build integration (checked-in generated + drift check) | DECIDED | [0012](../context/decisions/0012-registry-codegen.md) |
 | 11 | `MediaBackend` interface — pull/push, callback/iterator, buffer ownership, timestamps (backend fork F-A) | DECIDED | [0013](../context/decisions/0013-media-backend-interface.md) |
-| 12 | 0x15 metadata extraction — stock `tsdemux` drops it; custom PID demux vs defer (F-B) | OPEN | — (see [backend-scope](./backend-scope.md)) |
+| 12 | 0x15 metadata extraction — gst-free TS demuxer (`extract_ts_klv`) handles 0x06 + 0x15 AU cells (F-B) | DECIDED | [0016](../context/decisions/0016-ts-0x15-extraction.md) |
 | 13 | `klvpmtrewrite` — NOT needed: stock `mpegtsmux` (gst ≥1.20) emits 0x06+KLVA (F-C) | DECIDED | [0015](../context/decisions/0015-no-pmt-rewrite.md) |
 | 14 | Backend optional-dependency build — `option()` + separate `misbklv-gst` target (F-D) | DECIDED | [0014](../context/decisions/0014-backend-optional-dependency.md) |
 

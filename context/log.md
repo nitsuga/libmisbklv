@@ -64,6 +64,18 @@
   test: KLV → mux → `.ts` → re-extract **byte-exact** (15 CTest cases). Both
   directions now work with **stock gstreamer, no custom element** — B2 collapsed
   from "build klvpmtrewrite" to a thin inserter.
+* **Decision (accepted)**: Fork 12 →
+  [`0016-ts-0x15-extraction`](./decisions/0016-ts-0x15-extraction.md) (accepted):
+  a gst-free MPEG-TS KLV extractor for the `0x15` streams stock `tsdemux` drops.
+* **B3 (implementation)**: `0x15` extraction. PES probe showed `0x15` wraps KLV in
+  SMPTE RP 217 metadata AU cells (`stream_id 0xfc`, 5-byte cell header) vs `0x06`
+  (KLV directly in PES). New core `extract_ts_klv` (`ts.hpp`/`src/ts.cpp`, in the
+  `misbklv` lib, no gstreamer): iterates 188-byte TS packets, finds the KLV PID by
+  content (PES payload starting with a SMPTE UL), reassembles PES, unwraps the AU
+  cell for `0x15`, frames via `packet_frame_length`. `ts_extract_test`: **byte-exact
+  vs ffmpeg** on Day Flight (0x06), Cheyenne + sync (0x15); each unit
+  `parse_packet`-able. 18 CTest cases. **Bonus: file KLV extraction is now
+  gstreamer-free** — gstreamer only needed for live sources + mux.
 
 ## 2026-07-18
 

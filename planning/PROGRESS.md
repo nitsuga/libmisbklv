@@ -195,8 +195,15 @@ backend (ADR 0008).
   1.20.3) already emits `stream_type 0x06`+KLVA, so ADR 0008's PMT-rewrite element
   is superseded. `gst_insert` test: KLV → mux → `.ts` → re-extract **byte-exact**
   (15 CTest cases). Extraction + insertion both work with **stock gstreamer, no
-  custom element**. Next: **B3** — 0x15 extraction (fork 12) or **B4** — real-time
-  (udp/srt) streaming.
+  custom element**.
+- **B3 done** (0x15 extraction, fork 12 / ADR
+  [`0016`](../context/decisions/0016-ts-0x15-extraction.md)): stock `tsdemux`
+  drops `0x15` metadata streams (KLV wrapped in SMPTE RP 217 AU cells). New
+  gst-free core extractor `extract_ts_klv` (`ts.hpp`/`ts.cpp`) finds the KLV PID
+  by content and handles **both 0x06 and 0x15** — byte-exact vs ffmpeg on
+  Cheyenne/sync (0x15, 407/365 pkts) and Day Flight (0x06). **Bonus: file KLV
+  extraction needs no gstreamer.** 18 CTest cases. Next: **B4** — real-time
+  (udp/srt) streaming (make_sink already wired; needs a live push/pace test).
 
 ## Next
 

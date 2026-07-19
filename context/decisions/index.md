@@ -21,3 +21,4 @@ forks live in [`../../planning/ROADMAP.md`](../../planning/ROADMAP.md).
 | [0013 — MediaBackend interface](./0013-media-backend-interface.md) | accepted |
 | [0014 — Backend as an optional dependency](./0014-backend-optional-dependency.md) | accepted |
 | [0015 — No klvpmtrewrite (stock mpegtsmux emits 0x06+KLVA)](./0015-no-pmt-rewrite.md) | accepted |
+| [0016 — 0x15 KLV extraction via a gst-free TS demuxer](./0016-ts-0x15-extraction.md) | accepted |
