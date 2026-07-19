@@ -78,6 +78,13 @@ status), and refresh present state in
 decided forks — it defers to the register. Raw open questions live in
 `../planning/`; only deliberated rationale lives here.
 
+Record the decision in [`log.md`](./log.md) as a **single thin line** —
+chronology + a link to the ADR. The ADR owns the rationale, so do **not**
+restate the decision or its rejected alternatives in the log (that would put the
+same content in three places). Add a *second* log line for one fork only on a
+genuine cross-session gap (proposed one session, accepted a later one) or a
+revision / supersede — not for a same-session propose→accept.
+
 ## ADR format
 
 - **Filename:** `NNNN-slug.md` — 4-digit zero-padded, hyphenated lowercase slug.

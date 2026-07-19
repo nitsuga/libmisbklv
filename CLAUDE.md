@@ -41,11 +41,18 @@ So:
   [`context/decisions/`](context/decisions/index.md) per the lifecycle in
   [`context/CONVENTIONS.md`](context/CONVENTIONS.md) (status: proposed →
   accepted / superseded), add/update its row in the decided register
-  (`decisions/index.md`), append a `log.md` line, and refresh PROGRESS's present
-  state. Touch ROADMAP only if it opens/closes an *open* fork or shifts a phase.
+  (`decisions/index.md`), append **one thin** `log.md` line (chronology + link —
+  the ADR owns the rationale; see CONVENTIONS § Decisions), and refresh
+  PROGRESS's present state. Touch ROADMAP only if it opens/closes an *open* fork
+  or shifts a phase.
 - **On implementing a significant change**: append a `log.md` entry (the detail)
   and refresh [`planning/PROGRESS.md`](planning/PROGRESS.md)'s present state
   (Now / In-progress / Next) — a thin pointer, not a history.
+- **No live tallies in durable prose**: never bake a running count (test cases,
+  item totals, "N of M done") into present-tense docs (PROGRESS, ROADMAP) or ADR
+  bodies — it drifts. Say "all CTest cases green", not "19". A specific number
+  belongs only in a dated `log.md` snapshot (history, frozen at write time). Same
+  for any state that moves — describe the state, don't tally it.
 
 ## Commit messages
 

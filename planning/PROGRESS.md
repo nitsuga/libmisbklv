@@ -21,8 +21,8 @@ done and extending incrementally** — the state today:
   extraction needs no gstreamer at all ([ADR 0016](../context/decisions/0016-ts-0x15-extraction.md)).
   Design/scope: [`backend-scope.md`](../context/backend-scope.md).
 - **Packaging**: compiled `libmisbklv.a` (`find_package(misbklv)` →
-  `misbklv::misbklv`) + optional `misbklv-gst` target; **19 CTest cases green**;
-  CI runs build/test + the ADR 0012 registry drift check.
+  `misbklv::misbklv`) + optional `misbklv-gst` target; **the full CTest suite
+  green**; CI runs build/test + the ADR 0012 registry drift check.
 
 ## In progress
 
