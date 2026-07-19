@@ -26,8 +26,28 @@ jobs:
         run: cmake --build build
       - name: Test
         run: ctest --test-dir build --output-on-failure
-      - name: Install smoke test
+      - name: Install
         run: cmake --install build --prefix "$PWD/_install"
+      - name: Consumer smoke test (find_package, core + gst component)
+        # Builds a throwaway out-of-tree project against the install — catches
+        # export/packaging gaps that a bare `cmake --install` cannot.
+        run: |
+          mkdir -p /tmp/consumer
+          cat > /tmp/consumer/CMakeLists.txt <<'EOF'
+          cmake_minimum_required(VERSION 3.20)
+          project(consumer CXX)
+          set(CMAKE_CXX_STANDARD 20)
+          find_package(misbklv REQUIRED COMPONENTS gst)
+          add_executable(app main.cpp)
+          target_link_libraries(app PRIVATE misbklv::gst)  # transitively: core
+          EOF
+          cat > /tmp/consumer/main.cpp <<'EOF'
+          #include "misbklv/stream.hpp"
+          #include "misbklv/message.hpp"
+          int main() { return 0; }  // link-only: proves both components resolve
+          EOF
+          cmake -S /tmp/consumer -B /tmp/consumer/build -DCMAKE_PREFIX_PATH="$PWD/_install"
+          cmake --build /tmp/consumer/build
 
   sanitizers:
     # Real-world hardening: the core parse/codec paths must be free of UB / OOB

@@ -139,6 +139,17 @@
   returns promptly instead of hanging — retiring the 0018 caveat. `stop_test`
   (endless mock): early break destroys in ~6 ms; verified teeth — removing the
   cancel makes it hang.
+* **Packaging fix (gst was not consumable)**: an out-of-tree build check found
+  that `find_package(misbklv)` installed only the core — `libmisbklv-gst.a` and
+  its target were never exported, so the advertised `misbklv::gst` (KlvStream/
+  KlvSink) couldn't be linked. Fixed: gst is now an opt-in **find_package
+  component** (`find_package(misbklv COMPONENTS gst)` → `misbklv::gst`), exported
+  with `EXPORT_NAME gst` (was leaking as `misbklv::misbklv-gst`), its Config
+  re-discovers gstreamer + Threads so the imported-target link resolves; core-only
+  consumers keep zero gst dependency. Verified by building both a core and a gst
+  consumer against a fresh install (gst consumer runs KlvStream over Day Flight).
+  CI's install step now **builds a consumer** (both components) — the bare
+  `cmake --install` smoke test had masked this. Completes ADR 0014's intent.
 
 ## 2026-07-18
 

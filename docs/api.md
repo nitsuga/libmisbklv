@@ -59,10 +59,15 @@ the packet's 16-byte UL key.
 ## Build
 
 ```cmake
+# Core only (Message, parse, codec) — no gstreamer dependency:
 find_package(misbklv REQUIRED)
-target_link_libraries(app PRIVATE misbklv::misbklv)   # core: Message, parse, codec
-target_link_libraries(app PRIVATE misbklv::gst)       # + KlvStream / KlvSink
+target_link_libraries(app PRIVATE misbklv::misbklv)
+
+# ...or with the streaming facade (KlvStream / KlvSink), which needs gstreamer:
+find_package(misbklv REQUIRED COMPONENTS gst)
+target_link_libraries(app PRIVATE misbklv::gst)   # transitively brings in the core
 ```
 
-`misbklv::gst` is built only when gstreamer (≥ 1.20) is present. The core is
+`gst` is an opt-in component so core-only consumers don't inherit the gstreamer
+dependency; its config re-discovers gstreamer (≥ 1.20). The core is
 dependency-free.

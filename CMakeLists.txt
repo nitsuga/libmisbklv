@@ -47,6 +47,8 @@ if(MISBKLV_GSTREAMER)
   if(GST_FOUND)
     add_library(misbklv-gst STATIC src/gst/gst_backend.cpp src/gst/stream.cpp)
     add_library(misbklv::gst ALIAS misbklv-gst)
+    # Export as misbklv::gst (not misbklv::misbklv-gst); the ALIAS is build-tree only.
+    set_target_properties(misbklv-gst PROPERTIES EXPORT_NAME gst)
     target_link_libraries(misbklv-gst PUBLIC misbklv PkgConfig::GST Threads::Threads)
     message(STATUS "misbklv-gst: gstreamer media backend enabled")
   else()
@@ -211,17 +213,32 @@ if(FFMPEG_EXECUTABLE)  # 0x15 streams: compare against the ffmpeg-extracted ES
     "${CMAKE_CURRENT_BINARY_DIR}/sync.klv")
 endif()
 
-# --- Install / export: consumers do find_package(misbklv) -> misbklv::misbklv -
+# --- Install / export --------------------------------------------------------
+# Core:  find_package(misbklv)                 -> misbklv::misbklv
+# Facade: find_package(misbklv COMPONENTS gst) -> misbklv::gst (needs gstreamer)
+# The gst backend is a find_package COMPONENT so core-only consumers don't inherit
+# the gstreamer dependency; its Config re-discovers gstreamer (ADR 0014).
 include(CMakePackageConfigHelpers)
 
-install(TARGETS misbklv EXPORT misbklvTargets
+install(TARGETS misbklv EXPORT misbklvCoreTargets
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})  # headers incl. generated tables
-install(EXPORT misbklvTargets
-  FILE misbklvTargets.cmake
+install(EXPORT misbklvCoreTargets
+  FILE misbklvCoreTargets.cmake
   NAMESPACE misbklv::
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/misbklv)
+
+set(MISBKLV_HAS_GST OFF)
+if(TARGET misbklv-gst)
+  set(MISBKLV_HAS_GST ON)
+  install(TARGETS misbklv-gst EXPORT misbklvGstTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+  install(EXPORT misbklvGstTargets
+    FILE misbklvGstTargets.cmake
+    NAMESPACE misbklv::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/misbklv)
+endif()
 
 configure_package_config_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/cmake/misbklvConfig.cmake.in

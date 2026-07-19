@@ -32,10 +32,12 @@ done and extending incrementally** — the state today:
   a live stream is safe** — `extract` takes a `std::stop_token` and `KlvStream`'s
   destructor cancels promptly ([ADR 0019](../context/decisions/0019-extract-cancellation.md),
   `stop_test`).
-- **Packaging**: compiled `libmisbklv.a` (`find_package(misbklv)` →
-  `misbklv::misbklv`) + optional `misbklv-gst` target; **the full CTest suite
-  green**; CI runs build/test, a **sanitizer job** (ASan+UBSan core), and the
-  ADR 0012 registry drift check.
+- **Packaging** — installable + consumable, verified with real out-of-tree
+  builds: `find_package(misbklv)` → `misbklv::misbklv` (core, no gst dep), and
+  `find_package(misbklv COMPONENTS gst)` → `misbklv::gst` (the streaming facade;
+  its config re-discovers gstreamer). **The full CTest suite green**; CI runs
+  build/test, a **consumer smoke test** (find_package, both components), a
+  **sanitizer job** (ASan+UBSan core), and the ADR 0012 registry drift check.
 
 ## In progress
 
