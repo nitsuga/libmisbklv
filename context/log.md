@@ -119,6 +119,16 @@
   packets round-trip. New `hardening_test` covers all three; the core builds clean
   under **ASan+UBSan** (`MISBKLV_SANITIZE` option + a CI sanitizer job, gstreamer
   off). Verified the test has teeth: reintroducing the overflow flips it to FAIL.
+* **Decision + API (fork 16)**: high-level facade —
+  [`0018`](./decisions/0018-high-level-api.md) (accepted). `Message` (core): an
+  owned, editable packet — copy+parse, registry auto-selected by UL key, typed
+  `get<T>`/`set`, `encode()` byte-exact for untouched items (move-only; owns above
+  the borrow core). `KlvStream`/`KlvSink` (`misbklv-gst`): range-for read (backend
+  push-extract adapted to pull via a background thread + bounded queue), edit,
+  emit — file + live. `message_test` + end-to-end `api_test` (read Day Flight,
+  edit SensorLatitude, emit, re-read — all 6 frames' edits persist through
+  decode→encode→mux→demux), a `klv_edit` example, and the first user guide
+  [`docs/api.md`](../docs/api.md). Closes the Phase-3 usability pass.
 
 ## 2026-07-18
 

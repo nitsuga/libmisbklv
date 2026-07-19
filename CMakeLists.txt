@@ -45,9 +45,9 @@ if(MISBKLV_GSTREAMER)
     pkg_check_modules(GST IMPORTED_TARGET gstreamer-1.0 gstreamer-app-1.0)
   endif()
   if(GST_FOUND)
-    add_library(misbklv-gst STATIC src/gst/gst_backend.cpp)
+    add_library(misbklv-gst STATIC src/gst/gst_backend.cpp src/gst/stream.cpp)
     add_library(misbklv::gst ALIAS misbklv-gst)
-    target_link_libraries(misbklv-gst PUBLIC misbklv PkgConfig::GST)
+    target_link_libraries(misbklv-gst PUBLIC misbklv PkgConfig::GST Threads::Threads)
     message(STATUS "misbklv-gst: gstreamer media backend enabled")
   else()
     message(STATUS "misbklv-gst: gstreamer not found -- media backend disabled")
@@ -149,6 +149,15 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
   target_link_libraries(gst_stream_test PRIVATE misbklv-gst Threads::Threads)
   add_test(NAME gst_stream COMMAND gst_stream_test
     "${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight.klv")
+
+  add_executable(api_test test/api_test.cpp)  # high-level facade end-to-end (ADR 0018)
+  target_link_libraries(api_test PRIVATE misbklv-gst)
+  add_test(NAME api_stream COMMAND api_test
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/Day Flight.mpg"
+    "${CMAKE_CURRENT_BINARY_DIR}/api_edit.ts")
+
+  add_executable(klv_edit examples/klv_edit.cpp)  # user-facing example (not a test)
+  target_link_libraries(klv_edit PRIVATE misbklv-gst)
 endif()
 
 # --- Regression over real MPEG-TS captures (data/*.ts, git-lfs) --------------

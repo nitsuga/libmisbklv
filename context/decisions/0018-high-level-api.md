@@ -1,7 +1,7 @@
 ---
 type: Decision
 title: High-level API — Message + KlvStream/KlvSink facade
-status: proposed
+status: accepted
 tags: [decision, api, usability, facade, phase-3]
 timestamp: 2026-07-19T07:00:00Z
 fork: 16
