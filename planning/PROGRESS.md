@@ -179,7 +179,16 @@ backend (ADR 0008).
   [`0013`](../context/decisions/0013-media-backend-interface.md) (PROPOSED)**:
   abstract `MediaBackend`, blocking `extract(source, on_packet)` (borrowed
   per-packet bytes + PTS), `open_insert → Inserter.push/finish` (appsrc
-  backpressure); `GstBackend` + `MockBackend`. Awaiting review → accept, then B1.
+  backpressure); `GstBackend` + `MockBackend`. **Accepted.**
+- **B1 done** (extraction + interface + mock + optional-dep build): `backend.hpp`
+  (interface), `mock_backend.hpp` (`MockBackend`/`MockInserter`), `gst_backend`
+  (real gstreamer extraction: `filesrc ! tsdemux ! appsink`, reassemble +
+  `packet_frame_length` framing). `misbklv-gst` optional target (ADR
+  [`0014`](../context/decisions/0014-backend-optional-dependency.md), fork 14).
+  Tests: `mock_backend` (contract) + **`gst_extract`** — GstBackend extracts
+  `Day Flight.mpg` into 6 whole packets, **byte-exact** vs the fixture (14 CTest
+  cases). CI installs gstreamer. Next: **B2** — insertion (`appsrc ! mpegtsmux !
+  klvpmtrewrite`, forks 12/13).
 
 ## Next
 

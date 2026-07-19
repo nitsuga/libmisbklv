@@ -13,7 +13,13 @@ jobs:
         with:
           lfs: true  # materialize data/*.ts for the regression tests
       - name: Install deps
-        run: sudo apt-get update && sudo apt-get install -y cmake g++ ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ ffmpeg \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libgstreamer-plugins-bad1.0-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-bad
       - name: Configure
         run: cmake -S . -B build
       - name: Build

@@ -34,6 +34,22 @@
 * **Decision (accepted)**: [`0013`](./decisions/0013-media-backend-interface.md)
   → accepted. `MediaBackend` interface locked; B1 (GstBackend extraction +
   MockBackend + optional-dep CMake) implements it. ROADMAP fork 11 → DECIDED.
+* **Decision (accepted)**: Fork 14 →
+  [`0014-backend-optional-dependency`](./decisions/0014-backend-optional-dependency.md)
+  (accepted): a **separate `misbklv-gst` CMake target** holds the gstreamer impl;
+  the core `misbklv` stays dependency-free. `option(MISBKLV_GSTREAMER)` +
+  `pkg_check_modules`; skipped if gstreamer absent. Interface/factory headers are
+  gstreamer-free. ROADMAP fork 14 → DECIDED.
+* **B1 (implementation)**: media backend — extraction + interface + mock.
+  `include/misbklv/backend.hpp` (ADR 0013 interface: `MediaBackend`, `KlvPacket`,
+  `Inserter`), `mock_backend.hpp` (`MockBackend`/`MockInserter`, core-only),
+  `gst_backend.hpp` factory + `src/gst/gst_backend.cpp` (real gstreamer:
+  `filesrc ! tsdemux ! appsink`, reassemble appsink fragments, frame packets via
+  new `packet_frame_length`). Added `Error::{Backend,Unsupported}`. Tests:
+  `mock_backend` (contract) + **`gst_extract`** — GstBackend extracts
+  `Day Flight.mpg` into **6 whole packets, byte-exact vs the committed `.klv`**
+  (each `parse_packet`-able). 14 CTest cases; CI installs gstreamer. Insertion is
+  B2 (`open_insert` returns `Unsupported`).
 
 ## 2026-07-18
 

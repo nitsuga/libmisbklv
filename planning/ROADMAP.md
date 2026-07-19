@@ -52,7 +52,7 @@ Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 | 11 | `MediaBackend` interface — pull/push, callback/iterator, buffer ownership, timestamps (backend fork F-A) | DECIDED | [0013](../context/decisions/0013-media-backend-interface.md) |
 | 12 | 0x15 metadata extraction — stock `tsdemux` drops it; custom PID demux vs defer (F-B) | OPEN | — (see [backend-scope](./backend-scope.md)) |
 | 13 | `klvpmtrewrite` element form — GstBaseTransform vs pad-probe over `GstMpegtsSection` (F-C) | OPEN | — (see [backend-scope](./backend-scope.md)) |
-| 14 | Backend optional-dependency build — `option()` + separate `misbklv-gst` target (F-D) | OPEN | — (see [backend-scope](./backend-scope.md)) |
+| 14 | Backend optional-dependency build — `option()` + separate `misbklv-gst` target (F-D) | DECIDED | [0014](../context/decisions/0014-backend-optional-dependency.md) |
 
 Forks 8–9 surfaced during the Phase 3 extraction spike (2026-07-17): the core
 *decoder* design (forks 4/5) was complete, but the registry descriptor

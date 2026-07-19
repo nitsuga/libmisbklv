@@ -23,6 +23,25 @@ target_include_directories(misbklv PUBLIC
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_compile_features(misbklv PUBLIC cxx_std_20)
 
+# --- Optional gstreamer media backend: misbklv-gst (ADR 0013; fork 14) -------
+# A separate target so the core library stays gstreamer-free. Built only when
+# gstreamer is found (unless MISBKLV_GSTREAMER=OFF).
+option(MISBKLV_GSTREAMER "Build the gstreamer media backend" ON)
+if(MISBKLV_GSTREAMER)
+  find_package(PkgConfig QUIET)
+  if(PkgConfig_FOUND)
+    pkg_check_modules(GST IMPORTED_TARGET gstreamer-1.0 gstreamer-app-1.0)
+  endif()
+  if(GST_FOUND)
+    add_library(misbklv-gst STATIC src/gst/gst_backend.cpp)
+    add_library(misbklv::gst ALIAS misbklv-gst)
+    target_link_libraries(misbklv-gst PUBLIC misbklv PkgConfig::GST)
+    message(STATUS "misbklv-gst: gstreamer media backend enabled")
+  else()
+    message(STATUS "misbklv-gst: gstreamer not found -- media backend disabled")
+  endif()
+endif()
+
 # Regenerate the committed registry tables from TOML source (ADR 0012).
 # Not part of the default build; CI runs it and checks for drift.
 find_package(Python3 COMPONENTS Interpreter)
@@ -86,6 +105,18 @@ add_test(NAME vtarget_series
 add_executable(jmisb_crosscheck_test test/jmisb_crosscheck_test.cpp)
 target_link_libraries(jmisb_crosscheck_test PRIVATE misbklv)
 add_test(NAME jmisb_crosscheck COMMAND jmisb_crosscheck_test)
+
+add_executable(mock_backend_test test/mock_backend_test.cpp)
+target_link_libraries(mock_backend_test PRIVATE misbklv)
+add_test(NAME mock_backend COMMAND mock_backend_test)
+
+if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
+  add_executable(gst_backend_test test/gst_backend_test.cpp)
+  target_link_libraries(gst_backend_test PRIVATE misbklv-gst)
+  add_test(NAME gst_extract COMMAND gst_backend_test
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/Day Flight.mpg"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight.klv")
+endif()
 
 # --- Regression over real MPEG-TS captures (data/*.ts, git-lfs) --------------
 # The KLV elementary stream is extracted at build time with ffmpeg (a test-only

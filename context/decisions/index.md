@@ -19,3 +19,4 @@ forks live in [`../../planning/ROADMAP.md`](../../planning/ROADMAP.md).
 | [0011 — Encode / serialization model](./0011-encode-model.md) | accepted |
 | [0012 — Registry codegen (source format & build)](./0012-registry-codegen.md) | accepted |
 | [0013 — MediaBackend interface](./0013-media-backend-interface.md) | accepted |
+| [0014 — Backend as an optional dependency](./0014-backend-optional-dependency.md) | accepted |

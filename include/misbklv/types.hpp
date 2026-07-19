@@ -20,6 +20,9 @@ enum class Error : std::uint8_t {
   // encode (ADR 0011 extends the enum)
   MissingMandatory,
   RangeError,
+  // media backend (ADR 0013)
+  Backend,      // pipeline / I/O failure
+  Unsupported,  // not implemented in this backend / config
 };
 
 // Minimal Result<T> — the full map/and_then API is deferred (ADR 0007).

@@ -43,4 +43,12 @@ Result<Packet> parse_packet(std::span<const std::byte> buf) {
   return Result<Packet>::ok(std::move(pkt));
 }
 
+std::size_t packet_frame_length(std::span<const std::byte> buf) {
+  if (buf.size() < 17) return 0;  // 16-byte key + at least one length byte
+  auto len = ber::read_length(buf, 16);
+  if (!len) return 0;             // length not yet parseable -> need more data
+  const std::size_t total = 16 + len->consumed + len->value;
+  return buf.size() >= total ? total : 0;
+}
+
 }  // namespace misbklv
