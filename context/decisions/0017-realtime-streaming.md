@@ -9,7 +9,7 @@ fork: 15
 
 # Context
 
-Backend phase B4 (the last of the [`backend-scope`](../../planning/backend-scope.md)
+Backend phase B4 (the last of the [`backend-scope`](../backend-scope.md)
 plan) and the real-time half of ADR [`0008`](./0008-media-backend-gstreamer.md)'s
 goal: push KLV to, and pull KLV from, a live network endpoint (`udp`/`srt`), not
 just a file. Two gaps remained after B1–B3:
@@ -88,7 +88,7 @@ confirming the output is clock-paced, not fast-pushed.
 
 # Citations
 
-[1] [`backend-scope`](../../planning/backend-scope.md) — B4 plan (real-time
+[1] [`backend-scope`](../backend-scope.md) — B4 plan (real-time
     streaming) and the udp/srt element inventory.
 [2] [`0008`](./0008-media-backend-gstreamer.md) — real-time insertion via
     `appsrc` is a stated v1 goal.

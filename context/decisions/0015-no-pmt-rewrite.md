@@ -42,7 +42,7 @@ library-style, `MediaBackend` interface, real-time via `appsrc`) stands.
   push blocks on backpressure, `finish()` drains. The single biggest planned
   backend risk is removed.
 - **Minimum gstreamer bumps to ≥ 1.20** for insertion signaling. Documented in
-  [`backend-scope`](../../planning/backend-scope.md). If a target must ship an
+  [`backend-scope`](../backend-scope.md). If a target must ship an
   older mpegtsmux that omits KLVA, `klvpmtrewrite` returns as a follow-on (the
   interface — [`0013`](./0013-media-backend-interface.md) — is unaffected).
 - The `gstreamer-mpegts-1.0` dev lib is no longer required for v1 insertion (was
@@ -61,6 +61,6 @@ library-style, `MediaBackend` interface, real-time via `appsrc`) stands.
     requirement; the rest stands.
 [2] [`0013`](./0013-media-backend-interface.md) — the interface `GstInserter`
     implements.
-[3] [`backend-scope`](../../planning/backend-scope.md) — B2 spike evidence.
+[3] [`backend-scope`](../backend-scope.md) — B2 spike evidence.
 [4] [`gstklvplugin`](../prior-art-gstklvplugin.md) — the `tspmtrewrite` reference
     that a modern `mpegtsmux` makes unnecessary.

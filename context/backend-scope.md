@@ -1,6 +1,14 @@
+---
+type: Component
+title: gstreamer media backend — scope & design
+description: Environment findings, component breakdown, and the B0–B4 phased plan for the gstreamer MPEG-TS backend.
+tags: [component, backend, gstreamer, mpegts, phase-3]
+timestamp: 2026-07-19T06:00:00Z
+---
+
 # gstreamer backend — scope
 
-Scoping for the media backend (ADR [`0008`](../context/decisions/0008-media-backend-gstreamer.md)):
+Scoping for the media backend (ADR [`0008`](./decisions/0008-media-backend-gstreamer.md)):
 the layer between the KLV core (parse/build) and MPEG-TS I/O. Library-style
 gstreamer (link libs, drive pipelines; not shipped plugins). This doc grounds
 that shape in the real environment and lays out components, open decisions, and
@@ -46,7 +54,7 @@ sync-KLV mode (its samples are the `*_sync` file).
 4. **`klvpmtrewrite` element** — in-library `GstElement` (ADR 0008 option c),
    registered in-process at init; rewrites the PMT to add the KLVA registration
    descriptor + `stream_type` (0x06 async). Needs `gstreamer-mpegts-1.0`. Form is
-   **fork F-C**. Reference: [`gstklvplugin`](../context/prior-art-gstklvplugin.md)
+   **fork F-C**. Reference: [`gstklvplugin`](./prior-art-gstklvplugin.md)
    `tspmtrewrite`.
 5. **Mock backend** — in-memory `MediaBackend` for testing the core↔backend
    contract without gstreamer.
@@ -85,7 +93,7 @@ sync-KLV mode (its samples are the `*_sync` file).
   one buffer = one KLV packet. (Shapes F-A.)
 - **PES PTS came back invalid** (`CLOCK_TIME_NONE`). Correlation should rely on
   the KLV's own Item 2 Precision Time Stamp, not PES PTS — consistent with
-  [`0009`](../context/decisions/0009-st0604-deferred.md). (Confirm on more
+  [`0009`](./decisions/0009-st0604-deferred.md). (Confirm on more
   samples; may be a demux-config detail.)
 
 ## Phased plan
@@ -96,18 +104,18 @@ sync-KLV mode (its samples are the `*_sync` file).
   Test: extract from `Day Flight.mpg` → core, vs the committed `.klv`.
 - **B2 — insertion** (done): `appsrc ! mpegtsmux ! filesink`. The B2 spike showed
   stock `mpegtsmux` (gst 1.20.3) already emits `0x06`+KLVA, so **`klvpmtrewrite`
-  is not needed** (ADR [`0015`](../context/decisions/0015-no-pmt-rewrite.md), F-C
+  is not needed** (ADR [`0015`](./decisions/0015-no-pmt-rewrite.md), F-C
   resolved). `GstInserter` + `gst_insert_test`: insert→re-extract byte-exact.
 - **B3 — 0x15 extraction** (done): gst-free `extract_ts_klv` in the core handles
   both 0x06 and 0x15 (metadata AU cells), byte-exact vs ffmpeg (ADR
-  [`0016`](../context/decisions/0016-ts-0x15-extraction.md), F-B resolved). Bonus:
+  [`0016`](./decisions/0016-ts-0x15-extraction.md), F-B resolved). Bonus:
   file extraction needs no gstreamer.
 - **B4 — real-time streaming** (done): live-sink clock pacing (`InsertConfig::realtime`
   → `appsrc is-live` + sink `sync`) and live-source extraction (`udp:`/`srt:` src)
   ending on a `udpsrc` idle timeout (no EOS crosses the wire). `gst_stream_test`:
   udp loopback (receiver `extract()` on a thread, realtime `push` on main) →
   byte-exact, 6 packets in ~165 ms (clock-paced). ADR
-  [`0017`](../context/decisions/0017-realtime-streaming.md), fork 15. **B0–B4
+  [`0017`](./decisions/0017-realtime-streaming.md), fork 15. **B0–B4
   complete.**
 
 ## Risks

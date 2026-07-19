@@ -15,7 +15,7 @@ a mock and a future ffmpeg backend fit, and the KLV core stays media-agnostic).
 This ADR fixes that interface: how the core gets KLV **out of** and **into** an
 MPEG-TS stream, backend-agnostically.
 
-The B0 extraction spike ([`backend-scope`](../../planning/backend-scope.md))
+The B0 extraction spike ([`backend-scope`](../backend-scope.md))
 grounded the hard parts:
 
 - `tsdemux ! meta/x-klv ! appsink` extraction is **byte-identical** to the
@@ -138,5 +138,5 @@ class MediaBackend {
 [2] [`0011`](./0011-encode-model.md) — read-borrows / write-owns ownership.
 [3] [`0007`](./0007-error-and-c-abi.md) — `Result<T>`; future C ABI.
 [4] [`0009`](./0009-st0604-deferred.md) — KLV Item 2 for time correlation.
-[5] [`backend-scope`](../../planning/backend-scope.md) — B0 spike (reassembly,
+[5] [`backend-scope`](../backend-scope.md) — B0 spike (reassembly,
     fragments, PTS) that grounds this interface.

@@ -4,7 +4,7 @@
 
 * **Scope (gstreamer backend)**: probed the environment + extraction path to
   ground ADR [`0008`](./decisions/0008-media-backend-gstreamer.md); wrote
-  [`../planning/backend-scope.md`](../planning/backend-scope.md). gst 1.20.3, all
+  [`./backend-scope.md`](./backend-scope.md). gst 1.20.3, all
   elements present, **`gstreamer-mpegts-1.0` dev missing** (need
   `libgstreamer-plugins-bad1.0-dev` for the PMT rewrite). **Key finding** (via
   python-gi `tsdemux` pad probe across all samples): stock `tsdemux` exposes
@@ -17,7 +17,7 @@
   `tsdemux ! meta/x-klv ! appsink` on Day Flight via python-gi. Extraction is
   **byte-identical** to the ffmpeg-extracted `.klv` the core already round-trips —
   the core↔gst path is proven. Two interface inputs (recorded in
-  [`backend-scope`](../planning/backend-scope.md)): appsink yields sub-packet
+  [`backend-scope`](./backend-scope.md)): appsink yields sub-packet
   fragments (203 buffers / 6 packets → backend reassembles + `parse_packet`), and
   PES PTS is unreliable (`CLOCK_TIME_NONE`) so correlation should use KLV Item 2.
 * **Decision (proposed)**: Fork 11 →
@@ -388,7 +388,7 @@
   (typed codecs for registered items, raw for the rest), recomputes the checksum,
   and reproduces all 163 bytes identically. Validates the descriptor schema +
   encode model against real bytes. Generator output byte-identical under `tomli`
-  and the embedded fallback reader (drift check). (Detail in PROGRESS.)
+  and the embedded fallback reader (drift check).
 * **Milestone 2 (implementation)**: full-stream byte-exact round-trip.
   `stream_roundtrip_test` walks every packet in both samples and reconstructs the
   whole stream identically (Day Flight 6/6, Night Flight IR 18/18). Registry
@@ -399,7 +399,7 @@
   length-parameterized (ADR 0011 updated); (2) **mandatory-enforcement opt-out**
   on `finalize()` for Report-on-Change packets (these samples are all full
   packets, so RoC trimming isn't yet exercised). Fixtures `dayflight.klv` /
-  `nightflight_ir.klv` added. (Detail in PROGRESS.)
+  `nightflight_ir.klv` added.
 * **Milestone 3 (implementation)**: 0903 nesting round-trip. Restored
   `RegistryId` + descriptor `child` (ADR 0010) + a `registry_for()` resolver;
   added the VMTI registry (`registry/vmti0903.toml`), recursive `parse_items`
@@ -410,7 +410,7 @@
   byte-exact. Generator extended (`child`/`nested_ls`; variable-length uint from
   omitted length). Fixed a stale 16-vs-17-byte UL-key hex typo in unused TOML
   `ul_key` fields + the fixture script. Scalar-only; VTarget Series → M5.
-  (Detail in PROGRESS.)
+ 
 * **Milestone 4 (implementation)**: real ST 1201 IMAPB codec. `ValueKind::IMAPB`
   now uses the Starting-Point-B mapping (`imapb_params`: bPow/dPow/sF/sR/Zoffset;
   `imapb_decode`/`imapb_encode`), split from the linear-LDS path in `codec.hpp`.
@@ -419,7 +419,7 @@
   ST 0903 §10.1.11 (IMAPB(0,180), L=2: 12.5°=0x0640) — plus a full-range
   round-trip sweep. VMTI FoV items 11/12 (IMAPB) added to the registry + nested
   fixture for end-to-end coverage; 5th CTest case. VTarget Series → M5.
-  (Detail in PROGRESS.)
+ 
 * **Milestone 5 (implementation)**: standalone VMTI. Restored `ul_key` to the
   `Registry` struct (generator emits a 16-byte key array + validates length);
   added `registry_by_key()` for UL-key → registry demux dispatch. New
@@ -434,7 +434,7 @@
   lib — no parsing source to check against; **ImpleoTV MisbCore** docs are
   API-level (JSON), not byte-level, and ship no downloadable `vmtiPckt.bin` (that
   name is only a placeholder path in sample code) — ST 0903 §10 is the authority
-  used. VTarget Series → M6. (Detail in PROGRESS.)
+  used. VTarget Series → M6.
 * **Milestone 6 (implementation)**: VTarget Series (0903 Item 101). New
   `series.hpp` (`parse_vtarget_series` / `build_vtarget_pack` / `build_series`)
   for ST 0903 §9.1.3 Series of VTarget Packs (`[BER-OID targetId][LS items]`);

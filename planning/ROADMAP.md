@@ -1,9 +1,11 @@
 # libmisbklv — Roadmap
 
-The plan: scope, sequencing, and open forks. Living doc — rewrite freely.
-For "where are we right now" see [PROGRESS.md](./PROGRESS.md). Decisions
-(resolved rationale) live in [`../context/`](../context/) as `type: Decision`
-concepts; this file tracks them as a checklist.
+The plan: scope, sequencing, and **open** forks. Living doc — rewrite freely.
+For "where are we right now" see [PROGRESS.md](./PROGRESS.md). Resolved forks and
+their rationale live in [`../context/`](../context/) as `type: Decision` concepts;
+the **decided register** (fork # ↔ ADR ↔ status) is
+[`../context/decisions/index.md`](../context/decisions/index.md). This file no
+longer duplicates it — it tracks scope, phases, and forks still open.
 
 ## Scope (v1)
 
@@ -24,10 +26,14 @@ beyond MSID passthrough.
 - **Phase 1 — Foundational decisions** (done): build system, C++ standard,
   license, name, ADR format (ADRs 0001–0004).
 - **Phase 2 — Core architecture + media-backend decisions** (done): data
-  model, registry, error + C ABI, gstreamer backend (ADRs 0005–0008).
-- **Phase 3 — Implementation** (next): KLV core, registry, `Result<T>`,
-  gstreamer backend incl. the in-library PMT-rewrite element. Round-trip
-  targets: `../data/Day Flight.mpg`, `../data/Night Flight IR.mpg`.
+  model, registry, error + C ABI, gstreamer backend (ADRs 0005–0012).
+- **Phase 3 — Implementation** (done, extending incrementally): the KLV core
+  (milestones 1–6: round-trips, ST 1201 IMAPB, 0903 nesting / standalone /
+  VTarget Series) and the gstreamer backend (B0–B4: extraction 0x06 + 0x15,
+  file + live; insertion file + live, clock-paced) — both on stock gstreamer,
+  no custom element. The in-library PMT-rewrite element that ADR 0008 planned
+  was proven unnecessary ([ADR 0015](../context/decisions/0015-no-pmt-rewrite.md)).
+  Ongoing within this phase: registry breadth (below).
 - **Phase 4 — 0604 ES timestamps** (deferred — [ADR 0009](../context/decisions/0009-st0604-deferred.md)):
   SEI / `user_data` injection/extraction, emulation-prevention stuff/de-stuff.
 - **Phase 5 — Hardening**: tests, conformance, packaging, user docs.
@@ -35,35 +41,24 @@ beyond MSID passthrough.
 ## Open forks
 
 Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
-`status: proposed`) · `DECIDED` (`status: accepted`) · `DEFERRED`.
+`status: proposed`) · `DECIDED` / `DEFERRED` (has an ADR — see the register).
 
-| # | Fork | Status | Decision |
-|---|------|--------|----------|
-| 1 | Build system & C++ standard (CMake; C++17/20/23) | DECIDED | [0001](../context/decisions/0001-build-system-and-cpp-standard.md) |
-| 2 | Project license | DECIDED | [0002](../context/decisions/0002-license.md) |
-| 3 | `akrutsinger/libklv` name collision — renamed to `libmisbklv` | DECIDED | [0003](../context/decisions/0003-project-name.md) |
-| 4 | Core architecture (data model / registry / error+ABI) | DECIDED | [0005](../context/decisions/0005-klv-core-data-model.md) [0006](../context/decisions/0006-tag-registry.md) [0007](../context/decisions/0007-error-and-c-abi.md) |
-| 5 | Media backend — gstreamer (v1); ffmpeg deferred | DECIDED | [0008](../context/decisions/0008-media-backend-gstreamer.md) |
-| 6 | 0604 ES-timestamp layer — deferred from v1 | DEFERRED | [0009](../context/decisions/0009-st0604-deferred.md) |
-| 7 | Decision records — ADR format & numbering | DECIDED | [0004](../context/decisions/0004-adr-format.md) |
-| 8 | Registry descriptor schema — the field set ADR 0006 punted (mapping-kind + params, special values, length, nested-registry routing) | DECIDED | [0010](../context/decisions/0010-registry-descriptor-schema.md) |
-| 9 | Encode / serialization model — owned builder, bottom-up length assembly, forward mapping, checksum/ordering emission | DECIDED | [0011](../context/decisions/0011-encode-model.md) |
-| 10 | Registry codegen — descriptor source format (TOML) + build integration (checked-in generated + drift check) | DECIDED | [0012](../context/decisions/0012-registry-codegen.md) |
-| 11 | `MediaBackend` interface — pull/push, callback/iterator, buffer ownership, timestamps (backend fork F-A) | DECIDED | [0013](../context/decisions/0013-media-backend-interface.md) |
-| 12 | 0x15 metadata extraction — gst-free TS demuxer (`extract_ts_klv`) handles 0x06 + 0x15 AU cells (F-B) | DECIDED | [0016](../context/decisions/0016-ts-0x15-extraction.md) |
-| 13 | `klvpmtrewrite` — NOT needed: stock `mpegtsmux` (gst ≥1.20) emits 0x06+KLVA (F-C) | DECIDED | [0015](../context/decisions/0015-no-pmt-rewrite.md) |
-| 14 | Backend optional-dependency build — `option()` + separate `misbklv-gst` target (F-D) | DECIDED | [0014](../context/decisions/0014-backend-optional-dependency.md) |
-| 15 | Real-time streaming (B4) — live-sink clock pacing (`is-live`+`sync`) + live-source idle-timeout termination (udp/srt) | DECIDED | [0017](../context/decisions/0017-realtime-streaming.md) |
+**None open.** Forks 1–15 are all resolved; the decided register is
+[`../context/decisions/index.md`](../context/decisions/index.md). Candidate
+future forks (not yet opened), all downstream of registry/data breadth:
 
-Forks 8–9 surfaced during the Phase 3 extraction spike (2026-07-17): the core
-*decoder* design (forks 4/5) was complete, but the registry descriptor
-**schema** and the **encode** path were under-specified. Both are now decided
-(ADRs 0010/0011) and will be **locked by a byte-exact round-trip on the spike
-packet** as the first implementation milestone — see [PROGRESS.md](./PROGRESS.md).
-Fork 10 (the [`0006`](../context/decisions/0006-tag-registry.md) codegen
-follow-on — descriptor source format + build integration) is decided in ADR
-0012. **All forks resolved; Phase 3 implementation is underway** (milestone 1:
-byte-exact round-trip of the spike packet).
+- ST 0102 Security LS as a typed nested registry (seen as tag 48 in `falls`;
+  currently opaque passthrough).
+- Multi-byte BER-OID tags (≥128, e.g. 0601 Item 143 MSID) — unexercised by
+  current samples.
+- 0903 Array type (§9.1.2) and remaining VTarget items, as data needs them.
+- Backend follow-ons deferred by [ADR 0017](../context/decisions/0017-realtime-streaming.md):
+  a cooperative stop-token for live `extract()`, RTP payloading.
+
+## Fork lifecycle
 
 When a fork is deliberated, write a `type: Decision` concept in `../context/`
-(`status: proposed` → `accepted`), link it here, and update PROGRESS.
+(`status: proposed` → `accepted`), add its row to the decided register
+([`../context/decisions/index.md`](../context/decisions/index.md)), and update
+PROGRESS. A genuinely open (undeliberated) fork gets a line under **Open forks**
+above until it has an ADR.

@@ -99,7 +99,7 @@ Findings worth acting on:
   `KLVA` registration descriptor, but split on `stream_type`: **`falls` = `0x06`**
   (like Day/Night Flight); **`Cheyenne` and `klv_metadata_test_sync` = `0x15`**
   (metadata). This matters for extraction — stock `tsdemux` exposes `0x06`+KLVA as
-  `meta/x-klv` but **drops `0x15`** (see [`../planning/backend-scope.md`](../planning/backend-scope.md)).
+  `meta/x-klv` but **drops `0x15`** (see [`./backend-scope.md`](./backend-scope.md)).
 - **Not yet exercised anywhere:** multi-byte BER-OID tags (≥128, e.g. Item 143
   MSID) — max tag across all samples is 91.
 

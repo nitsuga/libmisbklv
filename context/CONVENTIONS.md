@@ -68,11 +68,15 @@ fork — context, alternatives considered, the choice, consequences. Carry a
 | `superseded` | Replaced by a later Decision (link it). |
 | `deferred` | Parked; revisit later. |
 
-Lifecycle: an open fork starts as a checklist line in
+Lifecycle: an open fork starts under **Open forks** in
 [`../planning/ROADMAP.md`](../planning/ROADMAP.md) (`OPEN`). Once deliberated,
-write the Decision in [`./decisions/`](./decisions/index.md) with `status: proposed`; on resolution set `accepted`,
-link it from ROADMAP, and update [`../planning/PROGRESS.md`](../planning/PROGRESS.md).
-Raw open questions live in `../planning/`; only deliberated rationale lives here.
+write the Decision in [`./decisions/`](./decisions/index.md) with
+`status: proposed`; on resolution set `accepted`, add its row to the **decided
+register** [`./decisions/index.md`](./decisions/index.md) (fork # ↔ ADR ↔
+status), and refresh present state in
+[`../planning/PROGRESS.md`](../planning/PROGRESS.md). ROADMAP no longer lists
+decided forks — it defers to the register. Raw open questions live in
+`../planning/`; only deliberated rationale lives here.
 
 ## ADR format
 

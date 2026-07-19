@@ -20,19 +20,32 @@ v0.1 bundle.
 
 ## Planning hygiene
 
-Keep `planning/` current as the project moves — it's the non-ephemeral record
-of decisions and status, not chat.
+Each doc has one job — keep them from re-narrating each other:
 
-- **On a significant decision** (a fork resolved or changed): write/update the
-  ADR in [`context/decisions/`](context/decisions/index.md) per the lifecycle
-  in [`context/CONVENTIONS.md`](context/CONVENTIONS.md) (status: proposed →
-  accepted / superseded), then update the fork's row in
-  [`planning/ROADMAP.md`](planning/ROADMAP.md) (status + Decision link) and
-  [`planning/PROGRESS.md`](planning/PROGRESS.md).
-- **On implementing a significant change**: update
-  [`planning/PROGRESS.md`](planning/PROGRESS.md) (done / in-progress / next);
-  if it advances or closes a roadmap fork, update ROADMAP too.
-- Routine ingests / lint go to [`context/log.md`](context/log.md), not PROGRESS.
+- [`context/log.md`](context/log.md) — the **durable chronological record**:
+  what landed when, milestone/decision detail, routine ingests/lint. History
+  lives here, newest-first.
+- [`context/decisions/index.md`](context/decisions/index.md) — the **decided
+  register**: fork # ↔ ADR ↔ status. The single source of truth for what's
+  decided.
+- [`planning/PROGRESS.md`](planning/PROGRESS.md) — **present state only**
+  (Now / In-progress / Next). Volatile; rewrite each session. Do **not** grow a
+  "Done" history here — that's `log.md`.
+- [`planning/ROADMAP.md`](planning/ROADMAP.md) — scope, phases, and **open**
+  (undeliberated) forks. It defers the decided register to
+  `decisions/index.md`.
+
+So:
+
+- **On a significant decision**: write/update the ADR in
+  [`context/decisions/`](context/decisions/index.md) per the lifecycle in
+  [`context/CONVENTIONS.md`](context/CONVENTIONS.md) (status: proposed →
+  accepted / superseded), add/update its row in the decided register
+  (`decisions/index.md`), append a `log.md` line, and refresh PROGRESS's present
+  state. Touch ROADMAP only if it opens/closes an *open* fork or shifts a phase.
+- **On implementing a significant change**: append a `log.md` entry (the detail)
+  and refresh [`planning/PROGRESS.md`](planning/PROGRESS.md)'s present state
+  (Now / In-progress / Next) — a thin pointer, not a history.
 
 ## Commit messages
 

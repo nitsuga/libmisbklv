@@ -49,4 +49,4 @@ dependency; only linking `misbklv-gst` pulls gstreamer in.
 [1] [`0013`](./0013-media-backend-interface.md) — the interface `misbklv-gst`
     implements.
 [2] [`0006`](./0006-tag-registry.md) — dependency-free core rationale.
-[3] [`backend-scope`](../../planning/backend-scope.md) — F-D.
+[3] [`backend-scope`](../backend-scope.md) — F-D.

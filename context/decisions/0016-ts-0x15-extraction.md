@@ -60,7 +60,7 @@ for live/network sources.
 
 # Citations
 
-[1] [`backend-scope`](../../planning/backend-scope.md) — the 0x06-vs-0x15 finding
+[1] [`backend-scope`](../backend-scope.md) — the 0x06-vs-0x15 finding
     and PES probe.
 [2] [`0013`](./0013-media-backend-interface.md) — `PacketHandler`/`KlvPacket`
     reused by `extract_ts_klv`.
