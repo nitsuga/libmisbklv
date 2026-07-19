@@ -28,7 +28,10 @@ done and extending incrementally** — the state today:
   `Message` (owned, editable packet — typed `get<T>`/`set`, byte-exact `encode`,
   auto registry by UL key) in the core; `KlvStream`/`KlvSink` (range-for read,
   edit, emit — file + live) in `misbklv-gst`. End-to-end `api_test`, a `klv_edit`
-  example, and a user guide ([`docs/api.md`](../docs/api.md)).
+  example, and a user guide ([`docs/api.md`](../docs/api.md)). **Early break from
+  a live stream is safe** — `extract` takes a `std::stop_token` and `KlvStream`'s
+  destructor cancels promptly ([ADR 0019](../context/decisions/0019-extract-cancellation.md),
+  `stop_test`).
 - **Packaging**: compiled `libmisbklv.a` (`find_package(misbklv)` →
   `misbklv::misbklv`) + optional `misbklv-gst` target; **the full CTest suite
   green**; CI runs build/test, a **sanitizer job** (ASan+UBSan core), and the

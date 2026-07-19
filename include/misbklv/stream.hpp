@@ -13,6 +13,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <thread>
 #include <vector>
@@ -24,9 +25,9 @@ namespace misbklv {
 
 // Read a KLV source (file path / "udp:host:port" / "srt:uri") as a range of owned
 // Messages: `for (Message& m : KlvStream(src)) { ... }`. Iteration ends when the
-// source reaches EOS (file) or idles (live). NB: breaking early blocks the
-// destructor until the source drains — clean for files; for an endless live
-// source it waits one idle timeout (a cooperative stop is an ADR 0017 follow-on).
+// source reaches EOS (file) or idles (live). Breaking early is safe: the
+// destructor cooperatively cancels the extract (ADR 0019), so it returns promptly
+// even for an endless live source (no wait for the idle timeout / EOS).
 class KlvStream {
  public:
   explicit KlvStream(std::string source);  // default gstreamer backend
@@ -65,6 +66,7 @@ class KlvStream {
   static constexpr std::size_t kCap = 32;
   bool done_ = false;   // extract returned
   bool stop_ = false;   // destructor asked the producer to quit
+  std::stop_source stop_source_;  // cancels the backend extract (ADR 0019)
   std::thread producer_;
 
   void push_frame(Frame f);

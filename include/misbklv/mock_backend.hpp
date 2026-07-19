@@ -36,9 +36,12 @@ class MockBackend : public MediaBackend {
   explicit MockBackend(std::vector<ber::Bytes> packets = {})
       : packets_(std::move(packets)) {}
 
-  Result<std::monostate> extract(std::string_view, const PacketHandler& on_packet) override {
-    for (const auto& p : packets_)
+  Result<std::monostate> extract(std::string_view, const PacketHandler& on_packet,
+                                 std::stop_token stop = {}) override {
+    for (const auto& p : packets_) {
+      if (stop.stop_requested()) break;  // cooperative cancel (ADR 0019)
       on_packet(KlvPacket{std::span<const std::byte>(p), kNoPts});
+    }
     return Result<std::monostate>::ok({});
   }
 

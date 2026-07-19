@@ -31,3 +31,4 @@ diverge — e.g. fork 7 → ADR 0004; one fork can span several ADRs — fork 4 
 | 12 | [0016 — 0x15 KLV extraction via a gst-free TS demuxer](./0016-ts-0x15-extraction.md) | accepted |
 | 15 | [0017 — Real-time streaming (live pacing + idle-timeout)](./0017-realtime-streaming.md) | accepted |
 | 16 | [0018 — High-level API (Message + KlvStream/KlvSink facade)](./0018-high-level-api.md) | accepted |
+| 17 | [0019 — Cooperative extraction cancellation (stop token)](./0019-extract-cancellation.md) | accepted |

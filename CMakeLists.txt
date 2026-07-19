@@ -158,6 +158,11 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
 
   add_executable(klv_edit examples/klv_edit.cpp)  # user-facing example (not a test)
   target_link_libraries(klv_edit PRIVATE misbklv-gst)
+
+  add_executable(stop_test test/stop_test.cpp)  # cooperative cancellation (ADR 0019)
+  target_link_libraries(stop_test PRIVATE misbklv-gst Threads::Threads)
+  add_test(NAME stream_stop COMMAND stop_test
+    "${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight_first_packet.klv")
 endif()
 
 # --- Regression over real MPEG-TS captures (data/*.ts, git-lfs) --------------

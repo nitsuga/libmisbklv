@@ -11,10 +11,14 @@ namespace misbklv {
 KlvStream::KlvStream(std::unique_ptr<MediaBackend> backend, std::string source)
     : backend_(std::move(backend)), source_(std::move(source)) {
   producer_ = std::thread([this] {
-    backend_->extract(source_, [this](const KlvPacket& kp) {
-      push_frame(Frame{std::vector<std::byte>(kp.bytes.begin(), kp.bytes.end()),
-                       kp.pts_ns});
-    });
+    backend_->extract(
+        source_,
+        [this](const KlvPacket& kp) {
+          push_frame(Frame{
+              std::vector<std::byte>(kp.bytes.begin(), kp.bytes.end()),
+              kp.pts_ns});
+        },
+        stop_source_.get_token());
     {  // extract returned -> no more frames
       std::lock_guard<std::mutex> lk(mu_);
       done_ = true;
@@ -27,12 +31,15 @@ KlvStream::KlvStream(std::string source)
     : KlvStream(make_gst_backend(), std::move(source)) {}
 
 KlvStream::~KlvStream() {
-  {  // ask the producer to quit; unblock it if it's waiting on a full queue
+  {  // unblock a push_frame waiting on a full queue, so extract's teardown
+     // (set_state NULL, which waits on the streaming thread) can't deadlock
     std::lock_guard<std::mutex> lk(mu_);
     stop_ = true;
   }
   not_full_.notify_all();
   not_empty_.notify_all();
+  stop_source_.request_stop();  // cancel the extract itself (ADR 0019) — the
+                                // only way to end an endless live source early
   if (producer_.joinable()) producer_.join();
 }
 

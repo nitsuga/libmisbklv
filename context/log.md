@@ -129,6 +129,16 @@
   edit SensorLatitude, emit, re-read — all 6 frames' edits persist through
   decode→encode→mux→demux), a `klv_edit` example, and the first user guide
   [`docs/api.md`](../docs/api.md). Closes the Phase-3 usability pass.
+* **Decision + cancellation (fork 17)**: cooperative extract stop —
+  [`0019`](./decisions/0019-extract-cancellation.md) (accepted). `extract` gained
+  a `std::stop_token` (default = never signaled, so existing callers are
+  unchanged); `GstBackend` polls it on a 100 ms bus timeout and tears down on
+  request, `MockBackend` checks it between packets. `KlvStream`'s destructor now
+  `request_stop()`s (after unblocking the queue so `set_state(NULL)` can't
+  deadlock), so breaking out of the read loop over an **endless** live source
+  returns promptly instead of hanging — retiring the 0018 caveat. `stop_test`
+  (endless mock): early break destroys in ~6 ms; verified teeth — removing the
+  cancel makes it hang.
 
 ## 2026-07-18
 

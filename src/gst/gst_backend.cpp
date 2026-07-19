@@ -192,7 +192,8 @@ class GstInserter : public Inserter {
 class GstBackend : public MediaBackend {
  public:
   Result<std::monostate> extract(std::string_view source,
-                                 const PacketHandler& on_packet) override {
+                                 const PacketHandler& on_packet,
+                                 std::stop_token stop = {}) override {
     gst_init(nullptr, nullptr);  // idempotent
     GstElement* pipeline = gst_pipeline_new("misbklv-extract");
     bool live = false;
@@ -224,13 +225,17 @@ class GstBackend : public MediaBackend {
       // A file source ends at EOS; a live source never does, so udpsrc posts a
       // GstUDPSrcTimeout ELEMENT message once it idles — we treat that as end,
       // but only after data has flowed (an early timeout during startup, before
-      // the sender is up, is ignored so it can't truncate the stream).
+      // the sender is up, is ignored so it can't truncate the stream). A finite
+      // pop timeout lets us also poll `stop` for cooperative early cancel (ADR
+      // 0019) — the exit path for a KlvStream consumer that breaks.
+      constexpr GstClockTime kPoll = 100 * GST_MSECOND;
       for (;;) {
+        if (stop.stop_requested()) break;  // cancelled (ok stays true)
         GstMessage* msg = gst_bus_timed_pop_filtered(
-            bus, GST_CLOCK_TIME_NONE,
+            bus, kPoll,
             static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR |
                                         GST_MESSAGE_ELEMENT));
-        if (!msg) continue;
+        if (!msg) continue;  // timeout -> re-check stop / keep waiting
         const GstMessageType t = GST_MESSAGE_TYPE(msg);
         bool done = (t == GST_MESSAGE_EOS);
         if (t == GST_MESSAGE_ERROR) {
