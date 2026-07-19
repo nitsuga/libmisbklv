@@ -1,7 +1,7 @@
 ---
 type: Decision
 title: MediaBackend interface
-status: proposed
+status: accepted
 tags: [decision, backend, interface, gstreamer, phase-3]
 timestamp: 2026-07-19T00:00:00Z
 fork: 11

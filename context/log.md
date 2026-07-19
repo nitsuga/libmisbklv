@@ -31,6 +31,9 @@
   Rejected: pull-iterator, parsed-`Packet` units, raw-buffer units,
   need-data-callback insertion, no-interface. Grounded by the B0 spike. ROADMAP
   fork 11 → PROPOSED.
+* **Decision (accepted)**: [`0013`](./decisions/0013-media-backend-interface.md)
+  → accepted. `MediaBackend` interface locked; B1 (GstBackend extraction +
+  MockBackend + optional-dep CMake) implements it. ROADMAP fork 11 → DECIDED.
 
 ## 2026-07-18
 

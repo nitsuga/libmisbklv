@@ -49,7 +49,7 @@ Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 | 8 | Registry descriptor schema — the field set ADR 0006 punted (mapping-kind + params, special values, length, nested-registry routing) | DECIDED | [0010](../context/decisions/0010-registry-descriptor-schema.md) |
 | 9 | Encode / serialization model — owned builder, bottom-up length assembly, forward mapping, checksum/ordering emission | DECIDED | [0011](../context/decisions/0011-encode-model.md) |
 | 10 | Registry codegen — descriptor source format (TOML) + build integration (checked-in generated + drift check) | DECIDED | [0012](../context/decisions/0012-registry-codegen.md) |
-| 11 | `MediaBackend` interface — pull/push, callback/iterator, buffer ownership, timestamps (backend fork F-A) | PROPOSED | [0013](../context/decisions/0013-media-backend-interface.md) |
+| 11 | `MediaBackend` interface — pull/push, callback/iterator, buffer ownership, timestamps (backend fork F-A) | DECIDED | [0013](../context/decisions/0013-media-backend-interface.md) |
 | 12 | 0x15 metadata extraction — stock `tsdemux` drops it; custom PID demux vs defer (F-B) | OPEN | — (see [backend-scope](./backend-scope.md)) |
 | 13 | `klvpmtrewrite` element form — GstBaseTransform vs pad-probe over `GstMpegtsSection` (F-C) | OPEN | — (see [backend-scope](./backend-scope.md)) |
 | 14 | Backend optional-dependency build — `option()` + separate `misbklv-gst` target (F-D) | OPEN | — (see [backend-scope](./backend-scope.md)) |
