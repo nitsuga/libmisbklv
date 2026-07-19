@@ -91,6 +91,22 @@
   ~165 ms (5×33 ms = genuinely clock-paced), stable across repeated runs.
   19 CTest cases. **Backend B0–B4 complete**; extraction + insertion, file + live,
   all on stock gstreamer with no custom element.
+* **Restructure (planning/context seams)**: de-duplicated the ripple-update
+  workflow. [`decisions/index.md`](./decisions/index.md) gained a Fork column and
+  is now the sole **decided-fork register**; [`ROADMAP`](../planning/ROADMAP.md)
+  dropped its duplicate fork table (keeps scope / phases / *open* forks, defers to
+  the register). [`PROGRESS`](../planning/PROGRESS.md) is now present-tense only —
+  its ~200-line "Done" history graduated here (this log owns chronology).
+  [`backend-scope.md`](./backend-scope.md) moved `planning/` → `context/` as a
+  `type: Component` concept (durable design analysis, not plan/state). Root
+  `CLAUDE.md` + [`CONVENTIONS`](./CONVENTIONS.md) updated to codify the
+  one-job-per-doc split.
+* **Conventions (doc hygiene)**: two ripple-workflow rules, no tooling. (1)
+  Decision log entries are a **single thin line** (chronology + link; the ADR owns
+  the rationale — [`CONVENTIONS`](./CONVENTIONS.md) § Decisions), a second entry
+  only on a cross-session gap or revision. (2) **No live tallies** (test-case
+  counts, item totals) in present-tense / durable prose — a specific number
+  belongs only in a dated log snapshot here (root `CLAUDE.md` Planning hygiene).
 
 ## 2026-07-18
 
