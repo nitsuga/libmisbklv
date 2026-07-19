@@ -187,8 +187,16 @@ backend (ADR 0008).
   [`0014`](../context/decisions/0014-backend-optional-dependency.md), fork 14).
   Tests: `mock_backend` (contract) + **`gst_extract`** — GstBackend extracts
   `Day Flight.mpg` into 6 whole packets, **byte-exact** vs the fixture (14 CTest
-  cases). CI installs gstreamer. Next: **B2** — insertion (`appsrc ! mpegtsmux !
-  klvpmtrewrite`, forks 12/13).
+  cases). CI installs gstreamer.
+- **B2 done** (insertion): `GstInserter` = `appsrc(meta/x-klv) ! mpegtsmux !
+  file/udp/srt sink`; `push()` (backpressure) + `finish()` (drain). **Big finding
+  — `klvpmtrewrite` NOT needed** (fork 13, ADR
+  [`0015`](../context/decisions/0015-no-pmt-rewrite.md)): stock `mpegtsmux` (gst
+  1.20.3) already emits `stream_type 0x06`+KLVA, so ADR 0008's PMT-rewrite element
+  is superseded. `gst_insert` test: KLV → mux → `.ts` → re-extract **byte-exact**
+  (15 CTest cases). Extraction + insertion both work with **stock gstreamer, no
+  custom element**. Next: **B3** — 0x15 extraction (fork 12) or **B4** — real-time
+  (udp/srt) streaming.
 
 ## Next
 

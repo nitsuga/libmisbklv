@@ -116,6 +116,12 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
   add_test(NAME gst_extract COMMAND gst_backend_test
     "${CMAKE_CURRENT_SOURCE_DIR}/data/Day Flight.mpg"
     "${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight.klv")
+
+  add_executable(gst_insert_test test/gst_insert_test.cpp)  # B2 insertion round-trip
+  target_link_libraries(gst_insert_test PRIVATE misbklv-gst)
+  add_test(NAME gst_insert COMMAND gst_insert_test
+    "${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight.klv"
+    "${CMAKE_CURRENT_BINARY_DIR}/insert_roundtrip.ts")
 endif()
 
 # --- Regression over real MPEG-TS captures (data/*.ts, git-lfs) --------------

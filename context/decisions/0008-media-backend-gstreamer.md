@@ -75,6 +75,14 @@ ffmpeg is deferred/optional, not built in v1. See
   (tapping video frames to pace KLV); async (`0x06`) satisfies "insertion in v1"
   and matches our samples; sync added later, non-breaking.
 
+# Update (2026-07-19)
+
+The `klvpmtrewrite` requirement below is **superseded by
+[`0015`](./0015-no-pmt-rewrite.md)**: stock `mpegtsmux` (gstreamer ≥ 1.20)
+already emits `stream_type 0x06` + `KLVA`, verified by a byte-exact insertion
+round-trip, so no PMT-rewrite element is built. Everything else in this ADR
+stands.
+
 # Consequences
 
 - v1 ships a gstreamer backend doing extract + insert (file + real-time,

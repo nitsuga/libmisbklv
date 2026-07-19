@@ -94,18 +94,19 @@ sync-KLV mode (its samples are the `*_sync` file).
 - **B1 — extraction (0x06) + interface + mock**: land `MediaBackend` (F-A),
   `GstBackend` extraction, the mock backend, and the optional-dep CMake (F-D).
   Test: extract from `Day Flight.mpg` → core, vs the committed `.klv`.
-- **B2 — insertion + `klvpmtrewrite`**: `appsrc ! mpegtsmux ! klvpmtrewrite !
-  filesink` (F-C); needs `gstreamer-mpegts`. Test: build a TS from core-encoded
-  KLV, re-extract via B1, round-trip byte-exact; verify `0x06`+KLVA signaling.
+- **B2 — insertion** (done): `appsrc ! mpegtsmux ! filesink`. The B2 spike showed
+  stock `mpegtsmux` (gst 1.20.3) already emits `0x06`+KLVA, so **`klvpmtrewrite`
+  is not needed** (ADR [`0015`](../context/decisions/0015-no-pmt-rewrite.md), F-C
+  resolved). `GstInserter` + `gst_insert_test`: insert→re-extract byte-exact.
 - **B3 — 0x15 extraction** (per F-B outcome): custom PID path, or defer.
 - **B4 — real-time streaming**: `udpsink`/`srtsink` + appsrc backpressure; the
   push-KLV API blocking on flow control (the ADR 0008 ergonomic win).
 
 ## Risks
 
-- **PMT rewrite is the hard part** — `klvpmtrewrite` is real GstElement +
-  `gstreamer-mpegts` work; the single biggest chunk (bounded by the gstklvplugin
-  reference).
+- ~~**PMT rewrite is the hard part**~~ — **retired**: the B2 spike proved stock
+  `mpegtsmux` (gst ≥ 1.20) emits `0x06`+KLVA, so `klvpmtrewrite` isn't built
+  (ADR 0015). The single biggest planned risk is gone.
 - **0x15 extraction gap** — stock tsdemux can't; custom demux is more work.
 - **CI** — the gst backend needs the gst dev libs in CI; keep it a separate,
   skippable job so the core build stays light.

@@ -50,6 +50,20 @@
   `Day Flight.mpg` into **6 whole packets, byte-exact vs the committed `.klv`**
   (each `parse_packet`-able). 14 CTest cases; CI installs gstreamer. Insertion is
   B2 (`open_insert` returns `Unsupported`).
+* **Decision (accepted)**: Fork 13 →
+  [`0015-no-pmt-rewrite`](./decisions/0015-no-pmt-rewrite.md) (accepted).
+  **`klvpmtrewrite` is NOT needed.** B2 spike (gst 1.20.3): stock
+  `appsrc(meta/x-klv) ! mpegtsmux` already emits `stream_type 0x06` + `KLVA`
+  registration descriptor; insert→re-extract is byte-exact. Supersedes ADR 0008's
+  PMT-rewrite requirement (its premise was true only for older gstreamer). ADR
+  0008 annotated; ROADMAP fork 13 → DECIDED.
+* **B2 (implementation)**: media backend insertion. `GstInserter` in
+  `gst_backend.cpp` = `appsrc(meta/x-klv) ! mpegtsmux ! {file,udp,srt} sink`;
+  `push()` (blocks on backpressure) + `finish()` (EOS/drain); `make_sink()` parses
+  `file:`/`udp:`/`srt:`. `open_insert` builds+starts the pipeline. `gst_insert`
+  test: KLV → mux → `.ts` → re-extract **byte-exact** (15 CTest cases). Both
+  directions now work with **stock gstreamer, no custom element** — B2 collapsed
+  from "build klvpmtrewrite" to a thin inserter.
 
 ## 2026-07-18
 

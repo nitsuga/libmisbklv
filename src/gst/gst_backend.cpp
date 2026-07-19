@@ -4,6 +4,7 @@
 // is B2 (returns Unsupported for now).
 #include "misbklv/gst_backend.hpp"
 
+#include <cstdlib>
 #include <cstring>
 #include <span>
 #include <string>
@@ -66,6 +67,84 @@ GstFlowReturn on_new_sample(GstElement* sink, gpointer user) {
   return GST_FLOW_OK;
 }
 
+// Build the sink element from an InsertConfig spec: "file:PATH" | "udp:HOST:PORT"
+// | "srt:URI". Returns nullptr on an unknown scheme.
+GstElement* make_sink(const std::string& spec) {
+  const auto colon = spec.find(':');
+  if (colon == std::string::npos) return nullptr;
+  const std::string scheme = spec.substr(0, colon);
+  const std::string rest = spec.substr(colon + 1);
+  if (scheme == "file") {
+    GstElement* s = gst_element_factory_make("filesink", "sink");
+    if (s) g_object_set(s, "location", rest.c_str(), nullptr);
+    return s;
+  }
+  if (scheme == "udp") {  // udp:HOST:PORT
+    const auto p = rest.rfind(':');
+    if (p == std::string::npos) return nullptr;
+    GstElement* s = gst_element_factory_make("udpsink", "sink");
+    if (s) g_object_set(s, "host", rest.substr(0, p).c_str(), "port",
+                        std::atoi(rest.substr(p + 1).c_str()), nullptr);
+    return s;
+  }
+  if (scheme == "srt") {
+    GstElement* s = gst_element_factory_make("srtsink", "sink");
+    if (s) g_object_set(s, "uri", spec.c_str(), nullptr);  // srt://...
+    return s;
+  }
+  return nullptr;
+}
+
+// appsrc(meta/x-klv) ! mpegtsmux ! sink. push() blocks on appsrc backpressure;
+// finish() sends EOS and drains. Stock mpegtsmux (gst >= 1.20) already emits
+// stream_type 0x06 + KLVA, so no PMT rewrite is needed (fork 13; verified by
+// round-trip).
+class GstInserter : public Inserter {
+ public:
+  GstInserter(GstElement* pipeline, GstElement* appsrc)
+      : pipeline_(pipeline), appsrc_(appsrc) {}
+  ~GstInserter() override {
+    if (pipeline_) {
+      gst_element_set_state(pipeline_, GST_STATE_NULL);
+      gst_object_unref(pipeline_);
+    }
+  }
+
+  Result<std::monostate> push(std::span<const std::byte> pkt,
+                              std::int64_t pts_ns) override {
+    GstBuffer* buf = gst_buffer_new_allocate(nullptr, pkt.size(), nullptr);
+    gst_buffer_fill(buf, 0, pkt.data(), pkt.size());
+    GST_BUFFER_PTS(buf) = (pts_ns == kNoPts) ? pts_
+                                             : static_cast<GstClockTime>(pts_ns);
+    GST_BUFFER_DURATION(buf) = kFrameDur;
+    pts_ += kFrameDur;
+    const GstFlowReturn ret =
+        gst_app_src_push_buffer(GST_APP_SRC(appsrc_), buf);  // consumes buf
+    return ret == GST_FLOW_OK ? Result<std::monostate>::ok({})
+                              : Result<std::monostate>::err(Error::Backend);
+  }
+
+  Result<std::monostate> finish() override {
+    gst_app_src_end_of_stream(GST_APP_SRC(appsrc_));
+    GstBus* bus = gst_element_get_bus(pipeline_);
+    GstMessage* msg = gst_bus_timed_pop_filtered(
+        bus, GST_CLOCK_TIME_NONE,
+        static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
+    const bool ok = !(msg && GST_MESSAGE_TYPE(msg) == GST_MESSAGE_ERROR);
+    if (msg) gst_message_unref(msg);
+    gst_object_unref(bus);
+    gst_element_set_state(pipeline_, GST_STATE_NULL);  // flush/close the sink
+    return ok ? Result<std::monostate>::ok({})
+              : Result<std::monostate>::err(Error::Backend);
+  }
+
+ private:
+  static constexpr GstClockTime kFrameDur = 33'000'000;  // ~30 fps pacing
+  GstElement* pipeline_;
+  GstElement* appsrc_;
+  GstClockTime pts_ = 0;
+};
+
 class GstBackend : public MediaBackend {
  public:
   Result<std::monostate> extract(std::string_view source,
@@ -113,8 +192,34 @@ class GstBackend : public MediaBackend {
               : Result<std::monostate>::err(Error::Backend);
   }
 
-  Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig&) override {
-    return Result<std::unique_ptr<Inserter>>::err(Error::Unsupported);  // B2
+  Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg) override {
+    gst_init(nullptr, nullptr);
+    GstElement* pipeline = gst_pipeline_new("misbklv-insert");
+    GstElement* appsrc = gst_element_factory_make("appsrc", "src");
+    GstElement* mux = gst_element_factory_make("mpegtsmux", "mux");
+    GstElement* sink = make_sink(cfg.sink);
+    if (!pipeline || !appsrc || !mux || !sink) {
+      if (sink) gst_object_unref(sink);
+      if (mux) gst_object_unref(mux);
+      if (appsrc) gst_object_unref(appsrc);
+      if (pipeline) gst_object_unref(pipeline);
+      return Result<std::unique_ptr<Inserter>>::err(sink ? Error::Backend
+                                                         : Error::Unsupported);
+    }
+    GstCaps* caps = gst_caps_from_string("meta/x-klv, parsed=(boolean)true");
+    g_object_set(appsrc, "caps", caps, "format", GST_FORMAT_TIME, "block", TRUE,
+                 nullptr);
+    gst_caps_unref(caps);
+    gst_bin_add_many(GST_BIN(pipeline), appsrc, mux, sink, nullptr);
+    if (!gst_element_link_many(appsrc, mux, sink, nullptr) ||
+        gst_element_set_state(pipeline, GST_STATE_PLAYING) ==
+            GST_STATE_CHANGE_FAILURE) {
+      gst_element_set_state(pipeline, GST_STATE_NULL);
+      gst_object_unref(pipeline);
+      return Result<std::unique_ptr<Inserter>>::err(Error::Backend);
+    }
+    return Result<std::unique_ptr<Inserter>>::ok(
+        std::make_unique<GstInserter>(pipeline, appsrc));
   }
 };
 
