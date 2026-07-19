@@ -27,6 +27,7 @@ add_library(misbklv STATIC
   src/builder.cpp
   src/series.cpp
   src/registries.cpp
+  src/message.cpp
   src/ts.cpp)
 add_library(misbklv::misbklv ALIAS misbklv)
 target_include_directories(misbklv PUBLIC
@@ -120,6 +121,11 @@ add_test(NAME jmisb_crosscheck COMMAND jmisb_crosscheck_test)
 add_executable(hardening_test test/hardening_test.cpp)  # real-world hardening
 target_link_libraries(hardening_test PRIVATE misbklv)
 add_test(NAME hardening COMMAND hardening_test
+  ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight_first_packet.klv)
+
+add_executable(message_test test/message_test.cpp)  # high-level Message (ADR 0018)
+target_link_libraries(message_test PRIVATE misbklv)
+add_test(NAME message COMMAND message_test
   ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight_first_packet.klv)
 
 add_executable(mock_backend_test test/mock_backend_test.cpp)

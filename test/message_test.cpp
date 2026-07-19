@@ -1,0 +1,70 @@
+// SPDX-License-Identifier: Apache-2.0
+// Message facade (ADR 0018): parse -> typed get -> edit -> encode. No-op encode
+// must be byte-exact; an edit must survive a re-parse.
+// argv: <dayflight_first_packet.klv>
+#include <cmath>
+#include <cstdio>
+#include <fstream>
+#include <span>
+#include <vector>
+
+#include "misbklv/message.hpp"
+
+using namespace misbklv;
+
+static int failures = 0;
+static void check(bool ok, const char* what) {
+  std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", what);
+  if (!ok) ++failures;
+}
+static std::vector<std::byte> read_file(const char* p) {
+  std::ifstream f(p, std::ios::binary);
+  std::vector<char> raw((std::istreambuf_iterator<char>(f)),
+                        std::istreambuf_iterator<char>());
+  std::vector<std::byte> out(raw.size());
+  for (std::size_t i = 0; i < raw.size(); ++i)
+    out[i] = static_cast<std::byte>(static_cast<unsigned char>(raw[i]));
+  return out;
+}
+
+int main(int argc, char** argv) {
+  const char* path =
+      argc > 1 ? argv[1] : "test/fixtures/dayflight_first_packet.klv";
+  const auto bytes = read_file(path);
+  if (bytes.empty()) { std::fprintf(stderr, "no fixture: %s\n", path); return 2; }
+
+  auto msg = Message::parse(bytes);
+  check(static_cast<bool>(msg), "parse");
+  if (!msg) return 2;
+
+  // typed read: SensorLatitude (tag 13) ~ 54.68 deg on Day Flight.
+  auto lat = msg->get<double>(13);
+  check(lat.has_value(), "get<double>(13) present");
+  check(lat && std::fabs(*lat - 54.68) < 0.5, "SensorLatitude ~ 54.68");
+  check(msg->get<std::uint64_t>(2).has_value(), "get<uint64_t>(2) timestamp present");
+  check(msg->has(13) && !msg->has(250), "has() reports membership");
+  check(!msg->get<double>(250).has_value(), "get of absent tag -> nullopt");
+  check(!msg->get<std::string_view>(13).has_value(), "type mismatch -> nullopt");
+
+  // no-op encode is byte-exact.
+  auto same = msg->encode();
+  check(same && *same == bytes, "no-op encode is byte-exact");
+
+  // edit -> encode -> re-parse -> value changed.
+  const double newlat = *lat + 1.0;
+  check(static_cast<bool>(msg->set(13, Value{newlat})), "set(13)");
+  auto edited = msg->encode();
+  check(static_cast<bool>(edited), "encode after edit");
+  check(edited && *edited != bytes, "edited bytes differ from source");
+  auto reparsed = Message::parse(*edited);
+  check(static_cast<bool>(reparsed), "re-parse edited");
+  auto lat2 = reparsed ? reparsed->get<double>(13) : std::nullopt;
+  check(lat2 && std::fabs(*lat2 - newlat) < 0.01, "edited SensorLatitude survives round-trip");
+
+  // get reflects a staged edit before encode, too.
+  check(msg->get<double>(13) && std::fabs(*msg->get<double>(13) - newlat) < 0.01,
+        "get() reflects staged edit");
+
+  std::printf("%s\n", failures == 0 ? "MESSAGE: all PASS" : "MESSAGE: FAIL");
+  return failures == 0 ? 0 : 1;
+}
