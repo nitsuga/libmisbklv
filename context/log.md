@@ -150,6 +150,18 @@
   consumer against a fresh install (gst consumer runs KlvStream over Day Flight).
   CI's install step now **builds a consumer** (both components) — the bare
   `cmake --install` smoke test had masked this. Completes ADR 0014's intent.
+* **Pushed to GitHub + first-CI fix**: `git@github.com:nitsuga/libmisbklv` (main,
+  ~431 MB LFS). The first Actions run failed one test — `stream_falls` — in both
+  the build and sanitizer jobs: the regression extracted KLV from `data/*.ts` with
+  **ffmpeg at build time**, and ffmpeg 6 (ubuntu-latest) frames `falls.ts` stream 0
+  differently than local 4.4 (385462 vs 395227 B → first packet no longer on a
+  boundary → Truncated). A demuxer's exact byte output isn't a stable contract, so
+  **committed the four extracted streams as fixtures** (`test/fixtures/{cheyenne,
+  falls,falls_ext,sync}.klv`, ~1.14 MB) and dropped build-time extraction; the
+  `stream_*` tests read them directly and `ts_extract_*` cross-checks our
+  `extract_ts_klv` against them (verified byte-exact vs the committed refs).
+  **ffmpeg removed from the tests and both CI jobs** — the regression is now
+  hermetic (LFS `.ts`/`.mpg` still needed only for `ts_extract`).
 
 ## 2026-07-18
 

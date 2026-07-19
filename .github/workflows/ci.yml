@@ -15,7 +15,7 @@ jobs:
       - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++ ffmpeg \
+          sudo apt-get install -y cmake g++ \
             libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             libgstreamer-plugins-bad1.0-dev \
             gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
@@ -60,7 +60,7 @@ jobs:
       - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++ ffmpeg
+          sudo apt-get install -y cmake g++
       - name: Configure (ASan + UBSan, no gstreamer)
         run: cmake -S . -B build-san -DMISBKLV_SANITIZE=ON -DMISBKLV_GSTREAMER=OFF
       - name: Build
