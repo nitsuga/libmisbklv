@@ -20,6 +20,17 @@
   [`backend-scope`](../planning/backend-scope.md)): appsink yields sub-packet
   fragments (203 buffers / 6 packets → backend reassembles + `parse_packet`), and
   PES PTS is unreliable (`CLOCK_TIME_NONE`) so correlation should use KLV Item 2.
+* **Decision (proposed)**: Fork 11 →
+  [`0013-media-backend-interface`](./decisions/0013-media-backend-interface.md)
+  (proposed). Abstract `MediaBackend`: blocking `extract(source, on_packet)`
+  yielding framed per-packet `KlvPacket{bytes, pts_ns}` (bytes borrow the
+  backend's reassembly buffer — the ADR 0011 boundary; consumer runs
+  `parse_packet`) + `open_insert(config) → Inserter{push, finish}` with appsrc
+  backpressure. Byte-level (no decode); `Result<T>`; `GstBackend` + `MockBackend`;
+  interface header core-only (gstreamer confined to `GstBackend`, fork 14).
+  Rejected: pull-iterator, parsed-`Packet` units, raw-buffer units,
+  need-data-callback insertion, no-interface. Grounded by the B0 spike. ROADMAP
+  fork 11 → PROPOSED.
 
 ## 2026-07-18
 

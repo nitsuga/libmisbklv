@@ -175,7 +175,11 @@ backend (ADR 0008).
   done**: `tsdemux ! meta/x-klv ! appsink` on Day Flight is **byte-identical** to
   the ffmpeg `.klv` the core already round-trips; appsink yields sub-packet
   fragments (backend reassembles → `parse_packet`); PES PTS unreliable (prefer KLV
-  Item 2). Next: decide **fork 11** (interface, ADR) → B1 (GstBackend + mock).
+  Item 2). **Fork 11 interface drafted — ADR
+  [`0013`](../context/decisions/0013-media-backend-interface.md) (PROPOSED)**:
+  abstract `MediaBackend`, blocking `extract(source, on_packet)` (borrowed
+  per-packet bytes + PTS), `open_insert → Inserter.push/finish` (appsrc
+  backpressure); `GstBackend` + `MockBackend`. Awaiting review → accept, then B1.
 
 ## Next
 
