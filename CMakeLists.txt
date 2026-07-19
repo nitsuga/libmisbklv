@@ -6,11 +6,20 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Header-only core for now (ADR 0005/0010/0011); .cpp split comes later.
-add_library(misbklv INTERFACE)
-target_include_directories(misbklv INTERFACE
+# Compiled core library (ADR 0005/0010/0011). Public headers in include/; the
+# generated constexpr registry tables live in src/registry/ (also a public
+# include dir so consumers can use gen::* / registry_by_key).
+add_library(misbklv STATIC
+  src/ber.cpp
+  src/codec.cpp
+  src/packet.cpp
+  src/builder.cpp
+  src/series.cpp
+  src/registries.cpp)
+target_include_directories(misbklv PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_compile_features(misbklv PUBLIC cxx_std_20)
 
 # Regenerate the committed registry tables from TOML source (ADR 0012).
 # Not part of the default build; CI runs it and checks for drift.

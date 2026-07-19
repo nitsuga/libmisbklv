@@ -64,6 +64,16 @@
   raw-passthrough (below/above decode lossily, so don't round-trip through the
   codec alone). `imapb_test` gained the jmisb `IMAPB(0,100,3)` special vectors —
   all pass. No regressions (12/12).
+* **Library split (plumbing)**: converted the header-only core into a compiled
+  static library `libmisbklv.a`. Moved function/method bodies from `ber`/`codec`/
+  `packet`/`builder`/`series`/`registries` headers into `src/*.cpp`; public
+  headers are now declaration-only. `types.hpp` (types + `Result<T>` template +
+  `Registry::find`) and the generated `constexpr` tables stay header (must, for
+  templates/compile-time). Internal codec helpers moved to an anonymous namespace
+  in `codec.cpp`; public codec API narrowed to what's used cross-TU
+  (`rd_uint`/`decode`/`encode`/`imapb_*`/`bcc16`/`is_imap_special`). Added
+  umbrella `misbklv.hpp`. CMake: `INTERFACE` → `STATIC` target. All 12 tests link
+  the lib and pass. Remaining plumbing: install/export + CI config.
 
 ## 2026-07-17
 

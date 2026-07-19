@@ -160,9 +160,12 @@ backend (ADR 0008).
 
 ## Next
 
-- **Plumbing / real library**: split the header-only core into a proper library
-  target (`.cpp` where it helps), export CMake config for consumers, and wire the
-  ADR 0012 drift check into an actual CI config (GitHub Actions).
+- **Plumbing**: ~~split the header-only core into a compiled library~~ **done**
+  (`libmisbklv.a` — `ber`/`codec`/`packet`/`builder`/`series`/`registries` in
+  `src/*.cpp`; declaration-only public headers; `types.hpp` + generated constexpr
+  tables stay header). Remaining: **CMake install/export** (config package so
+  consumers `find_package(misbklv)`) and **CI config** (build + test + ADR 0012
+  registry drift check).
 - **Media backend (ADR 0008)**: the gstreamer backend — `tsdemux` KLV extraction
   (by `KLVA` descriptor) and `appsrc`→`mpegtsmux`→`klvpmtrewrite` insertion. This
   is the big remaining Phase 3 chunk and needs the gstreamer dev libs (installed).
