@@ -13,7 +13,7 @@
 #include "misbklv/codec.hpp"
 #include "misbklv/packet.hpp"
 #include "misbklv/types.hpp"
-#include "registry/uas0601_tables.generated.hpp"
+#include "misbklv/registry/uas0601_tables.generated.hpp"
 
 using namespace misbklv;
 

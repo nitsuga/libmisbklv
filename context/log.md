@@ -74,6 +74,16 @@
   (`rd_uint`/`decode`/`encode`/`imapb_*`/`bcc16`/`is_imap_special`). Added
   umbrella `misbklv.hpp`. CMake: `INTERFACE` → `STATIC` target. All 12 tests link
   the lib and pass. Remaining plumbing: install/export + CI config.
+* **Install/export + CI (plumbing)**: made the library installable and consumable.
+  Moved the generated tables `src/registry/` → `include/misbklv/registry/` (clean
+  single-`include/` install tree; dropped `src` from public include dirs, updated
+  includes + the regenerate target, which also gains the previously-missing
+  vtarget0903). CMake `install(TARGETS EXPORT)` + `configure_package_config_file`
+  → `find_package(misbklv)` gives `misbklv::misbklv`; **verified end-to-end** by
+  installing to a prefix and building an out-of-tree consumer. (Bug caught + fixed:
+  `include(GNUInstallDirs)` must precede the `INSTALL_INTERFACE` include-dir GE, or
+  it's empty.) Added `.github/workflows/ci.yml`: build+test (LFS + ffmpeg), install
+  smoke test, and the ADR 0012 drift check job. ADR 0012 path refs updated.
 
 ## 2026-07-17
 

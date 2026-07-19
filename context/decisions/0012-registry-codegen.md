@@ -71,7 +71,7 @@ tool, unaffected by aarch64 cross-compile.
 
 ## Build integration: commit generated code + regen target + drift check
 
-The generated header(s) (`src/registry/registry_tables.generated.hpp`) are
+The generated header(s) (`include/misbklv/registry/*.generated.hpp`) are
 **checked in**, not build-time artifacts. Rationale:
 
 - **No Python build dependency for consumers** — the library builds from the
@@ -105,7 +105,7 @@ The generated header(s) (`src/registry/registry_tables.generated.hpp`) are
 # Consequences
 
 - New tree: `registry/*.toml` (source), `tools/gen_registry.py` (generator),
-  `src/registry/registry_tables.generated.hpp` (committed output).
+  `include/misbklv/registry/*.generated.hpp` (committed output).
 - CMake gains a `regenerate-registry` target (not in the default build); CI
   gains a drift-check step (`regenerate` → `git diff --exit-code`).
 - Adding an item = edit TOML + `regenerate-registry` + commit; adding a standard

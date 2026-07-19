@@ -1,14 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 cmake_minimum_required(VERSION 3.20)
-project(misbklv LANGUAGES CXX)
+project(misbklv VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Compiled core library (ADR 0005/0010/0011). Public headers in include/; the
-# generated constexpr registry tables live in src/registry/ (also a public
-# include dir so consumers can use gen::* / registry_by_key).
+include(GNUInstallDirs)  # defines CMAKE_INSTALL_INCLUDEDIR/LIBDIR (used below)
+
+# Compiled core library (ADR 0005/0010/0011). All public headers — including the
+# generated constexpr registry tables (include/misbklv/registry/) — under include/.
 add_library(misbklv STATIC
   src/ber.cpp
   src/codec.cpp
@@ -16,24 +17,30 @@ add_library(misbklv STATIC
   src/builder.cpp
   src/series.cpp
   src/registries.cpp)
+add_library(misbklv::misbklv ALIAS misbklv)
 target_include_directories(misbklv PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-  ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_compile_features(misbklv PUBLIC cxx_std_20)
 
 # Regenerate the committed registry tables from TOML source (ADR 0012).
 # Not part of the default build; CI runs it and checks for drift.
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+  set(_gen_dir ${CMAKE_CURRENT_SOURCE_DIR}/include/misbklv/registry)
   add_custom_target(regenerate-registry
     COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_registry.py
             ${CMAKE_CURRENT_SOURCE_DIR}/registry/uas0601.toml
-            ${CMAKE_CURRENT_SOURCE_DIR}/src/registry/uas0601_tables.generated.hpp
+            ${_gen_dir}/uas0601_tables.generated.hpp
     COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_registry.py
             ${CMAKE_CURRENT_SOURCE_DIR}/registry/vmti0903.toml
-            ${CMAKE_CURRENT_SOURCE_DIR}/src/registry/vmti0903_tables.generated.hpp
+            ${_gen_dir}/vmti0903_tables.generated.hpp
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_registry.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/registry/vtarget0903.toml
+            ${_gen_dir}/vtarget0903_tables.generated.hpp
     COMMENT "Regenerating registry tables from registry/*.toml")
 endif()
 
@@ -110,3 +117,28 @@ if(FFMPEG_EXECUTABLE)
 else()
   message(STATUS "ffmpeg not found -- skipping data/*.ts regression tests")
 endif()
+
+# --- Install / export: consumers do find_package(misbklv) -> misbklv::misbklv -
+include(CMakePackageConfigHelpers)
+
+install(TARGETS misbklv EXPORT misbklvTargets
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})  # headers incl. generated tables
+install(EXPORT misbklvTargets
+  FILE misbklvTargets.cmake
+  NAMESPACE misbklv::
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/misbklv)
+
+configure_package_config_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/cmake/misbklvConfig.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/misbklvConfig.cmake
+  INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/misbklv)
+write_basic_package_version_file(
+  ${CMAKE_CURRENT_BINARY_DIR}/misbklvConfigVersion.cmake
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY SameMajorVersion)
+install(FILES
+  ${CMAKE_CURRENT_BINARY_DIR}/misbklvConfig.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/misbklvConfigVersion.cmake
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/misbklv)

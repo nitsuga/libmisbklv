@@ -14,7 +14,9 @@ All design forks (1–10) resolved. **Milestones 1–6 done and passing** (12 CT
 cases green): unit + hand-authored round-trips, jmisb/ST 1201 Annex A IMAP
 cross-checks, jmisb 0601/0903 codec cross-checks, and **real-stream regression**
 over `data/*.ts` (KLV extracted at build time via ffmpeg; 4 streams / ~4678
-packets round-trip byte-exact). M1 = first-packet round-trip. M2 = full-stream round-trip of both
+packets round-trip byte-exact). The core is a **compiled, installable library**
+(`libmisbklv.a`, `find_package(misbklv)`) with **CI** (build/test/drift). M1 =
+first-packet round-trip. M2 = full-stream round-trip of both
 0601 samples. M3 = 0903 nesting (Item 74 VMTI, recursive `childRegistry`). M4 =
 real ST 1201 IMAPB codec (validated vs ST 1201 Table 7 + ST 0903 examples). M5 =
 standalone VMTI (own UL key + checksum + `registry_by_key()` dispatch) — **both
@@ -153,6 +155,13 @@ backend (ADR 0008).
   (2) `serialize_items()` dropped tag 1 assuming "checksum", but tag 1 is data in
   embedded LSs (VTarget targetCentroid) — removed the 0601-centric assumption
   (checksum handling stays in `finalize()`).
+- **Library + packaging + CI (plumbing)** — split the header-only core into a
+  compiled `libmisbklv.a` (`src/*.cpp`, declaration-only headers; generated
+  constexpr tables moved to `include/misbklv/registry/`). CMake install/export:
+  `find_package(misbklv)` → `misbklv::misbklv`, verified with an out-of-tree
+  consumer. GitHub Actions CI (`.github/workflows/ci.yml`): build + test
+  (LFS + ffmpeg for the `.ts` regression), install smoke test, and the ADR 0012
+  registry drift check.
 
 ## In progress
 
@@ -160,12 +169,6 @@ backend (ADR 0008).
 
 ## Next
 
-- **Plumbing**: ~~split the header-only core into a compiled library~~ **done**
-  (`libmisbklv.a` — `ber`/`codec`/`packet`/`builder`/`series`/`registries` in
-  `src/*.cpp`; declaration-only public headers; `types.hpp` + generated constexpr
-  tables stay header). Remaining: **CMake install/export** (config package so
-  consumers `find_package(misbklv)`) and **CI config** (build + test + ADR 0012
-  registry drift check).
 - **Media backend (ADR 0008)**: the gstreamer backend — `tsdemux` KLV extraction
   (by `KLVA` descriptor) and `appsrc`→`mpegtsmux`→`klvpmtrewrite` insertion. This
   is the big remaining Phase 3 chunk and needs the gstreamer dev libs (installed).

@@ -1,0 +1,7 @@
+@PACKAGE_INIT@
+
+# libmisbklv package config. Consumers: find_package(misbklv) then link
+# misbklv::misbklv. Header-consuming: the KLV core (0601/0903, ST 1201 IMAP).
+include("${CMAKE_CURRENT_LIST_DIR}/misbklvTargets.cmake")
+
+check_required_components(misbklv)

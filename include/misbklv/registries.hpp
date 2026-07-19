@@ -8,9 +8,9 @@
 #include <span>
 
 #include "misbklv/types.hpp"
-#include "registry/uas0601_tables.generated.hpp"
-#include "registry/vmti0903_tables.generated.hpp"
-#include "registry/vtarget0903_tables.generated.hpp"
+#include "misbklv/registry/uas0601_tables.generated.hpp"
+#include "misbklv/registry/vmti0903_tables.generated.hpp"
+#include "misbklv/registry/vtarget0903_tables.generated.hpp"
 
 namespace misbklv {
 

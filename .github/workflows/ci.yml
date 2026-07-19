@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: Apache-2.0
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true  # materialize data/*.ts for the regression tests
+      - name: Install deps
+        run: sudo apt-get update && sudo apt-get install -y cmake g++ ffmpeg
+      - name: Configure
+        run: cmake -S . -B build
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Install smoke test
+        run: cmake --install build --prefix "$PWD/_install"
+
+  registry-drift:
+    # ADR 0012: the committed constexpr tables must match a fresh regeneration.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Regenerate registry tables
+        run: |
+          for r in uas0601 vmti0903 vtarget0903; do
+            python3 tools/gen_registry.py \
+              "registry/$r.toml" "include/misbklv/registry/${r}_tables.generated.hpp"
+          done
+      - name: Fail on drift
+        run: git diff --exit-code -- include/misbklv/registry
