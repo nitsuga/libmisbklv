@@ -186,6 +186,13 @@
   for open work** — ROADMAP owns the candidate-*fork* backlog, PROGRESS "Next" is
   immediate *work* + a pointer (collapsed the live ROADMAP/PROGRESS overlap).
   Added forward-looking staleness to the CONVENTIONS lint checklist (the backstop).
+* **Finding + candidate (live 0x15)**: confirmed 0x15 metadata is **offline-only**
+  — the live gst path (`…src ! tsdemux ! appsink`) drops 0x15 silently, and the
+  0x15 handler `extract_ts_klv` is a whole-buffer batch parser, not streaming.
+  0x06 works live + offline. Opened a ROADMAP candidate: a streaming incremental
+  TS demux fed from a raw `udpsrc`/`srtsrc ! appsink` (bypassing `tsdemux`),
+  unifying 0x06 + 0x15 on one gst-free live path; extends
+  [`0016`](./decisions/0016-ts-0x15-extraction.md).
 
 ## 2026-07-18
 

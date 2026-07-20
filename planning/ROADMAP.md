@@ -53,6 +53,14 @@ registry/data breadth:
 - 0903 Array type (§9.1.2) — a descriptor-schema extension.
 - RTP payloading for the live path — deferred by
   [ADR 0019](../context/decisions/0019-extract-cancellation.md).
+- **Live 0x15 metadata extraction** — real-time reading of `stream_type 0x15`
+  streams. Today 0x15 is offline-only (the whole-buffer `extract_ts_klv`); the
+  live gst path uses `tsdemux`, which silently drops 0x15. Needs a *streaming*
+  incremental TS demux (stateful `feed()` handling partial-packet spans across
+  live buffers) fed from a raw `udpsrc`/`srtsrc ! appsink` that **bypasses
+  `tsdemux`** — which would also unify 0x06 + 0x15 onto one gst-free live path.
+  The fork is that path vs. a `tsdemux` workaround (none found — see
+  [ADR 0016](../context/decisions/0016-ts-0x15-extraction.md)); extends 0016.
 
 Incremental *work* that needs no fork (registry breadth, an SRT test) lives in
 [PROGRESS](./PROGRESS.md) "Next", not here.
