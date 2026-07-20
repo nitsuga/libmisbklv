@@ -20,7 +20,7 @@ static void check(bool ok, const char* what) {
 
 int main(int argc, char** argv) {
   if (argc < 3) { std::fprintf(stderr, "usage: api_test <in.ts> <out.ts>\n"); return 2; }
-  constexpr std::uint16_t kSensorLatitude = 13;
+  constexpr auto kSensorLatitude = tags::Uas0601::SensorLatitude;  // named ST 0601 tag
 
   // --- read + edit + emit ---------------------------------------------------
   std::vector<double> orig;

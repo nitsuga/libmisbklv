@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Minimal libmisbklv example: read KLV from an MPEG-TS, nudge each frame's
-// Sensor Latitude (ST 0601 tag 13), and write a new MPEG-TS. Shows the whole
-// high-level facade (ADR 0018): KlvStream -> typed get/set on Message -> KlvSink.
+// Sensor Latitude, and write a new MPEG-TS. Shows the whole high-level facade
+// (ADR 0018): KlvStream -> typed get/set on Message -> KlvSink.
 //
 //   klv_edit <in.ts> <out.ts>
 #include <cstdio>
@@ -9,20 +9,22 @@
 
 #include "misbklv/stream.hpp"
 
+using namespace misbklv;
+
 int main(int argc, char** argv) {
   if (argc < 3) {
     std::fprintf(stderr, "usage: %s <in.ts> <out.ts>\n", argv[0]);
     return 2;
   }
-  constexpr std::uint16_t kSensorLatitude = 13;
+  constexpr auto kSensorLatitude = tags::Uas0601::SensorLatitude;  // named ST 0601 tag
 
-  misbklv::KlvStream in(argv[1]);
-  misbklv::KlvSink out(std::string("file:") + argv[2]);
+  KlvStream in(argv[1]);
+  KlvSink out(std::string("file:") + argv[2]);
 
   std::size_t n = 0;
-  for (misbklv::Message& msg : in) {
+  for (Message& msg : in) {
     if (auto lat = msg.get<double>(kSensorLatitude))
-      msg.set(kSensorLatitude, misbklv::Value{*lat + 0.001});  // ~100 m north
+      msg.set(kSensorLatitude, Value{*lat + 0.001});  // ~100 m north
     if (!out.emit(msg)) { std::fprintf(stderr, "emit failed\n"); return 1; }
     ++n;
   }
