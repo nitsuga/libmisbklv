@@ -52,9 +52,8 @@ done and extending incrementally** — the state today:
   needs them.
 - **An SRT-specific hermetic streaming test** — the udp live path is covered,
   SRT isn't.
-- Candidate *forks* that need a decision first (ST 0102 typed registry, 0903
-  Array type, RTP payloading) live in [ROADMAP](./ROADMAP.md) — not duplicated
-  here.
+- Candidate *forks* that need a decision first live in [ROADMAP](./ROADMAP.md)'s
+  backlog — not enumerated here.
 
 ## Known gaps
 
