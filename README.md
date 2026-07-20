@@ -32,8 +32,8 @@ using namespace misbklv;
 KlvStream in("input.ts");            // a file, or "udp:127.0.0.1:5004" / "srt:..."
 KlvSink   out("file:output.ts");
 for (Message& m : in) {
-  if (auto lat = m.get<double>(13))  // ST 0601 tag 13 = Sensor Latitude
-    m.set(13, Value{*lat + 0.001});  // nudge ~100 m north
+  if (auto lat = m.get<double>(tags::Uas0601::SensorLatitude))
+    m.set(tags::Uas0601::SensorLatitude, Value{*lat + 0.001});   // nudge ~100 m north
   out.emit(m);
 }
 out.close();

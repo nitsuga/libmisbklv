@@ -35,13 +35,14 @@ idle for a live source). `emit` re-encodes and muxes; `close` drains. See
 
 ```cpp
 #include "misbklv/message.hpp"
+using namespace misbklv;
 
 auto msg = Message::parse(klv_bytes);       // Result<Message>
 if (!msg) return;
-double lat = msg->get<double>(13).value_or(0.0);
-auto uas_ts = msg->get<std::uint64_t>(2);   // Precision Time Stamp
-msg->set(13, Value{lat + 1.0});
-auto bytes = msg->encode();                  // Result<Bytes>; byte-exact if unedited
+double lat  = msg->get<double>(tags::Uas0601::SensorLatitude).value_or(0.0);
+auto uas_ts = msg->get<std::uint64_t>(tags::Uas0601::PrecisionTimeStamp);
+msg->set(tags::Uas0601::SensorLatitude, Value{lat + 1.0});
+auto bytes  = msg->encode();                 // Result<Bytes>; byte-exact if unedited
 ```
 
 - **`get<T>(tag)`** returns `std::optional<T>`. `T` must match the item's kind:
