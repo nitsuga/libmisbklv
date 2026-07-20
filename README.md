@@ -56,15 +56,47 @@ target_link_libraries(app PRIVATE misbklv::gst)
 ## Build from source
 
 ```sh
+git lfs pull            # materialize the sample .ts/.mpg test vectors (for ctest)
 cmake -S . -B build
 cmake --build build
 ctest --test-dir build
 ```
 
-Requirements: a **C++20** compiler (GCC ≥ 11) and **CMake ≥ 3.20**. **GStreamer
-≥ 1.20** is optional — needed only for the streaming facade (`misbklv::gst`). A
-few large test vectors live in [git-lfs](https://git-lfs.com/); run
-`git lfs pull` to materialize them for the extraction tests.
+### Requirements
+
+- **CMake ≥ 3.20** and a **C++20** compiler (GCC ≥ 11). The core library
+  (`misbklv::misbklv`) has no other dependencies.
+- **git-lfs** — a few large sample streams are stored via
+  [LFS](https://git-lfs.com/); needed for the extraction tests (not for building
+  the library).
+- **GStreamer ≥ 1.20** — *optional*, only for the streaming facade
+  (`misbklv::gst`). To **build** it you need the dev files for `gstreamer-1.0`
+  and `gstreamer-app-1.0`; to **run** it (and the gstreamer tests) you also need
+  the runtime plugins that provide the pipeline elements — MPEG-TS mux/demux and
+  SRT are in *plugins-bad*, UDP in *plugins-good*, app/core in *plugins-base*.
+  Without GStreamer the core still builds and its tests run; the facade and its
+  tests are skipped.
+
+### Ubuntu / Debian
+
+```sh
+# core build + tests
+sudo apt-get install -y cmake g++ git-lfs
+
+# ...plus the streaming facade (misbklv::gst): dev files + runtime plugins
+sudo apt-get install -y \
+  libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+  gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad
+```
+
+### Other Linux
+
+Names vary by distro; you need a C++20 toolchain, CMake, git-lfs, and — for the
+facade — the GStreamer 1.x dev files (`gstreamer-1.0`, `gstreamer-app-1.0`) plus
+the base/good/bad runtime plugins. For example:
+
+- **Fedora:** `gcc-c++ cmake git-lfs gstreamer1-devel gstreamer1-plugins-base-devel gstreamer1-plugins-base gstreamer1-plugins-good gstreamer1-plugins-bad-free`
+- **Arch:** `gcc cmake git-lfs gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad`
 
 ## Status
 
