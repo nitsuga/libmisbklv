@@ -46,11 +46,14 @@ done and extending incrementally** — the state today:
 
 ## Next
 
-- **Registry breadth** (incremental): more 0601 extended items (IMAPB, tags 90+),
-  the remaining VTarget items, and 0903 Array types (§9.1.2) as data needs them.
-- **Backend follow-ons**: an SRT-specific hermetic test; an RTP payloading option
-  (deferred by [ADR 0019](../context/decisions/0019-extract-cancellation.md)). The
-  cooperative stop-token that was pending here is now done (ADR 0019).
+- **Registry breadth** (incremental authoring, no new decision): more 0601
+  extended items (IMAPB, tags 90+) and the remaining VTarget items, as data
+  needs them.
+- **An SRT-specific hermetic streaming test** — the udp live path is covered,
+  SRT isn't.
+- Candidate *forks* that need a decision first (ST 0102 typed registry, 0903
+  Array type, RTP payloading) live in [ROADMAP](./ROADMAP.md) — not duplicated
+  here.
 
 ## Known gaps
 

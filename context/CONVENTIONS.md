@@ -136,9 +136,11 @@ synthesize with citations back to `../references/` or external URLs. File
 valuable query results back as new concepts so explorations compound.
 
 **Lint.** Periodically check for: contradictions between docs, stale claims
-superseded by newer sources, orphan concepts with no inbound links, concepts
-mentioned but not written, broken-link targets worth creating, and type drift
-(synonyms / casing). Tidy the `type` list when synonyms appear.
+superseded by newer sources, **forward-looking claims a later change resolved**
+(an "open decision" / "candidate" / "Next" item that's since been decided or
+done — the future-tense analog of a stale claim), orphan concepts with no inbound
+links, concepts mentioned but not written, broken-link targets worth creating,
+and type drift (synonyms / casing). Tidy the `type` list when synonyms appear.
 
 # Source discipline
 

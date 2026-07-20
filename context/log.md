@@ -175,6 +175,17 @@
   candidates (multi-byte BER-OID tags — done in the hardening pass; the live-extract
   stop-token — ADR 0019). PROGRESS "Next": stop-token removed. All ADRs are
   accepted/deferred (none stuck at proposed).
+* **Process amendment (why that drifted)**: root cause — *forward-looking*
+  content (open-decision / candidate / "Next" lists, a fork-count range) sits off
+  the decision update-path, and was duplicated across ROADMAP + PROGRESS + ADR
+  deferrals — the future-tense analog of the history duplication the earlier
+  consolidation removed. Codified the fix in `CLAUDE.md` Planning hygiene:
+  (1) extended "no live tallies" to **fork ranges** ("none open, see the register",
+  not "1–N"); (2) added **"closing scrubs the future"** — resolving an item deletes
+  its forward-looking mentions, not just the present-state bullet; (3) **one home
+  for open work** — ROADMAP owns the candidate-*fork* backlog, PROGRESS "Next" is
+  immediate *work* + a pointer (collapsed the live ROADMAP/PROGRESS overlap).
+  Added forward-looking staleness to the CONVENTIONS lint checklist (the backstop).
 
 ## 2026-07-18
 

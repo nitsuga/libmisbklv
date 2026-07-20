@@ -29,11 +29,12 @@ Each doc has one job — keep them from re-narrating each other:
   register**: fork # ↔ ADR ↔ status. The single source of truth for what's
   decided.
 - [`planning/PROGRESS.md`](planning/PROGRESS.md) — **present state only**
-  (Now / In-progress / Next). Volatile; rewrite each session. Do **not** grow a
-  "Done" history here — that's `log.md`.
-- [`planning/ROADMAP.md`](planning/ROADMAP.md) — scope, phases, and **open**
-  (undeliberated) forks. It defers the decided register to
-  `decisions/index.md`.
+  (Now / In-progress / Next). Volatile; rewrite each session. No "Done" history
+  (that's `log.md`); "Next" is the 1–3 *immediate* actions and **points to ROADMAP
+  for the candidate backlog** — it doesn't re-list it.
+- [`planning/ROADMAP.md`](planning/ROADMAP.md) — scope, phases, and the **single
+  backlog** of open + candidate forks. Defers the decided register (and the fork
+  count) to `decisions/index.md`; never enumerates a fork range.
 
 So:
 
@@ -48,11 +49,18 @@ So:
 - **On implementing a significant change**: append a `log.md` entry (the detail)
   and refresh [`planning/PROGRESS.md`](planning/PROGRESS.md)'s present state
   (Now / In-progress / Next) — a thin pointer, not a history.
+- **Closing scrubs the future**: when you resolve a fork or complete a
+  candidate / deferred / "Next" item, *delete its forward-looking mentions*
+  (ROADMAP candidates, PROGRESS "Next") — not just the present-state bullet you're
+  editing. Open work has one home; a resolved item leaves it. (Forward-looking
+  claims drift the same way history does — this is the future-tense half of
+  "one job per doc".)
 - **No live tallies in durable prose**: never bake a running count (test cases,
-  item totals, "N of M done") into present-tense docs (PROGRESS, ROADMAP) or ADR
-  bodies — it drifts. Say "all CTest cases green", not "19". A specific number
-  belongs only in a dated `log.md` snapshot (history, frozen at write time). Same
-  for any state that moves — describe the state, don't tally it.
+  item totals, "N of M done", **fork ranges like "1–N"**) into present-tense docs
+  (PROGRESS, ROADMAP) or ADR bodies — it drifts. Say "all CTest cases green", not
+  "19"; "none open, see the register", not "forks 1–17". A specific number belongs
+  only in a dated `log.md` snapshot (history, frozen at write time). Same for any
+  state that moves — describe the state, don't tally it.
 
 ## Commit messages
 

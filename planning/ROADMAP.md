@@ -43,16 +43,19 @@ beyond MSID passthrough.
 Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 `status: proposed`) · `DECIDED` / `DEFERRED` (has an ADR — see the register).
 
-**None open.** Forks 1–17 are all resolved; the decided register is
-[`../context/decisions/index.md`](../context/decisions/index.md). Candidate
-future forks (not yet opened), mostly downstream of registry/data breadth:
+**None open** — every fork so far is resolved; the count and status live in the
+decided register ([`../context/decisions/index.md`](../context/decisions/index.md)),
+not here. Candidate future forks (not yet opened), mostly downstream of
+registry/data breadth:
 
 - ST 0102 Security LS as a typed nested registry (seen as tag 48 in `falls`;
   currently opaque passthrough).
-- 0903 Array type (§9.1.2) and remaining VTarget items, as data needs them.
+- 0903 Array type (§9.1.2) — a descriptor-schema extension.
 - RTP payloading for the live path — deferred by
-  [ADR 0019](../context/decisions/0019-extract-cancellation.md) (the cooperative
-  stop-token it also listed is now done, ADR 0019).
+  [ADR 0019](../context/decisions/0019-extract-cancellation.md).
+
+Incremental *work* that needs no fork (registry breadth, an SRT test) lives in
+[PROGRESS](./PROGRESS.md) "Next", not here.
 
 ## Fork lifecycle
 
