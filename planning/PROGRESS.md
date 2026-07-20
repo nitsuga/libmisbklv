@@ -25,8 +25,8 @@ done and extending incrementally** — the state today:
   the length arithmetic, length validation in `codec::decode`) — all covered by
   `hardening_test`, and the core is clean under ASan+UBSan (`MISBKLV_SANITIZE`).
 - **High-level API** done ([ADR 0018](../context/decisions/0018-high-level-api.md)):
-  `Message` (owned, editable packet — typed `get<T>`/`set`, byte-exact `encode`,
-  auto registry by UL key) in the core; `KlvStream`/`KlvSink` (range-for read,
+  `Message` (owned packet — **parse an existing one or `create` from scratch**,
+  typed `get<T>`/`set`, byte-exact `encode`, auto registry by UL key) in the core; `KlvStream`/`KlvSink` (range-for read,
   edit, emit — file + live) in `misbklv-gst`. End-to-end `api_test`, a `klv_edit`
   example, and a user guide ([`docs/api.md`](../docs/api.md)). **Early break from
   a live stream is safe** — `extract` takes a `std::stop_token` and `KlvStream`'s

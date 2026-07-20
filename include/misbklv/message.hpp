@@ -26,6 +26,12 @@ class Message {
   // Copy + parse one KLV packet; the registry is chosen from the UL key.
   static Result<Message> parse(std::span<const std::byte> bytes);
 
+  // Author a fresh, empty packet for `registry` — ST 0601 (`RegistryId::Uas0601`)
+  // or standalone ST 0903 VMTI (`RegistryId::Vmti0903`). Populate with `set()`,
+  // then `encode()` / emit. Errors for a type with no standalone UL key (e.g.
+  // `Vtarget0903`, a pack — build those with `series.hpp` / `LocalSetBuilder`).
+  static Result<Message> create(RegistryId registry);
+
   const Registry& registry() const { return *reg_; }
   const std::vector<Item>& items() const { return pkt_.items; }  // wire order
   bool has(std::uint16_t tag) const;

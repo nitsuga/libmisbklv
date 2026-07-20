@@ -193,6 +193,15 @@
   TS demux fed from a raw `udpsrc`/`srtsrc ! appsink` (bypassing `tsdemux`),
   unifying 0x06 + 0x15 on one gst-free live path; extends
   [`0016`](./decisions/0016-ts-0x15-extraction.md).
+* **`Message::create` (from-scratch authoring)**: the high-level facade was
+  parse-only; authoring meant dropping to `LocalSetBuilder` + the low-level
+  `Inserter`. Added `Message::create(RegistryId)` → an empty packet for a
+  standalone type (0601 / VMTI; errors for a pack like Vtarget), populated with
+  the same `set()`, emitted via `encode()` / `KlvSink::emit` — completes ADR
+  0018's write side symmetrically with read. `message_test`: create → set →
+  encode → re-parse round-trips typed values, and byte-exact re-encode confirms
+  the checksum. Documented in [`docs/api.md`](../docs/api.md) (nested sets /
+  series / mandatory enforcement still point to `LocalSetBuilder`).
 
 ## 2026-07-18
 

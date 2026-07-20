@@ -17,6 +17,15 @@ Result<Message> Message::parse(std::span<const std::byte> bytes) {
   return Result<Message>::ok(std::move(m));
 }
 
+Result<Message> Message::create(RegistryId id) {
+  const Registry* reg = registry_for(id);
+  if (!reg || reg->ul_key.empty())  // not a standalone packet type
+    return Result<Message>::err(Error::Unsupported);
+  Message m;  // empty: no source bytes/items; set() populates edits_, encode() emits
+  m.reg_ = reg;
+  return Result<Message>::ok(std::move(m));
+}
+
 const ber::Bytes* Message::find_edit(std::uint16_t tag) const {
   for (const auto& e : edits_)
     if (e.first == tag) return &e.second;

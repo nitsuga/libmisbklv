@@ -65,6 +65,29 @@ int main(int argc, char** argv) {
   check(msg->get<double>(13) && std::fabs(*msg->get<double>(13) - newlat) < 0.01,
         "get() reflects staged edit");
 
+  // --- author a 0601 packet from scratch ------------------------------------
+  auto fresh = Message::create(RegistryId::Uas0601);
+  check(static_cast<bool>(fresh), "create(Uas0601)");
+  check(!Message::create(RegistryId::Vtarget0903), "create rejects a non-standalone type");
+  if (fresh) {
+    check(static_cast<bool>(fresh->set(2, Value{std::uint64_t{0x0004603E4F03D2CBull}})),
+          "set Precision Time Stamp");
+    check(static_cast<bool>(fresh->set(13, Value{54.0})), "set SensorLatitude");
+    check(static_cast<bool>(fresh->set(14, Value{-110.0})), "set SensorLongitude");
+    auto authored = fresh->encode();
+    check(static_cast<bool>(authored), "encode authored packet");
+    auto rp = authored ? Message::parse(*authored) : Result<Message>::err(Error::Backend);
+    check(static_cast<bool>(rp), "authored packet parses");
+    if (rp) {
+      auto ts = rp->get<std::uint64_t>(2);
+      auto la = rp->get<double>(13);
+      check(ts && *ts == 0x0004603E4F03D2CBull, "authored timestamp round-trips");
+      check(la && std::fabs(*la - 54.0) < 0.01, "authored latitude round-trips");
+      auto re = rp->encode();  // re-encode == authored proves the checksum is valid
+      check(re && *re == *authored, "authored packet re-encodes byte-exact (checksum OK)");
+    }
+  }
+
   std::printf("%s\n", failures == 0 ? "MESSAGE: all PASS" : "MESSAGE: FAIL");
   return failures == 0 ? 0 : 1;
 }
