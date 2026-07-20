@@ -19,3 +19,16 @@ inline constexpr ItemDescriptor vtarget_0903_items[] = {
 inline constexpr Registry vtarget_0903{ "VTARGET_0903", vtarget_0903_items, {} };
 
 }  // namespace misbklv::gen
+
+namespace misbklv::tags {
+
+// Named ST tags for the VTARGET_0903 registry (ADR 0018 follow-on).
+enum class Vtarget0903 : std::uint16_t {
+    TargetCentroid = 1,
+    TargetPriority = 4,
+    TargetColor = 8,
+    TargetLocationOffsetLat = 10,
+    TargetLocationOffsetLon = 11,
+};
+
+}  // namespace misbklv::tags

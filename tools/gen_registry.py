@@ -8,6 +8,7 @@ Validates the source and emits a self-contained header. Generated output is
 committed; regenerate via this script or the `regenerate-registry` CMake target.
 Requires Python >= 3.11 (stdlib tomllib).
 """
+import re
 import sys
 
 try:
@@ -30,6 +31,23 @@ CHILD = {"uas_0601": "Uas0601", "vmti_0903": "Vmti0903", "vtarget_0903": "Vtarge
 
 def die(msg):
     sys.exit(f"gen_registry: {msg}")
+
+
+def _tokens(s):
+    return [t for t in re.split(r"[^0-9A-Za-z]+", s) if t]
+
+
+def enum_type_name(registry_ident):    # "uas_0601" -> "Uas0601"
+    return "".join(t.capitalize() for t in _tokens(registry_ident))
+
+
+def enum_member_name(item_name):       # "Precision Time Stamp" -> "PrecisionTimeStamp"
+    ident = "".join(t[:1].upper() + t[1:] for t in _tokens(item_name))  # keep acronyms
+    if not ident:
+        ident = "Item"
+    if ident[0].isdigit():
+        ident = "Tag" + ident
+    return ident
 
 
 def _strip_comment(line):
@@ -177,6 +195,27 @@ def emit(reg, out_path):
     lines.append("")
     lines.append("}  // namespace misbklv::gen")
     lines.append("")
+
+    # Named tags: enum class <Registry> so callers can write
+    # Message::get/set(tags::Uas0601::SensorLatitude) instead of a magic number.
+    tname = enum_type_name(ident)
+    lines.append("namespace misbklv::tags {")
+    lines.append("")
+    lines.append(f"// Named ST tags for the {reg['registry']} registry (ADR 0018 follow-on).")
+    lines.append(f"enum class {tname} : std::uint16_t {{")
+    seen = {}
+    for it in items:
+        mname = enum_member_name(it["name"])
+        if mname in seen:
+            die(f"registry {reg['registry']}: item names {seen[mname]!r} and "
+                f"{it['name']!r} both map to enum member '{mname}'")
+        seen[mname] = it["name"]
+        lines.append(f'    {mname} = {it["tag"]},')
+    lines.append("};")
+    lines.append("")
+    lines.append("}  // namespace misbklv::tags")
+    lines.append("")
+
     with open(out_path, "w") as f:
         f.write("\n".join(lines))
 

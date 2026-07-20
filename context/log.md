@@ -202,6 +202,15 @@
   encode → re-parse round-trips typed values, and byte-exact re-encode confirms
   the checksum. Documented in [`docs/api.md`](../docs/api.md) (nested sets /
   series / mandatory enforcement still point to `LocalSetBuilder`).
+* **Named tags (ADR 0018 follow-on)**: `get`/`set` took raw tag numbers only.
+  `gen_registry.py` now also emits a per-registry `enum class` from the item
+  names (`namespace misbklv::tags`: `Uas0601::SensorLatitude = 13`, acronyms
+  preserved, member-name collisions are a generator error). Added `get`/`set`
+  overloads accepting any enum whose underlying type is `uint16_t`, forwarding to
+  the number path — so `msg.get<double>(tags::Uas0601::SensorLatitude)` and the
+  number are interchangeable; numbers still work for unregistered tags.
+  Regenerated the committed tables (deterministic + fallback-reader parity, so the
+  ADR 0012 drift check passes); `message_test` uses names; `docs/api.md` updated.
 
 ## 2026-07-18
 

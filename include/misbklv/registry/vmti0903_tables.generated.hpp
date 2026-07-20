@@ -23,3 +23,19 @@ inline constexpr std::uint8_t vmti_0903_key[] = {0x06, 0x0E, 0x2B, 0x34, 0x02, 0
 inline constexpr Registry vmti_0903{ "VMTI_0903", vmti_0903_items, vmti_0903_key };
 
 }  // namespace misbklv::gen
+
+namespace misbklv::tags {
+
+// Named ST tags for the VMTI_0903 registry (ADR 0018 follow-on).
+enum class Vmti0903 : std::uint16_t {
+    Checksum = 1,
+    PrecisionTimeStamp = 2,
+    VMTILSVersionNumber = 4,
+    TotalNumberOfTargetsDetected = 5,
+    NumberOfReportedTargets = 6,
+    VMTIHorizontalFieldOfView = 11,
+    VMTIVerticalFieldOfView = 12,
+    VTargetSeries = 101,
+};
+
+}  // namespace misbklv::tags

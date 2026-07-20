@@ -49,3 +49,38 @@ inline constexpr std::uint8_t uas_0601_key[] = {0x06, 0x0E, 0x2B, 0x34, 0x02, 0x
 inline constexpr Registry uas_0601{ "UAS_0601", uas_0601_items, uas_0601_key };
 
 }  // namespace misbklv::gen
+
+namespace misbklv::tags {
+
+// Named ST tags for the UAS_0601 registry (ADR 0018 follow-on).
+enum class Uas0601 : std::uint16_t {
+    Checksum = 1,
+    PrecisionTimeStamp = 2,
+    PlatformHeadingAngle = 5,
+    PlatformPitchAngle = 6,
+    PlatformRollAngle = 7,
+    ImageSourceSensor = 11,
+    ImageCoordinateSystem = 12,
+    SensorLatitude = 13,
+    SensorLongitude = 14,
+    SensorTrueAltitude = 15,
+    SensorHorizontalFieldOfView = 16,
+    SensorVerticalFieldOfView = 17,
+    SensorRelativeAzimuthAngle = 18,
+    SensorRelativeElevationAngle = 19,
+    SensorRelativeRollAngle = 20,
+    SlantRange = 21,
+    TargetWidth = 22,
+    FrameCenterLatitude = 23,
+    FrameCenterLongitude = 24,
+    FrameCenterElevation = 25,
+    TargetLocationLatitude = 40,
+    TargetLocationLongitude = 41,
+    TargetLocationElevation = 42,
+    PlatformGroundSpeed = 56,
+    GroundRange = 57,
+    UASDatalinkLSVersionNumber = 65,
+    VMTILocalSet = 74,
+};
+
+}  // namespace misbklv::tags

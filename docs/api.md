@@ -17,8 +17,8 @@ KlvStream in("input.ts");                 // file, or "udp:127.0.0.1:5004", "srt
 KlvSink   out("file:output.ts");          // realtime pacing: KlvSink(sink, true)
 
 for (Message& m : in) {
-  if (auto lat = m.get<double>(13))       // ST 0601 tag 13 = Sensor Latitude
-    m.set(13, Value{*lat + 0.001});       // nudge ~100 m north
+  if (auto lat = m.get<double>(tags::Uas0601::SensorLatitude))
+    m.set(tags::Uas0601::SensorLatitude, Value{*lat + 0.001});   // nudge ~100 m north
   out.emit(m);
 }
 out.close();
@@ -53,6 +53,10 @@ auto bytes = msg->encode();                  // Result<Bytes>; byte-exact if une
 - **`encode()`** rebuilds the packet: untouched items pass through byte-exact,
   edited ones via the codec, the checksum is recomputed. No edits → identical
   bytes.
+- **Named tags** — `tag` may be a plain number or a generated per-registry enum:
+  `tags::Uas0601::SensorLatitude`, `tags::Vmti0903::…`, `tags::Vtarget0903::…`
+  (generated from the registry, so the value equals the ST tag number). Names and
+  numbers are interchangeable; use a number for any tag not in the registry.
 
 The registry (ST 0601 vs standalone ST 0903 VMTI) is chosen automatically from
 the packet's 16-byte UL key.
@@ -64,12 +68,13 @@ same typed `set()`, then `encode()` (or hand it to a `KlvSink`):
 
 ```cpp
 #include "misbklv/message.hpp"
+using namespace misbklv;
 
 auto msg = Message::create(RegistryId::Uas0601);   // ST 0601; or Vmti0903 (standalone VMTI)
 if (!msg) return;
-msg->set(2,  Value{std::uint64_t{precision_time_stamp}});  // Item 2 — set it first
-msg->set(13, Value{54.68});      // Sensor Latitude  (double, mapped)
-msg->set(14, Value{-110.17});    // Sensor Longitude
+msg->set(tags::Uas0601::PrecisionTimeStamp, Value{std::uint64_t{ts}});  // set it first
+msg->set(tags::Uas0601::SensorLatitude,  Value{54.68});    // double, mapped
+msg->set(tags::Uas0601::SensorLongitude, Value{-110.17});
 auto bytes = msg->encode();      // Result<Bytes>: UL key + items + checksum (auto)
 
 // ...emit it live exactly like an edited one:

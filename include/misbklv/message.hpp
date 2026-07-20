@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -50,9 +51,26 @@ class Message {
     return std::nullopt;
   }
 
+  // Named-tag overload: get<double>(tags::Uas0601::SensorLatitude) etc. Accepts
+  // the generated per-registry tag enums (ADR 0018 follow-on); numbers still work.
+  template <class T, class E,
+            std::enable_if_t<std::is_enum_v<E> &&
+                std::is_same_v<std::underlying_type_t<E>, std::uint16_t>, int> = 0>
+  std::optional<T> get(E tag) const {
+    return get<T>(static_cast<std::uint16_t>(tag));
+  }
+
   // Stage a typed edit (encoded at the item's source width, or the descriptor
   // width for a new tag). Applied by encode().
   Result<std::monostate> set(std::uint16_t tag, Value v);
+
+  // Named-tag overload: set(tags::Uas0601::SensorLatitude, Value{...}).
+  template <class E,
+            std::enable_if_t<std::is_enum_v<E> &&
+                std::is_same_v<std::underlying_type_t<E>, std::uint16_t>, int> = 0>
+  Result<std::monostate> set(E tag, Value v) {
+    return set(static_cast<std::uint16_t>(tag), std::move(v));
+  }
 
   // Rebuild the packet: untouched items pass through byte-exact, edited/added via
   // the codec, checksum re-emitted. No edits => identical to the source bytes.
