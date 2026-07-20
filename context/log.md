@@ -162,6 +162,19 @@
   `extract_ts_klv` against them (verified byte-exact vs the committed refs).
   **ffmpeg removed from the tests and both CI jobs** — the regression is now
   hermetic (LFS `.ts`/`.mpg` still needed only for `ts_extract`).
+* **Repo basics + README**: set the GitHub description + topics; freshened
+  `README.md` (CI badge, features, read/edit/write quick-start, `find_package`
+  core-vs-`COMPONENTS gst`, and a build-deps section — GStreamer split into
+  build-time dev files vs runtime plugins, per-distro). Branch protection skipped
+  (unavailable on private + free plan; repo stays private).
+* **Lint (docs current)**: reconciled the living docs with the resolved state.
+  `backend-scope.md`'s "Open decisions" (forks F-A–F-D, all resolved by ADRs
+  0013/0016/0015/0014) → "Design forks — resolved"; retired its `klvpmtrewrite` /
+  `gstreamer-mpegts` / "First step" leftovers (superseded by ADR 0015) and added
+  a status banner + Outcome. ROADMAP: "forks 1–15" → "1–17"; dropped the resolved
+  candidates (multi-byte BER-OID tags — done in the hardening pass; the live-extract
+  stop-token — ADR 0019). PROGRESS "Next": stop-token removed. All ADRs are
+  accepted/deferred (none stuck at proposed).
 
 ## 2026-07-18
 

@@ -8,11 +8,17 @@ timestamp: 2026-07-19T06:00:00Z
 
 # gstreamer backend — scope
 
+> **Status: implemented.** B0–B4 complete and all scoping forks (F-A–F-D)
+> resolved — see the [decided register](./decisions/index.md). This is no longer
+> a forward plan; it's retained for the environment findings and the design
+> rationale that shaped the backend (`misbklv-gst`).
+
 Scoping for the media backend (ADR [`0008`](./decisions/0008-media-backend-gstreamer.md)):
 the layer between the KLV core (parse/build) and MPEG-TS I/O. Library-style
 gstreamer (link libs, drive pipelines; not shipped plugins). This doc grounds
-that shape in the real environment and lays out components, open decisions, and
-a phased plan. Empirical probes done 2026-07-19.
+that shape in the real environment and records the component breakdown, the
+design forks (now resolved), and the phased plan. Empirical probes done
+2026-07-19.
 
 ## Environment (verified)
 
@@ -20,8 +26,10 @@ a phased plan. Empirical probes done 2026-07-19.
   elements present (`tsdemux`, `tsparse`, `mpegtsmux`, `appsrc/appsink`,
   `filesrc/sink`, `udpsink`, `srtsink`, `souphttpsrc`).
 - **`gstreamer-mpegts-1.0` 1.20.3 installed** (`libgstreamer-plugins-bad1.0-dev`)
-  — the library for PMT / descriptor manipulation (`GstMpegtsSection`,
-  registration descriptor), needed for the KLVA PMT-rewrite. Headers resolve.
+  — the library for PMT / descriptor manipulation, thought to be needed for a
+  KLVA PMT-rewrite. **In the end it wasn't used** — the rewrite proved
+  unnecessary (ADR [`0015`](./decisions/0015-no-pmt-rewrite.md)); the built
+  backend links only `gstreamer-1.0` + `gstreamer-app-1.0`.
 - **python-gi + Gst** available — used for the probes; handy for further spikes.
 
 ## Key finding — extraction is two regimes
@@ -51,34 +59,38 @@ sync-KLV mode (its samples are the `*_sync` file).
 3. **`GstBackend` — insertion** — `appsrc(meta/x-klv) ! mpegtsmux ! klvpmtrewrite
    ! filesink|udpsink|srtsink`. Real-time via appsrc backpressure (need-data/
    enough-data, is-live).
-4. **`klvpmtrewrite` element** — in-library `GstElement` (ADR 0008 option c),
-   registered in-process at init; rewrites the PMT to add the KLVA registration
-   descriptor + `stream_type` (0x06 async). Needs `gstreamer-mpegts-1.0`. Form is
-   **fork F-C**. Reference: [`gstklvplugin`](./prior-art-gstklvplugin.md)
-   `tspmtrewrite`.
+4. ~~**`klvpmtrewrite` element**~~ — **not built** (fork F-C → ADR
+   [`0015`](./decisions/0015-no-pmt-rewrite.md)): stock `mpegtsmux` (gst ≥ 1.20)
+   already emits `stream_type 0x06` + the KLVA registration descriptor, so no
+   in-library PMT rewrite is needed. (Was to port
+   [`gstklvplugin`](./prior-art-gstklvplugin.md)'s `tspmtrewrite`.)
 5. **Mock backend** — in-memory `MediaBackend` for testing the core↔backend
    contract without gstreamer.
 6. **CMake optional dependency** — `option(MISBKLV_GSTREAMER)`; core stays
    dependency-free; backend built only when gstreamer is found. **Fork F-D**.
 
-## Open decisions (need ADRs before/*during* implementation)
+## Design forks — all resolved
 
-- **F-A — `MediaBackend` interface**: pull vs push; callback vs iterator for
-  extraction; **buffer ownership** — B0 showed appsink yields sub-packet
-  fragments, so the backend owns a **reassembly buffer** (concatenated appsink
-  data), runs `parse_packet` over it, and yields per-packet `KlvUnit`s whose core
-  spans borrow into that owned buffer (the ADR 0011 read-borrows boundary); how
-  PTS/timestamps surface (B0: PES PTS unreliable → prefer KLV Item 2). *The
-  keystone; decide first.*
-- **F-B — 0x15 extraction**: stock `tsdemux` won't surface it. Options: (a) a
-  custom path — `tsparse` + a pad probe / manual PID demux by the KLV PID; (b)
-  defer 0x15 *extraction* to post-v1 (v1 extracts 0x06 only); (c) investigate a
-  `tsdemux` property / metadata_descriptor that unlocks it. Interacts with the
-  deferred sync-KLV work (ADR 0008).
-- **F-C — `klvpmtrewrite` form**: `GstBaseTransform` over the TS stream vs a pad
-  probe rewriting `GstMpegtsSection`; how much of `gstreamer-mpegts` to lean on.
-- **F-D — optional-dependency build**: `option()` + `find_package`/pkg-config;
-  keep the core target dependency-free; a separate `misbklv-gst` target/component.
+Opened here during scoping, each resolved by an ADR (see the
+[register](./decisions/index.md)); kept as a record of what each weighed.
+
+- **F-A — `MediaBackend` interface** → ADR
+  [`0013`](./decisions/0013-media-backend-interface.md): a blocking push-callback
+  `extract` + an `Inserter`. The backend owns a **reassembly buffer** (B0 showed
+  appsink yields sub-packet fragments), runs `parse_packet`, and yields per-packet
+  borrowed spans (ADR 0011 read-borrows boundary); PES PTS unreliable → prefer KLV
+  Item 2. Later extended with a `std::stop_token` for cancellation (ADR
+  [`0019`](./decisions/0019-extract-cancellation.md)).
+- **F-B — 0x15 extraction** → ADR
+  [`0016`](./decisions/0016-ts-0x15-extraction.md): a gst-free core demuxer
+  (`extract_ts_klv`) handles both 0x06 and 0x15 (stock `tsdemux` drops 0x15).
+- **F-C — `klvpmtrewrite` form** → ADR
+  [`0015`](./decisions/0015-no-pmt-rewrite.md): **not needed** — stock `mpegtsmux`
+  already emits `0x06`+KLVA.
+- **F-D — optional-dependency build** → ADR
+  [`0014`](./decisions/0014-backend-optional-dependency.md): `option(MISBKLV_GSTREAMER)`
+  + a separate `misbklv-gst` target, installable as a `find_package(misbklv
+  COMPONENTS gst)` component.
 
 ## B0 spike results (2026-07-19, python-gi)
 
@@ -127,8 +139,11 @@ sync-KLV mode (its samples are the `*_sync` file).
 - **CI** — the gst backend needs the gst dev libs in CI; keep it a separate,
   skippable job so the core build stays light.
 
-## First step
+## Outcome
 
-Install `libgstreamer-plugins-bad1.0-dev` (for `gstreamer-mpegts-1.0`), then
-resolve **F-A** (interface) — write the ADR — and do **B0** (extraction spike)
-to lock the buffer-ownership boundary before building `GstBackend`.
+Built as **`misbklv-gst`** (`src/gst/gst_backend.cpp`, `src/gst/stream.cpp`): the
+`MediaBackend`/`Inserter` implementation plus the `KlvStream`/`KlvSink` facade
+(ADR [`0018`](./decisions/0018-high-level-api.md)), live `extract` cancellable via
+a stop token (ADR [`0019`](./decisions/0019-extract-cancellation.md)). Extraction
++ insertion, file + live (`udp`/`srt`), all on **stock gstreamer — no custom
+element**. Consumable via `find_package(misbklv COMPONENTS gst)`.

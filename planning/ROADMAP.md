@@ -43,17 +43,16 @@ beyond MSID passthrough.
 Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 `status: proposed`) · `DECIDED` / `DEFERRED` (has an ADR — see the register).
 
-**None open.** Forks 1–15 are all resolved; the decided register is
+**None open.** Forks 1–17 are all resolved; the decided register is
 [`../context/decisions/index.md`](../context/decisions/index.md). Candidate
-future forks (not yet opened), all downstream of registry/data breadth:
+future forks (not yet opened), mostly downstream of registry/data breadth:
 
 - ST 0102 Security LS as a typed nested registry (seen as tag 48 in `falls`;
   currently opaque passthrough).
-- Multi-byte BER-OID tags (≥128, e.g. 0601 Item 143 MSID) — unexercised by
-  current samples.
 - 0903 Array type (§9.1.2) and remaining VTarget items, as data needs them.
-- Backend follow-ons deferred by [ADR 0017](../context/decisions/0017-realtime-streaming.md):
-  a cooperative stop-token for live `extract()`, RTP payloading.
+- RTP payloading for the live path — deferred by
+  [ADR 0019](../context/decisions/0019-extract-cancellation.md) (the cooperative
+  stop-token it also listed is now done, ADR 0019).
 
 ## Fork lifecycle
 
