@@ -9,7 +9,7 @@ jobs:
   build-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           lfs: true  # materialize data/*.ts for the regression tests
       - name: Install deps
@@ -54,7 +54,7 @@ jobs:
     # on adversarial input. gstreamer is off so ASan isn't noised by gst internals.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           lfs: true  # data/*.ts for the extraction/stream tests
       - name: Install deps
@@ -75,7 +75,7 @@ jobs:
     # ADR 0012: the committed constexpr tables must match a fresh regeneration.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Regenerate registry tables
         run: |
           for r in uas0601 vmti0903 vtarget0903; do
