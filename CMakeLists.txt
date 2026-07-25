@@ -120,6 +120,11 @@ add_executable(jmisb_crosscheck_test test/jmisb_crosscheck_test.cpp)
 target_link_libraries(jmisb_crosscheck_test PRIVATE misbklv)
 add_test(NAME jmisb_crosscheck COMMAND jmisb_crosscheck_test)
 
+# ST 0601.19's own per-item worked examples — proves the registry's scales.
+add_executable(st0601_examples_test test/st0601_examples_test.cpp)
+target_link_libraries(st0601_examples_test PRIVATE misbklv)
+add_test(NAME st0601_examples COMMAND st0601_examples_test)
+
 add_executable(hardening_test test/hardening_test.cpp)  # real-world hardening
 target_link_libraries(hardening_test PRIVATE misbklv)
 add_test(NAME hardening COMMAND hardening_test

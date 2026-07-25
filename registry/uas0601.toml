@@ -1,10 +1,26 @@
 # ST 0601.19 UAS Datalink Local Set — descriptor source of truth (ADR 0012).
 # Regenerate the constexpr tables with:  tools/gen_registry.py (or the
 # `regenerate-registry` CMake target). Generated output is committed at
-# src/registry/uas0601_tables.generated.hpp — do not hand-edit that file.
+# include/misbklv/registry/uas0601_tables.generated.hpp — do not hand-edit it.
 #
-# This is a Milestone-1 subset: the items present in Day Flight.mpg's first
-# packet that carry a typed codec. Unregistered items round-trip as raw bytes.
+# Coverage: the full ST 0601.19 item set (§8.1–8.143), less Item 66 (deprecated
+# by the standard, no format defined — it stays unregistered and round-trips
+# raw). Every entry is transcribed from that item's §8.N format block: the
+# software Min/Max become `min`/`max`, the KLV column decides `kind` + `signed`,
+# and the "Special Values" row becomes `[[item.special]]`.
+#
+# Conventions:
+#   * `linear_lds` — the ST 0601 linear mapping. Signed items are symmetric
+#     (min == -max, which `linear_decode` relies on); unsigned ones carry the
+#     offset in `min` (e.g. altitudes map uint16 onto -900..19000).
+#   * `imapb` — ST 1201 IMAPB. These items are variable-length in the standard:
+#     `length` is the DEFAULT ENCODE WIDTH (chosen from the item's documented
+#     per-width resolution), `variable = true` records that the standard lets a
+#     sender pick another. Decoding always honours the actual field length.
+#   * `bytes` — structurally opaque: another standard's Local Set (0102, 0806,
+#     1002, 1206, 1601, 1602, 1607, 1010) or a DLP/FLP/VLP pack 0601 defines
+#     item-locally. Registered for the NAME and typed raw access; the value
+#     round-trips byte-for-byte exactly as an unregistered item would.
 
 registry     = "UAS_0601"
 tag_encoding = "ber_oid"
@@ -24,7 +40,17 @@ kind   = "uint"
 length = 8
 flags  = ["mandatory"]
 
-[[item]]                       # 0601.19 §8 — uint16 mapped 0..360
+[[item]]                       # §8.3 — utf8, max 127
+tag    = 3
+name   = "Mission ID"
+kind   = "utf8"
+
+[[item]]                       # §8.4 — utf8, max 127
+tag    = 4
+name   = "Platform Tail Number"
+kind   = "utf8"
+
+[[item]]                       # §8.5 — uint16 mapped 0..360
 tag    = 5
 name   = "Platform Heading Angle"
 units  = "deg"
@@ -34,7 +60,7 @@ signed = false
 min    = 0.0
 max    = 360.0
 
-[[item]]                       # int16 mapped -20..20
+[[item]]                       # §8.6 — int16 mapped -20..20
 tag    = 6
 name   = "Platform Pitch Angle"
 units  = "deg"
@@ -43,8 +69,11 @@ length = 2
 signed = true
 min    = -20.0
 max    = 20.0
+  [[item.special]]
+  pattern = "0x8000"
+  kind    = "out_of_range"
 
-[[item]]                       # int16 mapped -50..50
+[[item]]                       # §8.7 — int16 mapped -50..50
 tag    = 7
 name   = "Platform Roll Angle"
 units  = "deg"
@@ -53,6 +82,28 @@ length = 2
 signed = true
 min    = -50.0
 max    = 50.0
+  [[item.special]]
+  pattern = "0x8000"
+  kind    = "out_of_range"
+
+[[item]]                       # §8.8 — uint8, direct (KLVval = SoftVal)
+tag    = 8
+name   = "Platform True Airspeed"
+units  = "m/s"
+kind   = "uint"
+length = 1
+
+[[item]]                       # §8.9 — uint8, direct
+tag    = 9
+name   = "Platform Indicated Airspeed"
+units  = "m/s"
+kind   = "uint"
+length = 1
+
+[[item]]                       # §8.10 — utf8, max 127
+tag    = 10
+name   = "Platform Designation"
+kind   = "utf8"
 
 [[item]]
 tag    = 11
@@ -64,7 +115,7 @@ tag    = 12
 name   = "Image Coordinate System"
 kind   = "utf8"
 
-[[item]]                       # 0601.19 §8.13 — int32 mapped -90..90
+[[item]]                       # §8.13 — int32 mapped -90..90
 tag    = 13
 name   = "Sensor Latitude"
 units  = "deg"
@@ -77,7 +128,7 @@ max    = 90.0
   pattern = "0x80000000"
   kind    = "reserved"
 
-[[item]]                       # 0601.19 §8.14 — int32 mapped -180..180
+[[item]]                       # §8.14 — int32 mapped -180..180
 tag    = 14
 name   = "Sensor Longitude"
 units  = "deg"
@@ -90,7 +141,7 @@ max    = 180.0
   pattern = "0x80000000"
   kind    = "reserved"
 
-[[item]]                       # uint16 mapped -900..19000
+[[item]]                       # §8.15 — uint16 mapped -900..19000
 tag    = 15
 name   = "Sensor True Altitude"
 units  = "m"
@@ -209,6 +260,165 @@ signed = false
 min    = -900.0
 max    = 19000.0
 
+[[item]]                       # §8.26 — int16 mapped -0.075..0.075 (upper left)
+tag    = 26
+name   = "Offset Corner Latitude Point 1"
+units  = "deg"
+kind   = "linear_lds"
+length = 2
+signed = true
+min    = -0.075
+max    = 0.075
+  [[item.special]]
+  pattern = "0x8000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.27 — int16 mapped -0.075..0.075
+tag    = 27
+name   = "Offset Corner Longitude Point 1"
+units  = "deg"
+kind   = "linear_lds"
+length = 2
+signed = true
+min    = -0.075
+max    = 0.075
+  [[item.special]]
+  pattern = "0x8000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.28 — int16 mapped -0.075..0.075 (upper right)
+tag    = 28
+name   = "Offset Corner Latitude Point 2"
+units  = "deg"
+kind   = "linear_lds"
+length = 2
+signed = true
+min    = -0.075
+max    = 0.075
+  [[item.special]]
+  pattern = "0x8000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.29 — int16 mapped -0.075..0.075
+tag    = 29
+name   = "Offset Corner Longitude Point 2"
+units  = "deg"
+kind   = "linear_lds"
+length = 2
+signed = true
+min    = -0.075
+max    = 0.075
+  [[item.special]]
+  pattern = "0x8000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.30 — int16 mapped -0.075..0.075 (lower right)
+tag    = 30
+name   = "Offset Corner Latitude Point 3"
+units  = "deg"
+kind   = "linear_lds"
+length = 2
+signed = true
+min    = -0.075
+max    = 0.075
+  [[item.special]]
+  pattern = "0x8000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.31 — int16 mapped -0.075..0.075
+tag    = 31
+name   = "Offset Corner Longitude Point 3"
+units  = "deg"
+kind   = "linear_lds"
+length = 2
+signed = true
+min    = -0.075
+max    = 0.075
+  [[item.special]]
+  pattern = "0x8000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.32 — int16 mapped -0.075..0.075 (lower left)
+tag    = 32
+name   = "Offset Corner Latitude Point 4"
+units  = "deg"
+kind   = "linear_lds"
+length = 2
+signed = true
+min    = -0.075
+max    = 0.075
+  [[item.special]]
+  pattern = "0x8000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.33 — int16 mapped -0.075..0.075
+tag    = 33
+name   = "Offset Corner Longitude Point 4"
+units  = "deg"
+kind   = "linear_lds"
+length = 2
+signed = true
+min    = -0.075
+max    = 0.075
+  [[item.special]]
+  pattern = "0x8000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.34 — uint8 icing code 0..2
+tag    = 34
+name   = "Icing Detected"
+units  = "code"
+kind   = "uint"
+length = 1
+
+[[item]]                       # §8.35 — uint16 mapped 0..360
+tag    = 35
+name   = "Wind Direction"
+units  = "deg"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = 0.0
+max    = 360.0
+
+[[item]]                       # §8.36 — uint8 mapped 0..100
+tag    = 36
+name   = "Wind Speed"
+units  = "m/s"
+kind   = "linear_lds"
+length = 1
+signed = false
+min    = 0.0
+max    = 100.0
+
+[[item]]                       # §8.37 — uint16 mapped 0..5000
+tag    = 37
+name   = "Static Pressure"
+units  = "mbar"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = 0.0
+max    = 5000.0
+
+[[item]]                       # §8.38 — uint16 mapped -900..19000
+tag    = 38
+name   = "Density Altitude"
+units  = "m"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = -900.0
+max    = 19000.0
+
+[[item]]                       # §8.39 — int8, direct
+tag    = 39
+name   = "Outside Air Temperature"
+units  = "C"
+kind   = "int"
+length = 1
+signed = true
+
 [[item]]                       # §8.40 — int32 mapped -90..90
 tag    = 40
 name   = "Target Location Latitude"
@@ -245,6 +455,136 @@ signed = false
 min    = -900.0
 max    = 19000.0
 
+[[item]]                       # §8.43 — uint8 mapped 0..510 (2 px/count)
+tag    = 43
+name   = "Target Track Gate Width"
+units  = "px"
+kind   = "linear_lds"
+length = 1
+signed = false
+min    = 0.0
+max    = 510.0
+
+[[item]]                       # §8.44 — uint8 mapped 0..510 (2 px/count)
+tag    = 44
+name   = "Target Track Gate Height"
+units  = "px"
+kind   = "linear_lds"
+length = 1
+signed = false
+min    = 0.0
+max    = 510.0
+
+[[item]]                       # §8.45 — uint16 mapped 0..4095
+tag    = 45
+name   = "Target Error Estimate - CE90"
+units  = "m"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = 0.0
+max    = 4095.0
+
+[[item]]                       # §8.46 — uint16 mapped 0..4095
+tag    = 46
+name   = "Target Error Estimate - LE90"
+units  = "m"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = 0.0
+max    = 4095.0
+
+[[item]]                       # §8.47 — uint8 bit-flags (Table 3), 0..63
+tag    = 47
+name   = "Generic Flag Data"
+kind   = "uint"
+length = 1
+
+[[item]]                       # §8.48 — MISB ST 0102 Security LS (opaque)
+tag   = 48
+name  = "Security Local Set"
+kind  = "bytes"
+
+[[item]]                       # §8.49 — uint16 mapped 0..5000
+tag    = 49
+name   = "Differential Pressure"
+units  = "mbar"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = 0.0
+max    = 5000.0
+
+[[item]]                       # §8.50 — int16 mapped -20..20
+tag    = 50
+name   = "Platform Angle of Attack"
+units  = "deg"
+kind   = "linear_lds"
+length = 2
+signed = true
+min    = -20.0
+max    = 20.0
+  [[item.special]]
+  pattern = "0x8000"
+  kind    = "out_of_range"
+
+[[item]]                       # §8.51 — int16 mapped -180..180
+tag    = 51
+name   = "Platform Vertical Speed"
+units  = "m/s"
+kind   = "linear_lds"
+length = 2
+signed = true
+min    = -180.0
+max    = 180.0
+  [[item.special]]
+  pattern = "0x8000"
+  kind    = "out_of_range"
+
+[[item]]                       # §8.52 — int16 mapped -20..20
+tag    = 52
+name   = "Platform Sideslip Angle"
+units  = "deg"
+kind   = "linear_lds"
+length = 2
+signed = true
+min    = -20.0
+max    = 20.0
+  [[item.special]]
+  pattern = "0x8000"
+  kind    = "out_of_range"
+
+[[item]]                       # §8.53 — uint16 mapped 0..5000
+tag    = 53
+name   = "Airfield Barometric Pressure"
+units  = "mbar"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = 0.0
+max    = 5000.0
+
+[[item]]                       # §8.54 — uint16 mapped -900..19000
+tag    = 54
+name   = "Airfield Elevation"
+units  = "m"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = -900.0
+max    = 19000.0
+
+[[item]]                       # §8.55 — uint8 mapped 0..100
+tag    = 55
+name   = "Relative Humidity"
+units  = "%"
+kind   = "linear_lds"
+length = 1
+signed = false
+min    = 0.0
+max    = 100.0
+
 [[item]]                       # §8.56 — uint8, direct (KLVval = SoftVal)
 tag    = 56
 name   = "Platform Ground Speed"
@@ -262,6 +602,55 @@ signed = false
 min    = 0.0
 max    = 5000000.0
 
+[[item]]                       # §8.58 — uint16 mapped 0..10000
+tag    = 58
+name   = "Platform Fuel Remaining"
+units  = "kg"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = 0.0
+max    = 10000.0
+
+[[item]]                       # §8.59 — utf8, max 127
+tag    = 59
+name   = "Platform Call Sign"
+kind   = "utf8"
+
+[[item]]                       # §8.60 — uint16 bit-encoded weapon load
+tag    = 60
+name   = "Weapon Load"
+kind   = "uint"
+length = 2
+
+[[item]]                       # §8.61 — uint8 weapon-fired indication
+tag    = 61
+name   = "Weapon Fired"
+kind   = "uint"
+length = 1
+
+[[item]]                       # §8.62 — uint16 laser PRF code
+tag    = 62
+name   = "Laser PRF Code"
+kind   = "uint"
+length = 2
+
+[[item]]                       # §8.63 — uint8 enum 0..7 (Table 4)
+tag    = 63
+name   = "Sensor Field of View Name"
+kind   = "uint"
+length = 1
+
+[[item]]                       # §8.64 — uint16 mapped 0..360
+tag    = 64
+name   = "Platform Magnetic Heading"
+units  = "deg"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = 0.0
+max    = 360.0
+
 [[item]]
 tag    = 65
 name   = "UAS Datalink LS Version Number"
@@ -269,8 +658,642 @@ kind   = "uint"
 length = 1
 flags  = ["mandatory"]
 
+# Item 66 is deprecated by ST 0601.19 (no format defined) — deliberately
+# unregistered; it round-trips as raw bytes like any unknown tag.
+
+[[item]]                       # §8.67 — int32 mapped -90..90
+tag    = 67
+name   = "Alternate Platform Latitude"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -90.0
+max    = 90.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "reserved"
+
+[[item]]                       # §8.68 — int32 mapped -180..180
+tag    = 68
+name   = "Alternate Platform Longitude"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -180.0
+max    = 180.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "reserved"
+
+[[item]]                       # §8.69 — uint16 mapped -900..19000
+tag    = 69
+name   = "Alternate Platform Altitude"
+units  = "m"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = -900.0
+max    = 19000.0
+
+[[item]]                       # §8.70 — utf8, max 127
+tag    = 70
+name   = "Alternate Platform Name"
+kind   = "utf8"
+
+[[item]]                       # §8.71 — uint16 mapped 0..360
+tag    = 71
+name   = "Alternate Platform Heading"
+units  = "deg"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = 0.0
+max    = 360.0
+
+[[item]]                       # §8.72 — uint64 microseconds since the epoch
+tag    = 72
+name   = "Event Start Time"
+units  = "microseconds"
+kind   = "uint"
+length = 8
+
+[[item]]                       # §8.73 — MISB ST 0806 RVT LS (opaque)
+tag   = 73
+name  = "RVT Local Set"
+kind  = "bytes"
+
 [[item]]                       # §8.74 — nested MISB ST 0903 VMTI Local Set
 tag   = 74
 name  = "VMTI Local Set"
 kind  = "nested_ls"
 child = "vmti_0903"
+
+[[item]]                       # §8.75 — uint16 mapped -900..19000 (WGS84)
+tag    = 75
+name   = "Sensor Ellipsoid Height"
+units  = "m"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = -900.0
+max    = 19000.0
+
+[[item]]                       # §8.76 — uint16 mapped -900..19000 (WGS84)
+tag    = 76
+name   = "Alternate Platform Ellipsoid Height"
+units  = "m"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = -900.0
+max    = 19000.0
+
+[[item]]                       # §8.77 — uint8 enum 0..5 (Table 5)
+tag    = 77
+name   = "Operational Mode"
+kind   = "uint"
+length = 1
+
+[[item]]                       # §8.78 — uint16 mapped -900..19000 (WGS84)
+tag    = 78
+name   = "Frame Center Height Above Ellipsoid"
+units  = "m"
+kind   = "linear_lds"
+length = 2
+signed = false
+min    = -900.0
+max    = 19000.0
+
+[[item]]                       # §8.79 — int16 mapped -327..327
+tag    = 79
+name   = "Sensor North Velocity"
+units  = "m/s"
+kind   = "linear_lds"
+length = 2
+signed = true
+min    = -327.0
+max    = 327.0
+  [[item.special]]
+  pattern = "0x8000"
+  kind    = "out_of_range"
+
+[[item]]                       # §8.80 — int16 mapped -327..327
+tag    = 80
+name   = "Sensor East Velocity"
+units  = "m/s"
+kind   = "linear_lds"
+length = 2
+signed = true
+min    = -327.0
+max    = 327.0
+  [[item.special]]
+  pattern = "0x8000"
+  kind    = "out_of_range"
+
+[[item]]                       # §8.81 — Image Horizon Pixel Pack (DLP, max 20)
+tag   = 81
+name  = "Image Horizon Pixel Pack"
+kind  = "bytes"
+
+[[item]]                       # §8.82 — int32 mapped -90..90 (upper left)
+tag    = 82
+name   = "Corner Latitude Point 1 (Full)"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -90.0
+max    = 90.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.83 — int32 mapped -180..180
+tag    = 83
+name   = "Corner Longitude Point 1 (Full)"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -180.0
+max    = 180.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.84 — int32 mapped -90..90 (upper right)
+tag    = 84
+name   = "Corner Latitude Point 2 (Full)"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -90.0
+max    = 90.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.85 — int32 mapped -180..180
+tag    = 85
+name   = "Corner Longitude Point 2 (Full)"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -180.0
+max    = 180.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.86 — int32 mapped -90..90 (lower right)
+tag    = 86
+name   = "Corner Latitude Point 3 (Full)"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -90.0
+max    = 90.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.87 — int32 mapped -180..180
+tag    = 87
+name   = "Corner Longitude Point 3 (Full)"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -180.0
+max    = 180.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.88 — int32 mapped -90..90 (lower left)
+tag    = 88
+name   = "Corner Latitude Point 4 (Full)"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -90.0
+max    = 90.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.89 — int32 mapped -180..180
+tag    = 89
+name   = "Corner Longitude Point 4 (Full)"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -180.0
+max    = 180.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "na_off_earth"
+
+[[item]]                       # §8.90 — int32 mapped -90..90 (full-range Item 6)
+tag    = 90
+name   = "Platform Pitch Angle (Full)"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -90.0
+max    = 90.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "out_of_range"
+
+[[item]]                       # §8.91 — int32 mapped -90..90 (full-range Item 7)
+tag    = 91
+name   = "Platform Roll Angle (Full)"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -90.0
+max    = 90.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "out_of_range"
+
+[[item]]                       # §8.92 — int32 mapped -90..90 (full-range Item 50)
+tag    = 92
+name   = "Platform Angle of Attack (Full)"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -90.0
+max    = 90.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "out_of_range"
+
+[[item]]                       # §8.93 — int32 mapped -180..180 (full-range Item 52)
+tag    = 93
+name   = "Platform Sideslip Angle (Full)"
+units  = "deg"
+kind   = "linear_lds"
+length = 4
+signed = true
+min    = -180.0
+max    = 180.0
+  [[item.special]]
+  pattern = "0x80000000"
+  kind    = "out_of_range"
+
+[[item]]                       # §8.94 — MISB ST 1204 MIIS Core Identifier (max 50)
+tag   = 94
+name  = "MIIS Core Identifier"
+kind  = "bytes"
+
+[[item]]                       # §8.95 — MISB ST 1206 SAR MI LS (opaque)
+tag   = 95
+name  = "SAR Motion Imagery Local Set"
+kind  = "bytes"
+
+[[item]]                       # §8.96 — IMAPB(0, 1500000); 3 B => 0.25 m
+tag      = 96
+name     = "Target Width Extended"
+units    = "m"
+kind     = "imapb"
+length   = 3
+variable = true
+min      = 0.0
+max      = 1500000.0
+
+[[item]]                       # §8.97 — MISB ST 1002 Range Image LS (opaque)
+tag   = 97
+name  = "Range Image Local Set"
+kind  = "bytes"
+
+[[item]]                       # §8.98 — MISB ST 1601 Geo-Registration LS (opaque)
+tag   = 98
+name  = "Geo-Registration Local Set"
+kind  = "bytes"
+
+[[item]]                       # §8.99 — MISB ST 1602 Composite Imaging LS (opaque)
+tag   = 99
+name  = "Composite Imaging Local Set"
+kind  = "bytes"
+
+[[item]]                       # §8.100 — MISB ST 1607 Segment LS (opaque)
+tag   = 100
+name  = "Segment Local Set"
+kind  = "bytes"
+
+[[item]]                       # §8.101 — MISB ST 1607 Amend LS (opaque)
+tag   = 101
+name  = "Amend Local Set"
+kind  = "bytes"
+
+[[item]]                       # §8.102 — MISB ST 1010 SDCC Floating Length Pack
+tag   = 102
+name  = "SDCC-FLP"
+kind  = "bytes"
+
+[[item]]                       # §8.103 — IMAPB(-900, 40000)
+tag      = 103
+name     = "Density Altitude Extended"
+units    = "m"
+kind     = "imapb"
+length   = 3
+variable = true
+min      = -900.0
+max      = 40000.0
+
+[[item]]                       # §8.104 — IMAPB(-900, 40000); 3 B => 78.125 mm
+tag      = 104
+name     = "Sensor Ellipsoid Height Extended"
+units    = "m"
+kind     = "imapb"
+length   = 3
+variable = true
+min      = -900.0
+max      = 40000.0
+
+[[item]]                       # §8.105 — IMAPB(-900, 40000); 3 B => 78.125 mm
+tag      = 105
+name     = "Alternate Platform Ellipsoid Height Extended"
+units    = "m"
+kind     = "imapb"
+length   = 3
+variable = true
+min      = -900.0
+max      = 40000.0
+
+[[item]]                       # §8.106 — utf8, max 127
+tag    = 106
+name   = "Stream Designator"
+kind   = "utf8"
+
+[[item]]                       # §8.107 — utf8, max 127
+tag    = 107
+name   = "Operational Base"
+kind   = "utf8"
+
+[[item]]                       # §8.108 — utf8, max 127
+tag    = 108
+name   = "Broadcast Source"
+kind   = "utf8"
+
+[[item]]                       # §8.109 — IMAPB(0, 21000); 3 B => 3.9 m
+tag      = 109
+name     = "Range To Recovery Location"
+units    = "km"
+kind     = "imapb"
+length   = 3
+variable = true
+min      = 0.0
+max      = 21000.0
+
+[[item]]                       # §8.110 — variable-length uint, max 4 B
+tag      = 110
+name     = "Time Airborne"
+units    = "s"
+kind     = "uint"
+length   = 4
+variable = true
+
+[[item]]                       # §8.111 — variable-length uint, max 4 B
+tag      = 111
+name     = "Propulsion Unit Speed"
+units    = "RPM"
+kind     = "uint"
+length   = 4
+variable = true
+
+[[item]]                       # §8.112 — IMAPB(0, 360); 2 B => 16.625 millideg
+tag      = 112
+name     = "Platform Course Angle"
+units    = "deg"
+kind     = "imapb"
+length   = 2
+variable = true
+min      = 0.0
+max      = 360.0
+
+[[item]]                       # §8.113 — IMAPB(-900, 40000); 3 B => 0.7 cm
+tag      = 113
+name     = "Altitude AGL"
+units    = "m"
+kind     = "imapb"
+length   = 3
+variable = true
+min      = -900.0
+max      = 40000.0
+
+[[item]]                       # §8.114 — IMAPB(-900, 40000); 3 B => 0.7 cm
+tag      = 114
+name     = "Radar Altimeter"
+units    = "m"
+kind     = "imapb"
+length   = 3
+variable = true
+min      = -900.0
+max      = 40000.0
+
+[[item]]                       # §8.115 — Control Command (DLP, Table 7)
+tag   = 115
+name  = "Control Command"
+kind  = "bytes"
+
+[[item]]                       # §8.116 — Control Command Verification List (DLP)
+tag   = 116
+name  = "Control Command Verification List"
+kind  = "bytes"
+
+[[item]]                       # §8.117 — IMAPB(-1000, 1000); 3 B => 0.000244 dps
+tag      = 117
+name     = "Sensor Azimuth Rate"
+units    = "dps"
+kind     = "imapb"
+length   = 3
+variable = true
+min      = -1000.0
+max      = 1000.0
+
+[[item]]                       # §8.118 — IMAPB(-1000, 1000); 3 B => 0.000244 dps
+tag      = 118
+name     = "Sensor Elevation Rate"
+units    = "dps"
+kind     = "imapb"
+length   = 3
+variable = true
+min      = -1000.0
+max      = 1000.0
+
+[[item]]                       # §8.119 — IMAPB(-1000, 1000); 3 B => 0.000244 dps
+tag      = 119
+name     = "Sensor Roll Rate"
+units    = "dps"
+kind     = "imapb"
+length   = 3
+variable = true
+min      = -1000.0
+max      = 1000.0
+
+[[item]]                       # §8.120 — IMAPB(0, 100); 2 B => 0.004 %
+tag      = 120
+name     = "On-board MI Storage Percent Full"
+units    = "%"
+kind     = "imapb"
+length   = 2
+variable = true
+min      = 0.0
+max      = 100.0
+
+[[item]]                       # §8.121 — Active Wavelength List (DLP)
+tag   = 121
+name  = "Active Wavelength List"
+kind  = "bytes"
+
+[[item]]                       # §8.122 — Country Codes (VLP, Table 9)
+tag   = 122
+name  = "Country Codes"
+kind  = "bytes"
+
+[[item]]                       # §8.123 — uint8 count 0..255
+tag    = 123
+name   = "Number of NAVSATs in View"
+units  = "count"
+kind   = "uint"
+length = 1
+
+[[item]]                       # §8.124 — uint8 bit-flags (Table 10), 1..255
+tag    = 124
+name   = "Positioning Method Source"
+kind   = "uint"
+length = 1
+
+[[item]]                       # §8.125 — uint8 enum 0..12 (Table 11)
+tag    = 125
+name   = "Platform Status"
+kind   = "uint"
+length = 1
+
+[[item]]                       # §8.126 — uint8 enum 0..6 (Table 12)
+tag    = 126
+name   = "Sensor Control Mode"
+kind   = "uint"
+length = 1
+
+[[item]]                       # §8.127 — Sensor Frame Rate Pack (DLP, max 16)
+tag   = 127
+name  = "Sensor Frame Rate Pack"
+kind  = "bytes"
+
+[[item]]                       # §8.128 — Wavelengths List (VLP, Table 15)
+tag   = 128
+name  = "Wavelengths List"
+kind  = "bytes"
+
+[[item]]                       # §8.129 — utf8, max 32
+tag    = 129
+name   = "Target ID"
+kind   = "utf8"
+
+[[item]]                       # §8.130 — Airbase Locations (VLP, Table 16)
+tag   = 130
+name  = "Airbase Locations"
+kind  = "bytes"
+
+[[item]]                       # §8.131 — variable-length uint, max 8 B
+tag      = 131
+name     = "Take-off Time"
+units    = "microseconds"
+kind     = "uint"
+length   = 8
+variable = true
+
+[[item]]                       # §8.132 — IMAPB(1, 99999); 3 B => 15.625 kHz
+tag      = 132
+name     = "Transmission Frequency"
+units    = "MHz"
+kind     = "imapb"
+length   = 3
+variable = true
+min      = 1.0
+max      = 99999.0
+
+[[item]]                       # §8.133 — variable-length uint, max 4 B
+tag      = 133
+name     = "On-board MI Storage Capacity"
+units    = "GB"
+kind     = "uint"
+length   = 4
+variable = true
+
+[[item]]                       # §8.134 — IMAPB(0, 100); 2 B => 0.0039 %
+tag      = 134
+name     = "Zoom Percentage"
+units    = "%"
+kind     = "imapb"
+length   = 2
+variable = true
+min      = 0.0
+max      = 100.0
+
+[[item]]                       # §8.135 — utf8, max 127
+tag    = 135
+name   = "Communications Method"
+kind   = "utf8"
+
+[[item]]                       # §8.136 — variable-length signed int, max 4 B
+tag      = 136
+name     = "Leap Seconds"
+units    = "s"
+kind     = "int"
+length   = 4
+signed   = true
+variable = true
+
+[[item]]                       # §8.137 — variable-length signed int, max 8 B
+tag      = 137
+name     = "Correction Offset"
+units    = "microseconds"
+kind     = "int"
+length   = 8
+signed   = true
+variable = true
+
+[[item]]                       # §8.138 — Payload List (VLP)
+tag   = 138
+name  = "Payload List"
+kind  = "bytes"
+
+[[item]]                       # §8.139 — Active Payloads (byte bitmap)
+tag   = 139
+name  = "Active Payloads"
+kind  = "bytes"
+
+[[item]]                       # §8.140 — Weapons Stores (VLP)
+tag   = 140
+name  = "Weapons Stores"
+kind  = "bytes"
+
+[[item]]                       # §8.141 — Waypoint List (VLP)
+tag   = 141
+name  = "Waypoint List"
+kind  = "bytes"
+
+[[item]]                       # §8.142 — View Domain (VLP)
+tag   = 142
+name  = "View Domain"
+kind  = "bytes"
+
+[[item]]                       # §8.143 — Metadata Substream ID Pack (DLP, max 17)
+tag   = 143
+name  = "Metadata Substream ID Pack"
+kind  = "bytes"

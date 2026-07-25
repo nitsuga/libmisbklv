@@ -14,6 +14,12 @@ done and extending incrementally** — the state today:
 - **KLV core — structurally complete for 0601 + 0903** (scalars, nesting,
   packs/series, linear-LDS + ST 1201 IMAPB incl. special values). Milestones 1–6
   landed (detail in [`log.md`](../context/log.md)).
+- **The ST 0601 registry covers the whole standard** — every §8 item except the
+  deprecated Item 66 is typed, so the sample streams decode with no unregistered
+  tags. Items 0601 defines as another standard's Local Set or as a DLP/FLP/VLP
+  pack are registered `bytes`: named and raw-accessible, byte-identical
+  round-trip. Scales are held by `st0601_examples_test`, which runs the
+  standard's own per-item worked examples.
 - **gstreamer media backend — complete (B0–B4)**: extraction (0x06 + 0x15, file
   + live udp/srt) and insertion (file + live, clock-paced), all on **stock
   gstreamer, no custom element** (the ADR 0008 PMT-rewrite was proven
@@ -47,11 +53,13 @@ done and extending incrementally** — the state today:
 
 ## Next
 
-- **Registry breadth** (incremental authoring, no new decision): more 0601
-  extended items (IMAPB, tags 90+) and the remaining VTarget items, as data
-  needs them.
+- **Registry breadth — 0903 side**: the remaining VMTI/VTarget items, as data
+  needs them. (0601 is complete.)
 - **An SRT-specific hermetic streaming test** — the udp live path is covered,
-  SRT isn't.
+  SRT isn't. Live `extract()` ends on `udpsrc`'s idle-`timeout` message, which
+  `srtsrc` has no equivalent for (its properties are `poll-timeout` / `latency` /
+  `mode` / `wait-for-connection`), so the test likely has to terminate via the
+  ADR 0019 stop token — and may surface a real gap in live SRT extraction.
 - Candidate *forks* that need a decision first live in [ROADMAP](./ROADMAP.md)'s
   backlog — not enumerated here.
 
@@ -63,5 +71,7 @@ done and extending incrementally** — the state today:
   hand-constructed, not vendor data).
 - Need a real VMTI stream (M3/M5/M6 use hand-authored fixtures — the `data/*.ts`
   are all 0601, no tag 74).
-- ST 0102 Security LS (seen as tag 48 in `falls`) is opaque passthrough, not a
-  typed nested registry yet.
+- ST 0102 Security LS (tag 48) is registered as named opaque `bytes`, not a
+  typed nested registry — as are the other embedded Local Sets and the
+  DLP/FLP/VLP packs. Typing any of them is a candidate fork in
+  [ROADMAP](./ROADMAP.md).

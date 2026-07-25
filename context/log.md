@@ -2,6 +2,42 @@
 
 ## 2026-07-25
 
+* **ST 0601 registry breadth — the full item set**: the registry was a
+  Milestone-1 subset (27 items, the ones Day Flight's first packet carries);
+  everything else round-tripped as raw bytes. Transcribed the remaining
+  §8.1–8.143 items from the standard's per-item format blocks, less Item 66
+  (deprecated by 0601.19, no format defined — stays unregistered). Typed by the
+  KLV column: `linear_lds` for the mapped scalars (signed items symmetric,
+  unsigned ones carrying the offset in `min`, e.g. altitudes over -900..19000),
+  `imapb` for the ST 1201 extended items, `uint`/`int`/`utf8` for the direct
+  ones, and `bytes` for what is structurally opaque to 0601 — other standards'
+  Local Sets (0102, 0806, 1002, 1010, 1204, 1206, 1601, 1602, 1607) and the
+  DLP/FLP/VLP packs it defines item-locally. Those keep the exact raw
+  round-trip an unregistered tag had; what they gain is a name. Also added the
+  `0x8000` out-of-range specials that Items 6/7 had been missing.
+  **Two mechanical points.** 0601's IMAPB and extended-integer items are
+  *variable-length* (the sender picks the width), but a descriptor still needs
+  an encode width, and `message.cpp` reaches for `fixed_len` when setting a tag
+  on a fresh packet. So `length` on those items now means *default encode
+  width* (chosen from the item's documented per-width resolution — e.g. 3 B for
+  the ±0.078 m altitudes, 2 B for the angles), and a new explicit
+  `variable = true` key keeps the descriptor honest about the standard allowing
+  others; decode was already length-driven (`imapb_decode` reads `raw.size()`),
+  so it honours whatever width arrives.
+  **Validation** — three independent layers: (1) every `data/`-derived fixture
+  now decodes with **zero unregistered tags** and stays **byte-exact** through
+  the full-stream round-trip (cheyenne, falls, falls_ext, sync, dayflight,
+  nightflight_ir), which exercises the newly typed 3/4/10/26–33/47/48/59/72/
+  75/78/82–91 on real vendor data; (2) a new `st0601_examples_test` runs **the
+  standard's own worked examples** (the "Example Software Value / Example KLV
+  Item" pair ending each §8.N block) — one vector per distinct
+  kind/range/width family, since a byte-exact round-trip only proves encode and
+  decode are mutual inverses and a mis-scaled mapping satisfies that too;
+  (3) clean under ASan+UBSan. Tolerance there is one quantization step: the
+  spec prints its example values rounded, and tags 26 and 83 land a fraction of
+  an LSB off the exact mapping. ADR 0012's invariants re-verified — regeneration
+  is deterministic and the no-tomllib fallback reader still produces identical
+  output (checked with both TOML libraries blocked).
 * **Workflow backport from `okf-project-template`**: the doc method extracted
   from this repo into a reusable template gained refinements worth bringing back.
   Added [`workflow-rationale.md`](./workflow-rationale.md) — the *why* behind each

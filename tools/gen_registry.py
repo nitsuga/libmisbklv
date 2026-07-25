@@ -122,6 +122,8 @@ def validate(reg):
         kind = it["kind"]
         if kind not in KIND:
             die(f"tag {tag}: unknown kind '{kind}'")
+        if "variable" in it and not isinstance(it["variable"], bool):
+            die(f"tag {tag}: `variable` must be a bool")
         if kind in MAPPED_KINDS and "length" not in it:
             die(f"tag {tag}: mapped kind '{kind}' needs a length")
         if kind in MAPPED_KINDS and not ("min" in it and "max" in it):
@@ -166,7 +168,12 @@ def emit(reg, out_path):
     lines.append(f"inline constexpr ItemDescriptor {ident}_items[] = {{")
     for it in items:
         kind = it["kind"]
-        variable = "length" not in it   # no fixed width => variable-length item
+        # Length absent => variable. An item that is variable *in the standard*
+        # but still needs an encode width (0601's IMAPB / variable-uint items:
+        # the sender picks the byte count, decode honours the actual field
+        # length) says so with an explicit `variable = true` alongside `length`,
+        # which then means "default width when encoding a new value".
+        variable = it.get("variable", "length" not in it)
         fixed_len = it.get("length", 0)
         is_signed = it.get("signed", False)
         mn = it.get("min", 0.0)
