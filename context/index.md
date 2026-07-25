@@ -13,6 +13,8 @@ Read [`CONVENTIONS.md`](./CONVENTIONS.md) before ingesting or editing.
 ## Bundle guide
 
 * [Conventions](./CONVENTIONS.md) — frontmatter, types, linking, ingest/query/lint rules.
+* [Why these rules](./workflow-rationale.md) — the failure mode behind each
+  planning-hygiene rule in `CLAUDE.md`. Read before relaxing one.
 
 ## Standard References
 

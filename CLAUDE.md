@@ -18,9 +18,28 @@ v0.1 bundle.
 - For the live plan and status, read [`planning/PROGRESS.md`](planning/PROGRESS.md)
   and [`planning/ROADMAP.md`](planning/ROADMAP.md).
 
+## Before every commit checklist
+
+When you implement a significant change (new feature, milestone, decision):
+
+1. ✅ Code changes staged
+2. ✅ `context/log.md` updated (append dated entry)
+3. ✅ `planning/PROGRESS.md` updated (Now/In-progress/Next reflect current state)
+4. ✅ If decision made: ADR written, `context/decisions/index.md` updated
+
+**Never commit code without updating the docs that describe it.** If you're about
+to commit and haven't touched `log.md` or `PROGRESS.md`, stop and update them first.
+
+What goes in each doc — and the rules behind this checklist — is **Planning
+hygiene** below.
+
 ## Planning hygiene
 
-Each doc has one job — keep them from re-narrating each other:
+Each doc has one job — keep them from re-narrating each other. **The *why* behind
+each rule is in
+[`context/workflow-rationale.md`](context/workflow-rationale.md) — read it before
+relaxing a rule. A rule without its reason gets deleted the first time it's
+inconvenient.**
 
 - [`context/log.md`](context/log.md) — the **durable chronological record**:
   what landed when, milestone/decision detail, routine ingests/lint. History
@@ -33,22 +52,25 @@ Each doc has one job — keep them from re-narrating each other:
   (that's `log.md`); "Next" is the 1–3 *immediate* actions and **points to ROADMAP
   for the candidate backlog** — it doesn't re-list it.
 - [`planning/ROADMAP.md`](planning/ROADMAP.md) — scope, phases, and the **single
-  backlog** of open + candidate forks. Defers the decided register (and the fork
-  count) to `decisions/index.md`; never enumerates a fork range.
+  backlog** of open + candidate *forks* (a **fork** = a decision point that needs
+  a choice — a fork in the road, not a git fork; see CONVENTIONS § Decisions).
+  Defers the decided register (and the fork count) to `decisions/index.md`; never
+  enumerates a fork range.
 
 So:
 
-- **On a significant decision**: write/update the ADR in
-  [`context/decisions/`](context/decisions/index.md) per the lifecycle in
+- **On a significant decision** (a fork resolved or changed): write/update the ADR
+  in [`context/decisions/`](context/decisions/index.md) per the lifecycle in
   [`context/CONVENTIONS.md`](context/CONVENTIONS.md) (status: proposed →
-  accepted / superseded), add/update its row in the decided register
+  accepted / superseded / deferred), add/update its row in the decided register
   (`decisions/index.md`), append **one thin** `log.md` line (chronology + link —
   the ADR owns the rationale; see CONVENTIONS § Decisions), and refresh
   PROGRESS's present state. Touch ROADMAP only if it opens/closes an *open* fork
   or shifts a phase.
 - **On implementing a significant change**: append a `log.md` entry (the detail)
   and refresh [`planning/PROGRESS.md`](planning/PROGRESS.md)'s present state
-  (Now / In-progress / Next) — a thin pointer, not a history.
+  (Now / In-progress / Next) — a thin pointer, not a history. **Do this in the
+  same commit** as the implementation: a doc updated "later" is wrong in between.
 - **Closing scrubs the future**: when you resolve a fork or complete a
   candidate / deferred / "Next" item, *delete its forward-looking mentions*
   (ROADMAP candidates, PROGRESS "Next") — not just the present-state bullet you're

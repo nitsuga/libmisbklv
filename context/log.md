@@ -1,5 +1,30 @@
 # Knowledge Bundle Log
 
+## 2026-07-25
+
+* **Workflow backport from `okf-project-template`**: the doc method extracted
+  from this repo into a reusable template gained refinements worth bringing back.
+  Added [`workflow-rationale.md`](./workflow-rationale.md) — the *why* behind each
+  planning-hygiene rule (one job per doc, same-commit docs, no live tallies,
+  closing scrubs the future, lint-as-backstop), so a rule can't be dropped for
+  being inconvenient without meeting the failure mode it prevents; indexed it and
+  pointed `CLAUDE.md` at it. Added a **Before-every-commit checklist** to
+  `CLAUDE.md` (code staged → `log.md` → `PROGRESS.md` → ADR + register) with the
+  same-commit rule made explicit on the implementation bullet. Defined **fork** =
+  a decision point (not a git fork) canonically in `CONVENTIONS.md` § Decisions,
+  referenced from `CLAUDE.md` + ROADMAP. Fixes: the ADR-format § Register line
+  described the old `Title | Status` shape (register is `Fork | ADR | Status`);
+  the decision lifecycle omitted `deferred`; the lint section had no cadence; and
+  § Linking mandated `/`-absolute links while the bundle overwhelmingly uses
+  `./` (now: either, resolved from `context/` — matching what CI checks).
+* **CI — internal Markdown link check** (`.github/workflows/link-check.yml`, from
+  the template's dormant workflow, enabled): fails on an internal link whose
+  target doesn't exist, ignoring inline-code and HTML-comment examples and
+  resolving `/`-absolute links from `context/` per the linking convention. All
+  links currently resolve, so it lands green. This is the only automated part of
+  the CONVENTIONS lint; the rest stays a periodic read-through. Also normalized
+  line endings (`* text=auto` in `.gitattributes`).
+
 ## 2026-07-19
 
 * **Scope (gstreamer backend)**: probed the environment + extraction path to

@@ -1,3 +1,6 @@
+# Normalize line endings: store as LF in the repo, check out native.
+* text=auto
+
 # Git LFS — track large binary assets, keep text/source in regular git.
 # Text extracts (.txt) next to standards stay in regular git so they're greppable/diffable.
 

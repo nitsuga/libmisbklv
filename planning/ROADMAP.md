@@ -40,6 +40,9 @@ beyond MSID passthrough.
 
 ## Open forks
 
+A *fork* is a decision point — a branch in the plan/design that needs a choice
+(see [`../context/CONVENTIONS.md`](../context/CONVENTIONS.md) § Decisions).
+
 Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 `status: proposed`) · `DECIDED` / `DEFERRED` (has an ADR — see the register).
 

@@ -57,6 +57,10 @@ Anticipated but not yet used: `Test Vector`. Add as needed.
 
 # Decisions
 
+A **fork** is a decision point — a branch in the design or plan that needs a
+choice (the metaphor is a fork in the road; it has nothing to do with a git fork).
+Forks are the unit the roadmap and the register track.
+
 A `type: Decision` concept is an ADR: the *why* of a resolved (or proposed)
 fork — context, alternatives considered, the choice, consequences. Carry a
 `status:` frontmatter field:
@@ -99,7 +103,7 @@ revision / supersede — not for a same-session propose→accept.
   (specialized sections allowed between). Use `# Decision` always — `status`
   carries proposed/accepted, so no header churn on accept.
 - **Register:** [`./decisions/index.md`](./decisions/index.md) lists
-  `Title | Status` by number; updated on every status change.
+  `Fork | ADR | Status`; updated on every status change.
 - Decided in [`./decisions/0004-adr-format.md`](./decisions/0004-adr-format.md).
 
 # Subdirectories
@@ -113,8 +117,9 @@ ever ingested (deferred — see [`../planning/ROADMAP.md`](../planning/ROADMAP.m
 
 # Linking
 
-Prefer bundle-relative absolute links (begin with `/`, resolved relative to
-`context/`): `[ST 0601](/st0601.md)`. Relationship semantics — references,
+Prefer bundle-relative links resolved from `context/` — either sibling-relative
+`[ST 0601](./st0601.md)` (what the bundle mostly uses) or absolute
+`[ST 0601](/st0601.md)`. Relationship semantics — references,
 nests-in, depends-on — live in the surrounding prose; the link itself is
 untyped. Broken links are not errors; they may be not-yet-written knowledge.
 
@@ -141,6 +146,10 @@ superseded by newer sources, **forward-looking claims a later change resolved**
 done — the future-tense analog of a stale claim), orphan concepts with no inbound
 links, concepts mentioned but not written, broken-link targets worth creating,
 and type drift (synonyms / casing). Tidy the `type` list when synonyms appear.
+No trigger fires the lint automatically — run it periodically (e.g. when closing
+a fork, or before a release). Broken *internal* links are the one part CI
+catches ([`link-check`](../.github/workflows/link-check.yml)); the rest is a
+read-through.
 
 # Source discipline
 
