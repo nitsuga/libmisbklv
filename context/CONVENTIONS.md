@@ -52,8 +52,10 @@ Current types:
 | `Decision` | Architecture decision record — the *why* of a fork. |
 | `Component` | A libmisbklv module (KLV core, gstreamer backend, ffmpeg backend). |
 | `Sample Data` | Characterized input assets (sample streams, test vectors). |
+| `Conventions` | Meta: how this bundle and the working method are run (this file, [`workflow-rationale.md`](./workflow-rationale.md)). |
 
-Anticipated but not yet used: `Test Vector`. Add as needed.
+Anticipated but not yet used: `Test Vector`; `Encoding Rule` and `KLV Item` have
+index sections but no concepts yet. Add as needed.
 
 # Decisions
 

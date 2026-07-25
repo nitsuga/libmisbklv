@@ -57,6 +57,11 @@ Tags are plain `std::uint16_t` with a small set of named constants for the commo
 0601 items (enough for the example/docs); full generated tag enums are a possible
 follow-on (the alternative not taken this pass).
 
+> **Since accepted:** that follow-on landed — `gen_registry.py` emits a per-registry
+> `enum class` (`misbklv::tags::Uas0601::SensorLatitude`), and `get`/`set` accept
+> either the enum or the raw number. This ADR's decision is unchanged; only the
+> "possible follow-on" above is now history.
+
 # Alternatives considered
 
 - **Thin read-only wrapper** — smaller, but doesn't deliver the edit/stream story

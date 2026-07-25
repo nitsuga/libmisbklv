@@ -17,6 +17,17 @@
   the decision lifecycle omitted `deferred`; the lint section had no cadence; and
   § Linking mandated `/`-absolute links while the bundle overwhelmingly uses
   `./` (now: either, resolved from `context/` — matching what CI checks).
+* **Lint (against the newly-stated rules)**: audited the existing docs for what
+  the backported rules would catch. Clean: every ADR is in the register with a
+  `fork:` and a terminal status (none stuck at `proposed`), no orphan concepts,
+  no live tallies in PROGRESS/ROADMAP, all internal links resolve. Two fixes —
+  ADR [`0018`](./decisions/0018-high-level-api.md) called generated tag enums "a
+  possible follow-on" after that follow-on had landed (added a *Since accepted*
+  note rather than rewriting the rationale — an ADR records its moment), and
+  `type: Conventions` was in use by two files but missing from the type
+  vocabulary. Deliberately **not** retrofitted: older `log.md` entries and ADR
+  bodies keep their frozen counts and phrasing — history is a record, not a
+  present-tense claim, and the no-tallies rule was never about it.
 * **CI — internal Markdown link check** (`.github/workflows/link-check.yml`, from
   the template's dormant workflow, enabled): fails on an internal link whose
   target doesn't exist, ignoring inline-code and HTML-comment examples and
