@@ -64,7 +64,11 @@ the matching defaulted constructor argument.
 - **`realtime` + `video_source` is rejected** (`Error::Unsupported`). Clock-paced
   output with a file-backed video branch is unexercised; better to refuse than to
   ship something untested. Revisit if a live-out consumer appears.
-- **A failed `open_insert` leaves no output file**, in two layers. A missing or
+- **A failed `open_insert` leaves no output file**, in two layers. *(Extended by
+  [`0022`](./0022-no-output-on-failure.md) to the whole insert session: a
+  failing or never-called `finish()` cleans up the same way. A source whose
+  video is declared but unparseable opens fine and fails at EOS, which reached
+  the same leak one step later.)* A missing or
   unreadable `video_source` is caught before any element is built, so nothing can
   have been created. But a *readable* source with no video stream only reveals
   itself in `PAUSED` — and a `filesink` creates its file the moment the pipeline

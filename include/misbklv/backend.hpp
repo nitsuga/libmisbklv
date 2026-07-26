@@ -23,9 +23,24 @@ inline constexpr std::int64_t kNoPts = -1;
 // One complete, framed KLV packet delivered by extraction. `bytes` borrow the
 // backend's reassembly buffer and are valid ONLY during the handler call — copy
 // to retain (ADR 0011 read-borrows boundary).
+//
+// `pts_ns` is the packet's presentation time **in nanoseconds from the start of
+// the source** — the same timeline `Inserter::push()` writes on, so a read →
+// edit → write round trip preserves timing (ADR 0021). It is the timestamp of
+// the PES that carried the packet's FIRST byte (one PES may hold several
+// packets; one packet may span two). `kNoPts` when that PES carried no PTS —
+// which is a property of the stream, not a failure: real captures exist whose
+// KLV PES are entirely untimed (`data/Day Flight.mpg`), and correlation for
+// those is via the KLV's own Item 2 Precision Time Stamp.
+//
+// "Start of the source" is established per extractor and can differ by about a
+// frame on a stream that begins mid-PES: the gstreamer backend uses the
+// demuxer's running time (its segment spans the whole program), while
+// `extract_ts_klv` subtracts the earliest PTS in the buffer it was handed.
+// Intervals are exact in both.
 struct KlvPacket {
   std::span<const std::byte> bytes;  // parse_packet-able
-  std::int64_t pts_ns = kNoPts;      // PES PTS if present, else kNoPts
+  std::int64_t pts_ns = kNoPts;      // ns from the start of the source, or kNoPts
 };
 
 using PacketHandler = std::function<void(const KlvPacket&)>;
@@ -63,8 +78,19 @@ struct InsertConfig {
 };
 
 // Real-time push session (ADR 0013). push() blocks on sink backpressure.
+//
+// No output file unless the session succeeds (ADR 0022). For a `file:` sink,
+// the only thing that leaves an output file behind is a `finish()` that returns
+// ok. A failing `finish()`, or destroying the Inserter without one, removes the
+// sink file — but only if this session created it: a file that already existed
+// at that path is the caller's and is never deleted (its old *contents* are
+// still gone, since opening a file sink truncates).
 class Inserter {
  public:
+  // `pts_ns`: presentation time in nanoseconds from the start of the source
+  // (the same timeline extraction reports on — KlvPacket::pts_ns). `kNoPts`
+  // synthesizes a ~30 fps counter on a KLV-only pipeline, and is rejected when
+  // the config has a `video_source` (ADR 0020).
   virtual Result<std::monostate> push(std::span<const std::byte> klv_packet,
                                       std::int64_t pts_ns) = 0;
   virtual Result<std::monostate> finish() = 0;  // EOS + flush + close

@@ -24,8 +24,12 @@
 namespace misbklv {
 
 // Read a KLV source (file path / "udp:host:port" / "srt:uri") as a range of owned
-// Messages: `for (Message& m : KlvStream(src)) { ... }`. Iteration ends when the
-// source reaches EOS (file) or idles (live). Breaking early is safe: the
+// Messages: `for (Message& m : KlvStream(src)) { ... }`. Each Message carries the
+// source's timing in `pts()` — nanoseconds from the start of the source, the same
+// timeline KlvSink emits on, so `KlvStream -> edit -> KlvSink` keeps a stream
+// where it was (ADR 0021). `kNoPts` for a source whose KLV PES are untimed.
+// Iteration ends when the source reaches EOS (file) or idles (live). Breaking
+// early is safe: the
 // destructor cooperatively cancels the extract (ADR 0019), so it returns promptly
 // even for an endless live source (no wait for the idle timeout / EOS).
 class KlvStream {
@@ -75,6 +79,10 @@ class KlvStream {
 
 // Emit (edited) Messages to a sink ("file:out.ts" / "udp:host:port" / "srt:uri").
 // realtime=true paces output on the clock (ADR 0017).
+//
+// For a `file:` sink, an output file exists only if `close()` returned ok: a
+// failing close, or destroying the sink without one, removes the file this
+// session created (never one that was already there — ADR 0022).
 //
 // `video_source` (a path / "file:PATH", empty by default) re-muxes that file's
 // video elementary stream, unchanged, alongside the KLV — see InsertConfig for

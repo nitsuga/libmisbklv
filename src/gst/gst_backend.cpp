@@ -21,6 +21,7 @@
 #include <gst/gst.h>
 
 #include "misbklv/packet.hpp"
+#include "../pts_marks.hpp"
 
 namespace misbklv {
 namespace {
@@ -32,6 +33,8 @@ struct ExtractCtx {
   const PacketHandler* on_packet = nullptr;
   std::vector<std::byte> reassembly;
   std::size_t packets = 0;  // whole KLV packets emitted (gates the idle timeout)
+  detail::PtsMarks marks;   // buffer timestamps -> per-packet timestamps
+  std::size_t stream_off = 0;  // absolute offset of reassembly[0] in the stream
 
   void drain() {
     std::size_t pos = 0;
@@ -39,11 +42,14 @@ struct ExtractCtx {
       std::span<const std::byte> rest(reassembly.data() + pos, reassembly.size() - pos);
       const std::size_t n = packet_frame_length(rest);
       if (n == 0) break;  // need more data
-      (*on_packet)(KlvPacket{rest.subspan(0, n), kNoPts});
+      (*on_packet)(KlvPacket{rest.subspan(0, n), marks.at(stream_off + pos)});
       ++packets;
       pos += n;
     }
-    if (pos) reassembly.erase(reassembly.begin(), reassembly.begin() + pos);
+    if (pos) {
+      reassembly.erase(reassembly.begin(), reassembly.begin() + pos);
+      stream_off += pos;
+    }
   }
 };
 
@@ -67,6 +73,20 @@ GstFlowReturn on_new_sample(GstElement* sink, gpointer user) {
   GstBuffer* buf = gst_sample_get_buffer(sample);
   GstMapInfo mi;
   if (buf && gst_buffer_map(buf, &mi, GST_MAP_READ)) {
+    // Timestamp these bytes before they lose their identity in the reassembly
+    // buffer (ADR 0021). The *running* time, not the raw buffer PTS: tsdemux's
+    // segment is program-wide and starts at the earliest timestamp in the
+    // program, so running time is nanoseconds from the start of the source —
+    // the same timeline push() writes on, which is what makes read -> edit ->
+    // write compose. An untimed buffer marks kNoPts.
+    std::int64_t pts_ns = kNoPts;
+    const GstSegment* seg = gst_sample_get_segment(sample);
+    if (seg && GST_BUFFER_PTS_IS_VALID(buf)) {
+      const GstClockTime rt =
+          gst_segment_to_running_time(seg, GST_FORMAT_TIME, GST_BUFFER_PTS(buf));
+      if (GST_CLOCK_TIME_IS_VALID(rt)) pts_ns = static_cast<std::int64_t>(rt);
+    }
+    ctx->marks.mark(ctx->stream_off + ctx->reassembly.size(), pts_ns);
     const auto* p = reinterpret_cast<const std::byte*>(mi.data);
     ctx->reassembly.insert(ctx->reassembly.end(), p, p + mi.size);
     gst_buffer_unmap(buf, &mi);
@@ -213,14 +233,23 @@ void on_video_no_more_pads(GstElement*, gpointer user) {
 // round-trip).
 class GstInserter : public Inserter {
  public:
+  // `removable_sink` is the sink's file path IF this session created it and may
+  // therefore delete it again — empty for a non-file sink, or for a path that
+  // already existed (that file is the caller's, ADR 0022).
   GstInserter(GstElement* pipeline, GstElement* appsrc,
-              std::unique_ptr<VideoCtx> video = nullptr)
-      : pipeline_(pipeline), appsrc_(appsrc), video_(std::move(video)) {}
+              std::unique_ptr<VideoCtx> video = nullptr,
+              std::string removable_sink = {})
+      : pipeline_(pipeline), appsrc_(appsrc), video_(std::move(video)),
+        removable_sink_(std::move(removable_sink)) {}
   ~GstInserter() override {
     if (pipeline_) {
       gst_element_set_state(pipeline_, GST_STATE_NULL);  // joins the streaming
       gst_object_unref(pipeline_);  // threads, so video_ outlives its callbacks
     }
+    // An abandoned session — destroyed without a finish() that returned ok — has
+    // not produced output, only an unfinalized file. Same guarantee as a failed
+    // finish(): no error path leaves a file behind (ADR 0022).
+    discard_output();
   }
 
   Result<std::monostate> push(std::span<const std::byte> pkt,
@@ -251,16 +280,29 @@ class GstInserter : public Inserter {
     if (msg) gst_message_unref(msg);
     gst_object_unref(bus);
     gst_element_set_state(pipeline_, GST_STATE_NULL);  // flush/close the sink
+    if (ok)
+      removable_sink_.clear();  // this is the output now; never delete it
+    else
+      discard_output();  // an error result leaves no output file (ADR 0022)
     return ok ? Result<std::monostate>::ok({})
               : Result<std::monostate>::err(Error::Backend);
   }
 
  private:
+  // Remove the sink file this session created, if it still owns one. Called
+  // after the pipeline is in NULL, so the sink has closed the file first.
+  void discard_output() {
+    if (removable_sink_.empty()) return;
+    std::remove(removable_sink_.c_str());
+    removable_sink_.clear();
+  }
+
   static constexpr GstClockTime kFrameDur = 33'000'000;  // ~30 fps pacing
   GstElement* pipeline_;
   GstElement* appsrc_;
   std::unique_ptr<VideoCtx> video_;  // null = KLV-only pipeline
   GstClockTime pts_ = 0;
+  std::string removable_sink_;  // empty once there is nothing we may delete
 };
 
 class GstBackend : public MediaBackend {
@@ -354,6 +396,9 @@ class GstBackend : public MediaBackend {
     // anything scanning the directory and silently clobbers whatever was at that
     // path, so failures below unlink it — but only if THIS call created it, so a
     // pre-existing file the caller cared about is never deleted by a failed open.
+    // The same path+flag is handed to the Inserter, which extends the guarantee
+    // over the rest of the session (a failing finish(), or an abandoned one —
+    // ADR 0022).
     std::string sink_path;
     bool sink_preexisted = true;
     if (cfg.sink.rfind("file:", 0) == 0) {
@@ -471,7 +516,9 @@ class GstBackend : public MediaBackend {
     if (gst_element_set_state(pipeline, GST_STATE_PLAYING) ==
         GST_STATE_CHANGE_FAILURE)
       return fail(pipeline, Error::Backend);
-    return R::ok(std::make_unique<GstInserter>(pipeline, appsrc, std::move(video)));
+    return R::ok(std::make_unique<GstInserter>(
+        pipeline, appsrc, std::move(video),
+        sink_preexisted ? std::string() : sink_path));
   }
 };
 

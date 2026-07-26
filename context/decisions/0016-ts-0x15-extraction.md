@@ -51,6 +51,10 @@ for live/network sources.
 
 # Assumptions / open questions
 
+- **Timestamps**: as of [`0021`](./0021-read-path-timestamps.md) this extractor
+  also reports each packet's PES PTS as nanoseconds from the start of the source
+  — so `0x15` streams, which `tsdemux` exposes no pad for at all, get timing
+  here or nowhere.
 - **Non-fragmented AU cells** assumed (each PES = one complete AU cell = one KLV
   packet — holds for all samples; `cell_fragmentation_indication = 11`). Cell
   fragmentation across PES is a follow-on if a stream needs it.

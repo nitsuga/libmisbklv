@@ -17,6 +17,11 @@ namespace misbklv {
 // framed packet (bytes borrowed during the call, per ADR 0013). Returns a
 // Backend error if no KLV PID is found. Non-fragmented AU cells (the common
 // case) are supported.
+//
+// Each packet carries `pts_ns` — nanoseconds from the start of the source,
+// measured from the earliest PTS anywhere in `ts` (ADR 0021), or `kNoPts` if
+// its PES was untimed. `ts` must therefore be the whole stream: extracting from
+// a chunk re-anchors the timeline to that chunk.
 Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
                                       const PacketHandler& on_packet);
 

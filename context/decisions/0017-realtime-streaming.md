@@ -85,6 +85,10 @@ confirming the output is clock-paced, not fast-pushed.
   handshake/timing is harder to make hermetic); `udp` is the covered live path.
 - **PTS on extraction** stays `kNoPts` (PES PTS unreliable, ADR
   [`0009`](./0009-st0604-deferred.md)); correlation uses KLV Item 2.
+  **Superseded by [`0021`](./0021-read-path-timestamps.md)**: extraction reports
+  nanoseconds from the start of the source, and `kNoPts` now means the stream
+  carried no timestamp. Nothing else here changes — pacing still runs off the
+  per-buffer PTS.
 
 # Citations
 

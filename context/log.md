@@ -1,5 +1,54 @@
 # Knowledge Bundle Log
 
+## 2026-07-26
+
+* **Read-path timestamps** (fork 19 →
+  [ADR 0021](./decisions/0021-read-path-timestamps.md)): `KlvPacket::pts_ns` was
+  a documented field that neither extractor ever set, so every consumer saw `-1`
+  on every packet of every file. Both now report **nanoseconds from the start of
+  the source** — the same timeline `push()` writes on. The gstreamer backend uses
+  the demuxer's running time (its segment is program-wide, so running time is
+  zero-based at the source's start and is what `mpegtsmux` consumes on the way
+  back out); `extract_ts_klv` converts the 90 kHz PES PTS and subtracts the
+  earliest PTS in the buffer, found by a header-only pre-pass — the *minimum*,
+  not the first in file order, which with reordered video is a frame late.
+  Packets don't line up with the units carrying them (one PES can hold several
+  packets, one packet can span two), so both extractors mark timestamps against
+  absolute offsets in the reassembled byte stream and attribute to each packet
+  the mark at its first byte — shared logic in the private `src/pts_marks.hpp`
+  rather than two subtly different versions. Found by `parrot-to-klv`: since ADR
+  0020 the writer *requires* a real PTS when there is a video branch, so
+  `KlvStream` → edit → `KlvSink` had stopped composing.
+  **The old "PES PTS is unreliable" finding was Day Flight, not gstreamer**: that
+  capture's KLV PES genuinely carry no PTS (`PTS_DTS_flags` clear, verified
+  byte-wise) and still correctly report `kNoPts`; `falls.ts` timestamps all 1 953
+  of its KLV PES, and `Cheyenne.ts` / `klv_metadata_test_sync.ts` timestamp every
+  `0x15` PES — which only the gst-free reader can see at all (ADR 0016). Notes
+  added to ADRs 0013/0016/0017/0018 and `backend-scope.md`, whose claims this
+  supersedes.
+  **Tests**: `gst_video_insert_test` now asserts both extractors read back the
+  timestamps it pushed (its own PES parser stays the independent witness), plus a
+  `KlvStream` → `KlvSink` round trip over a video source that checks the timing
+  survives; `ts_extract_test` checks the real captures are timestamped
+  all-or-nothing and non-decreasing. Full CTest suite green, sanitizer build
+  green.
+
+* **"No output file on failure" now spans the insert session** (fork 20 →
+  [ADR 0022](./decisions/0022-no-output-on-failure.md)): the guarantee ADR 0020
+  established for `open_insert` stopped at the end of that function, and the same
+  zero-byte `.ts` leaked one step later — a source whose video track is declared
+  but unparseable opens fine, accepts pushes, and fails at `finish()`. Reproduced
+  with an MP4 whose `avc1` entry has no `avcC`: `h264parse` refuses the caps and
+  the muxer fails only at EOS. `open_insert` now hands the `Inserter` the sink
+  path **only when this call created it**, so "never delete a file we did not
+  create" holds by construction; a failing `finish()` unlinks it, a successful one
+  clears the path, and destruction without a successful `finish()` unlinks too
+  (an abandoned session produced an unfinalized file, not output). Unchanged: a
+  pre-existing file is never deleted, though opening a file sink still truncates
+  it. `gst_video_insert_test` covers the abandoned session and the late failure,
+  both re-checking the pre-existing-file guard. Lets `parrot-to-klv` drop the
+  local workaround it had written for exactly this.
+
 ## 2026-07-25
 
 * **Video passthrough — consumer review fixes** (`parrot-to-klv` reviewed the

@@ -28,6 +28,17 @@ out.close();
 idle for a live source). `emit` re-encodes and muxes; `close` drains. See
 [`examples/klv_edit.cpp`](../examples/klv_edit.cpp).
 
+- **Timing carries through.** `m.pts()` is where the packet sat in the source —
+  nanoseconds from the start of it — and `emit` writes it back at that time, so
+  an edit does not re-time the stream. A source whose KLV carries no PES
+  timestamps reports `kNoPts` (`-1`) and the sink falls back to a synthesized
+  ~30 fps counter; correlate such a stream by its KLV Item 2 Precision Time
+  Stamp instead.
+- **No half-written output.** An output file exists only if `close()` succeeded.
+  A failing close — or dropping the sink without calling it — removes the file
+  the sink created. A file that was already at that path is never deleted (but
+  it *is* truncated when the sink opens it, success or not).
+
 ## Write video + KLV in one pass
 
 To *author* a stream rather than edit one — video from an existing file, KLV you
@@ -49,13 +60,18 @@ out.close();
   your KLV must be on that same timeline — presentation time from the start of
   the source, in nanoseconds. Not wall-clock, not epoch. A Message with no PTS is
   **rejected** (`Error::Unsupported`) rather than given a synthetic one, because a
-  synthetic timestamp drifts silently against real frame timing.
+  synthetic timestamp drifts silently against real frame timing. It is the same
+  timeline `KlvStream` reports, so a Message read from a stream is already on
+  it — "read a video+KLV file, edit an item, write it back with the video" needs
+  no timestamps of your own.
 - **Push in order, as the video flows.** The muxer waits on the slower stream and
   `emit` blocks, which is the backpressure working — but don't try to emit a
   whole file's KLV before the video has started.
 - `realtime` pacing is not supported with a video source. A source that is
   missing, unreadable, or carries no video stream fails at construction (`emit`
-  then errors) and leaves no output file behind.
+  then errors) and leaves no output file behind — as does a failure that only
+  surfaces later, e.g. a video track that is declared but does not parse, which
+  fails at `close()`.
 
 The same field exists on the lower level: `open_insert({.sink = "file:out.ts",
 .video_source = "in.mp4"})`. Leave it empty for the KLV-only pipeline.
@@ -63,7 +79,9 @@ The same field exists on the lower level: `open_insert({.sink = "file:out.ts",
 ## Just a packet (no gstreamer)
 
 `Message` needs no media backend — hand it raw KLV bytes (e.g. from
-`extract_ts_klv`, which pulls KLV from a `.ts` buffer with zero dependencies):
+`extract_ts_klv`, which pulls KLV from a `.ts` buffer with zero dependencies and
+timestamps each packet the same way `KlvStream` does — it also reads the `0x15`
+sync-KLV streams gstreamer's demuxer drops):
 
 ```cpp
 #include "misbklv/message.hpp"

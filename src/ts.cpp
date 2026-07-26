@@ -7,11 +7,13 @@
 #include <vector>
 
 #include "misbklv/packet.hpp"  // packet_frame_length
+#include "pts_marks.hpp"
 
 namespace misbklv {
 namespace {
 
 constexpr std::uint8_t kSmpteUl[4] = {0x06, 0x0e, 0x2b, 0x34};
+constexpr std::size_t kPkt = 188;
 
 std::uint8_t u8(std::span<const std::byte> s, std::size_t i) {
   return std::to_integer<std::uint8_t>(s[i]);
@@ -41,14 +43,57 @@ std::span<const std::byte> unwrap_pes(std::span<const std::byte> pes) {
   return payload;  // 0x06: KLV directly in the PES
 }
 
+// The PES header's 33-bit PTS in 90 kHz ticks, or -1 if the packet carries none
+// (`PTS_DTS_flags` clear, or no optional header at all — a `stream_id` like
+// private_stream_2 has none). Layout: ISO 13818-1 Table 2-21, marker bits and all.
+std::int64_t pes_pts_90k(std::span<const std::byte> pes) {
+  if (pes.size() < 14) return -1;
+  if ((u8(pes, 6) & 0xC0) != 0x80) return -1;  // no optional PES header
+  if ((u8(pes, 7) & 0x80) == 0) return -1;     // PTS_DTS_flags: no PTS
+  return (static_cast<std::int64_t>(u8(pes, 9) & 0x0e) << 29) |
+         (static_cast<std::int64_t>(u8(pes, 10)) << 22) |
+         (static_cast<std::int64_t>(u8(pes, 11) & 0xfe) << 14) |
+         (static_cast<std::int64_t>(u8(pes, 12)) << 7) |
+         (static_cast<std::int64_t>(u8(pes, 13)) >> 1);
+}
+
+// The earliest PTS anywhere in the buffer, in 90 kHz ticks (-1 if nothing is
+// timestamped). This is the origin `pts_ns` is measured from: the start of the
+// source's presentation, which is what the insert path's timeline is also
+// anchored to (ADR 0021). A cheap header-only pre-pass — it looks at the first
+// 14 bytes of each PES, never at payload.
+//
+// Taking the minimum rather than the first in file order matters: with
+// reordered video the first PES in the file is not the earliest presentation
+// time, and picking it would shift every reported timestamp by the reorder
+// delay.
+std::int64_t earliest_pts_90k(std::span<const std::byte> ts) {
+  std::int64_t best = -1;
+  for (std::size_t i = 0; i + kPkt <= ts.size(); i += kPkt) {
+    if (u8(ts, i) != 0x47) continue;
+    if (!((u8(ts, i + 1) >> 6) & 1)) continue;  // not a PES start
+    const std::uint8_t afc = (u8(ts, i + 3) >> 4) & 3;
+    std::size_t off = i + 4;
+    if (afc & 2) off += 1 + u8(ts, off);
+    if (!(afc & 1) || off + 14 > i + kPkt) continue;
+    auto pes = ts.subspan(off, (i + kPkt) - off);
+    if (u8(pes, 0) != 0 || u8(pes, 1) != 0 || u8(pes, 2) != 1) continue;
+    const std::int64_t pts = pes_pts_90k(pes);
+    if (pts >= 0 && (best < 0 || pts < best)) best = pts;
+  }
+  return best;
+}
+
 }  // namespace
 
 Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
                                       const PacketHandler& on_packet) {
-  constexpr std::size_t kPkt = 188;
   std::unordered_map<std::uint16_t, std::vector<std::byte>> pes;  // PID -> current PES
   int klv_pid = -1;
   std::vector<std::byte> reasm;  // reassembled KLV for the KLV PID
+  const std::int64_t origin_90k = earliest_pts_90k(ts);
+  detail::PtsMarks marks;   // PES timestamps -> KLV packet timestamps
+  std::size_t stream_off = 0;  // absolute offset of reasm[0] in the KLV stream
 
   auto flush = [&](std::uint16_t pid) {
     auto it = pes.find(pid);
@@ -57,16 +102,26 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
     if (starts_with_ul(klv)) {
       if (klv_pid < 0) klv_pid = pid;
       if (pid == static_cast<std::uint16_t>(klv_pid)) {
+        // ns from the start of the source's presentation; kNoPts when this PES
+        // (or the whole file) carries no PTS. 90 kHz -> ns is exact at 1e5/9.
+        const std::int64_t pts90 = pes_pts_90k(it->second);
+        marks.mark(stream_off + reasm.size(),
+                   (pts90 < 0 || origin_90k < 0)
+                       ? kNoPts
+                       : (pts90 - origin_90k) * 100'000 / 9);
         reasm.insert(reasm.end(), klv.begin(), klv.end());
         std::size_t pos = 0;
         for (;;) {
           std::span<const std::byte> rest(reasm.data() + pos, reasm.size() - pos);
           const std::size_t n = packet_frame_length(rest);
           if (n == 0) break;
-          on_packet(KlvPacket{rest.subspan(0, n), kNoPts});
+          on_packet(KlvPacket{rest.subspan(0, n), marks.at(stream_off + pos)});
           pos += n;
         }
-        if (pos) reasm.erase(reasm.begin(), reasm.begin() + pos);
+        if (pos) {
+          reasm.erase(reasm.begin(), reasm.begin() + pos);
+          stream_off += pos;
+        }
       }
     }
     it->second.clear();

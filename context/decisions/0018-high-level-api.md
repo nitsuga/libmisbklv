@@ -94,7 +94,11 @@ follow-on (the alternative not taken this pass).
   for a mapped item); a mismatch returns `nullopt`. A checked/typed-tag scheme is
   the enum-codegen follow-on.
 - **PTS on emit**: `Message` carries the extraction PTS (or `kNoPts`); the sink
-  paces per ADR 0017 when realtime.
+  paces per ADR 0017 when realtime. *(Follow-on: until
+  [`0021`](./0021-read-path-timestamps.md) the extraction PTS was **always**
+  `kNoPts`, so `KlvStream` → `KlvSink` silently re-timed the stream it read —
+  and, once ADR 0020 required a real PTS for a video branch, refused it. With
+  0021 the two halves compose on one timeline.)*
 - Whether `Message` should expose the nested 0903 sets as sub-`Message`s is
   deferred — v1 exposes nested items as raw; typed nested access is a follow-on.
 

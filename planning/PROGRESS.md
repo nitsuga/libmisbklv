@@ -33,6 +33,16 @@ done and extending incrementally** — the state today:
   Codec-agnostic (H.264/H.265, TS or MP4 in); the source's audio and its own KLV
   are dropped. The caller must push KLV with real PTS on the video's timeline
   (`kNoPts` is rejected); `realtime` + video is refused as unexercised.
+  **An insert session leaves an output file only if it succeeded**
+  ([ADR 0022](../context/decisions/0022-no-output-on-failure.md)) — a failing or
+  never-called `finish()` removes the file it created, never one that was there
+  first.
+- **Read and write share one timeline**
+  ([ADR 0021](../context/decisions/0021-read-path-timestamps.md)): both
+  extractors report `pts_ns` as nanoseconds from the start of the source — the
+  timeline `push()` writes on — so `KlvStream` → edit → `KlvSink` keeps a stream
+  where it was, video branch included. `kNoPts` now means the stream carried no
+  timestamp (as `Day Flight.mpg` genuinely doesn't), not that we didn't look.
 - **Real-world hardening** done: multi-byte BER-OID tags (≥128), Report-on-Change
   trimmed packets, and adversarial/malformed input (integer-overflow OOB guards in
   the length arithmetic, length validation in `codec::decode`) — all covered by
@@ -55,14 +65,11 @@ done and extending incrementally** — the state today:
 
 ## In progress
 
-- **Video passthrough sits on the `feat/video-passthrough` branch**, green (full
-  CTest suite passing), not yet merged to `main`. `main` is unchanged and still
-  builds — the downstream consumer builds against this working tree. The
-  consumer's review of the branch is answered: the output-file-on-failure defect
-  is fixed, and the MP4/`qtdemux` path (its actual input format) is now covered
-  by the test alongside the TS/`tsdemux` one.
-- Otherwise nothing mid-change. Next work is pull-based (registry/data breadth as
-  samples require it) — see Next.
+- Nothing mid-change. Video passthrough and both follow-on findings the
+  `parrot-to-klv` consumer raised while building on it (read-path timestamps;
+  cleanup after a *late* failure) are landed and green — full CTest suite
+  passing, sanitizer build clean. Next work is pull-based (registry/data breadth
+  as samples require it) — see Next.
 
 ## Next
 

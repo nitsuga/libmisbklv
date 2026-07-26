@@ -26,6 +26,10 @@ grounded the hard parts:
   it cannot treat one buffer as one packet.
 - **PES PTS is unreliable** (`CLOCK_TIME_NONE`); time correlation should use the
   KLV Item 2 Precision Time Stamp ([`0009`](./0009-st0604-deferred.md)).
+  *(Follow-on: that was Day Flight, whose KLV PES genuinely carry no PTS — other
+  captures do. `pts_ns` is populated as of
+  [`0021`](./0021-read-path-timestamps.md), and Item 2 remains the answer only
+  for streams that really are untimed.)*
 
 # Decision
 
@@ -42,7 +46,7 @@ inline constexpr std::int64_t kNoPts = -1;
 // buffer and are valid ONLY during the handler call — copy to retain (ADR 0011).
 struct KlvPacket {
   std::span<const std::byte> bytes;   // parse_packet-able
-  std::int64_t pts_ns = kNoPts;       // PES PTS if present, else kNoPts
+  std::int64_t pts_ns = kNoPts;       // ns from the start of the source (ADR 0021)
 };
 using PacketHandler = std::function<void(const KlvPacket&)>;
 

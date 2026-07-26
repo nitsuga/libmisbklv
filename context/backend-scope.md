@@ -78,9 +78,12 @@ Opened here during scoping, each resolved by an ADR (see the
   [`0013`](./decisions/0013-media-backend-interface.md): a blocking push-callback
   `extract` + an `Inserter`. The backend owns a **reassembly buffer** (B0 showed
   appsink yields sub-packet fragments), runs `parse_packet`, and yields per-packet
-  borrowed spans (ADR 0011 read-borrows boundary); PES PTS unreliable → prefer KLV
-  Item 2. Later extended with a `std::stop_token` for cancellation (ADR
-  [`0019`](./decisions/0019-extract-cancellation.md)).
+  borrowed spans (ADR 0011 read-borrows boundary). Later extended with a
+  `std::stop_token` for cancellation (ADR
+  [`0019`](./decisions/0019-extract-cancellation.md)) and with real per-packet
+  timestamps — ns from the start of the source, both extractors (ADR
+  [`0021`](./decisions/0021-read-path-timestamps.md)), which retired the
+  "PES PTS unreliable → prefer KLV Item 2" reading of the B0 spike below.
 - **F-B — 0x15 extraction** → ADR
   [`0016`](./decisions/0016-ts-0x15-extraction.md): a gst-free core demuxer
   (`extract_ts_klv`) handles both 0x06 and 0x15 (stock `tsdemux` drops 0x15).
@@ -106,7 +109,12 @@ Opened here during scoping, each resolved by an ADR (see the
 - **PES PTS came back invalid** (`CLOCK_TIME_NONE`). Correlation should rely on
   the KLV's own Item 2 Precision Time Stamp, not PES PTS — consistent with
   [`0009`](./decisions/0009-st0604-deferred.md). (Confirm on more
-  samples; may be a demux-config detail.)
+  samples; may be a demux-config detail.) — **Confirmed on more samples, and it
+  is the sample, not the demuxer**: Day Flight's KLV PES really do carry no PTS,
+  while `falls.ts` / `Cheyenne.ts` / `klv_metadata_test_sync.ts` timestamp every
+  one. Extraction reports them as of ADR
+  [`0021`](./decisions/0021-read-path-timestamps.md); Item 2 remains the fallback
+  for streams like this one.
 
 ## Phased plan
 
@@ -133,7 +141,11 @@ Opened here during scoping, each resolved by an ADR (see the
   `open_insert` writes video + KLV. Parsed, never decoded (codec-agnostic); the
   source's audio/KLV pads are dropped; KLV must carry real PTS on the video's
   timeline. ADR [`0020`](./decisions/0020-video-passthrough.md), fork 18;
-  `gst_video_insert_test`.
+  `gst_video_insert_test`. Two follow-ons from the consumer using it: extraction
+  now reports that same timeline so read → edit → write composes (ADR
+  [`0021`](./decisions/0021-read-path-timestamps.md), fork 19), and the
+  "no output file on failure" guarantee covers the whole insert session, not just
+  the open (ADR [`0022`](./decisions/0022-no-output-on-failure.md), fork 20).
 
 ## Risks
 

@@ -9,6 +9,13 @@
 //   5. the source's own KLV / audio streams are dropped, not forwarded
 //   6. a failed open_insert() writes no output file — and never deletes one it
 //      did not create
+//   7. BOTH library extractors read those timestamps back (ADR 0021) — the gst
+//      backend and the gst-free extract_ts_klv — so the write side's timeline is
+//      the read side's timeline, checked against the PES parser below
+//   8. read -> edit -> write composes (ADR 0021): a KlvStream of the output,
+//      re-emitted through a KlvSink with the same video, keeps its timing
+//   9. no output file after a failure LATER than open_insert either (ADR 0022) —
+//      a failing finish(), and a session abandoned without one
 // Runs the whole battery twice: once on the given MPEG-TS source, then again on
 // an MP4 remuxed from it (the `qtdemux` path — what a consumer converting MP4s
 // actually hits, and a different demuxer + caps negotiation into the muxer).
@@ -26,7 +33,10 @@
 
 #include "misbklv/backend.hpp"
 #include "misbklv/gst_backend.hpp"
+#include "misbklv/message.hpp"
 #include "misbklv/packet.hpp"
+#include "misbklv/stream.hpp"
+#include "misbklv/ts.hpp"
 
 using namespace misbklv;
 
@@ -169,6 +179,35 @@ bool is_video(unsigned stream_type) {  // mpeg2, h264, h265
   return stream_type == 0x02 || stream_type == 0x1b || stream_type == 0x24;
 }
 
+// Compare a library extractor's per-packet timestamps against the ones pushed.
+// Both sides are "nanoseconds from the start of the source" (ADR 0021), but the
+// origin is the muxer's stream start rather than ours, so what must match is
+// every interval from the first packet — and no packet may come back kNoPts,
+// which is the whole defect this guards. Tolerance: the values made a round trip
+// through the 90 kHz PES grid, so allow two ticks.
+bool pts_series_ok(const char* who, const std::vector<std::int64_t>& got,
+                   const std::vector<std::int64_t>& want) {
+  constexpr std::int64_t kTol = 25'000;  // ns; one 90 kHz tick is 11 111 ns
+  if (got.size() != want.size()) {
+    std::printf("  %s: %zu timestamps for %zu packets\n", who, got.size(),
+                want.size());
+    return false;
+  }
+  for (std::size_t i = 0; i < got.size(); ++i) {
+    if (got[i] == kNoPts) {
+      std::printf("  %s: packet %zu came back kNoPts\n", who, i);
+      return false;
+    }
+    const std::int64_t diff = (got[i] - got[0]) - (want[i] - want[0]);
+    if (std::llabs(diff) > kTol) {
+      std::printf("  %s: packet %zu off by %lld ns\n", who, i,
+                  static_cast<long long>(diff));
+      return false;
+    }
+  }
+  return true;
+}
+
 bool g_pass = true;
 void check(const char* what, bool ok) {
   std::printf("  %-28s %s\n", what, ok ? "PASS" : "FAIL");
@@ -266,8 +305,10 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
 
   // --- 2. KLV byte-exact through the mux ------------------------------------
   std::vector<std::byte> klv_back;
+  std::vector<std::int64_t> gst_pts;
   auto r = be.extract(out_path, [&](const KlvPacket& kp) {
     klv_back.insert(klv_back.end(), kp.bytes.begin(), kp.bytes.end());
+    gst_pts.push_back(kp.pts_ns);
   });
   check("KLV byte-exact", r && klv_back == input);
 
@@ -328,6 +369,48 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
   check("KLV PTS preserved", pts_ok);
   // Both branches ran from zero, so their origins must coincide within a frame.
   check("KLV shares video timeline", std::llabs(base - vbase) <= 90000 / 20);
+
+  // --- 7. and the library reads those timestamps back (ADR 0021) ------------
+  // Same file, same expectation, but through the two extractors a consumer
+  // actually calls — the PES parser above is only the independent witness that
+  // the timing is in the file at all. Before ADR 0021 both reported kNoPts here.
+  check("gst extract reports PTS", pts_series_ok("gst extract", gst_pts, pushed));
+  std::vector<std::int64_t> ts_pts;
+  auto tr = extract_ts_klv(out_ts, [&](const KlvPacket& kp) {
+    ts_pts.push_back(kp.pts_ns);
+  });
+  check("extract_ts_klv reports PTS",
+        tr && pts_series_ok("extract_ts_klv", ts_pts, pushed));
+
+  // --- 8. read -> edit -> write composes (ADR 0021) -------------------------
+  // The facade's two halves over one timeline: read the file we just wrote as
+  // Messages, emit them into a NEW sink carrying the same video, and check the
+  // timing survived. This is the round trip that a kNoPts read path made
+  // impossible — KlvSink rejects an unset PTS when there is a video branch, so
+  // before the fix this did not merely drift, it failed outright.
+  const std::string round_path = out_path + ".roundtrip.ts";
+  std::remove(round_path.c_str());
+  std::size_t emitted = 0;
+  bool emit_ok = true;
+  {
+    KlvSink out(make_gst_backend(), "file:" + round_path, false, source);
+    KlvStream in(make_gst_backend(), out_path);
+    for (Message& m : in) {
+      if (!out.emit(m)) { emit_ok = false; break; }
+      ++emitted;
+    }
+    emit_ok = emit_ok && out.close();
+  }
+  check("round trip: re-emitted", emit_ok && emitted == pushed.size());
+  if (emit_ok) {
+    std::vector<std::int64_t> round_pts;
+    auto rr = be.extract(round_path, [&](const KlvPacket& kp) {
+      round_pts.push_back(kp.pts_ns);
+    });
+    check("round trip: timing kept",
+          rr && pts_series_ok("round trip", round_pts, pushed));
+  }
+  std::remove(round_path.c_str());
   return out_video.pts_90k.size();
 }
 
@@ -344,7 +427,14 @@ int main(int argc, char** argv) {
   const std::string out_path = argv[3];
   auto be = make_gst_backend();
 
-  // --- 6. a failed open_insert leaves no output behind ----------------------
+  // An MP4 remuxed from the TS source: the qtdemux path for the main battery,
+  // and the raw material for the late-failure case below. Absent if this
+  // gstreamer has no usable mp4mux, in which case both are skipped.
+  const std::string mp4 = out_path + ".src.mp4";
+  std::remove(mp4.c_str());
+  const bool have_mp4 = remux_to_mp4(ts_source, mp4);
+
+  // --- 6/9. no output file after a failure, wherever it surfaces ------------
   std::printf("failure paths\n");
   {
     // (a) missing source — rejected by the pre-flight check, before any element
@@ -379,14 +469,79 @@ int main(int argc, char** argv) {
     check("pre-existing output not deleted", !r && file_exists(p));
     std::remove(p.c_str());
   }
+  {
+    // (d) a session abandoned without finish(): the pipeline ran, the sink file
+    //     exists, but nothing finalized it. An unfinished .ts is not output
+    //     either, so the guarantee covers the whole session, not just the open
+    //     (ADR 0022).
+    const std::string p = out_path + ".abandoned.ts";
+    std::remove(p.c_str());
+    auto ins = be->open_insert({"file:" + p, false, ts_source});
+    check("abandoned: opened", static_cast<bool>(ins));
+    if (ins) {
+      std::span<const std::byte> buf = input;
+      (*ins)->push(buf.subspan(0, packet_frame_length(buf)), 0);
+      ins->reset();  // destroy without finish()
+      check("abandoned: no output", !file_exists(p));
+    }
+    std::remove(p.c_str());
+  }
+  if (have_mp4) {
+    // (e) the finding this case exists for: a source whose video track is
+    //     *declared but unparseable*. Blanking the avcC box leaves qtdemux an
+    //     avc1 sample entry with no codec_data — a video pad appears, so
+    //     open_insert succeeds and pushes are accepted, and the failure only
+    //     surfaces when finish() drains the pipeline. Before ADR 0022 that left
+    //     a zero-byte .ts behind, which reads as output to anything scanning
+    //     the directory.
+    auto bytes = read_file(mp4.c_str());
+    std::size_t at = std::string::npos;
+    for (std::size_t i = 0; i + 4 <= bytes.size(); ++i)
+      if (u8(bytes, i) == 'a' && u8(bytes, i + 1) == 'v' &&
+          u8(bytes, i + 2) == 'c' && u8(bytes, i + 3) == 'C') { at = i; break; }
+    if (at == std::string::npos) {
+      std::printf("  late failure: SKIPPED (no avcC box in the remuxed MP4)\n");
+    } else {
+      const char kFree[] = "free";  // same size, so the box layout still walks
+      for (std::size_t i = 0; i < 4; ++i)
+        bytes[at + i] = static_cast<std::byte>(kFree[i]);
+      const std::string broken = out_path + ".no-avcc.mp4";
+      { std::ofstream f(broken, std::ios::binary);
+        f.write(reinterpret_cast<const char*>(bytes.data()), bytes.size()); }
+
+      const std::string p = out_path + ".late.ts";
+      std::remove(p.c_str());
+      auto ins = be->open_insert({"file:" + p, false, broken});
+      check("late failure: opens", static_cast<bool>(ins));
+      if (ins) {
+        std::span<const std::byte> buf = input;
+        (*ins)->push(buf.subspan(0, packet_frame_length(buf)), 0);
+        check("late failure: finish fails", !(*ins)->finish());
+        ins->reset();
+        check("late failure: no output", !file_exists(p));
+      }
+      std::remove(p.c_str());
+      // ...and the same case must still not delete a file it did not create.
+      const std::string q = out_path + ".late-keepme.ts";
+      { std::ofstream f(q, std::ios::binary); f << "not ours to delete"; }
+      auto ins2 = be->open_insert({"file:" + q, false, broken});
+      if (ins2) {
+        (*ins2)->finish();
+        ins2->reset();
+      }
+      check("late failure: pre-existing output kept", file_exists(q));
+      std::remove(q.c_str());
+      std::remove(broken.c_str());
+    }
+  } else {
+    std::printf("  late failure: SKIPPED (needs the remuxed MP4)\n");
+  }
 
   // --- the full battery, on the TS source and then on an MP4 remuxed from it -
   std::printf("MPEG-TS source (%s)\n", ts_source.c_str());
   const std::size_t ts_frames = run_case(*be, ts_source, input, out_path);
 
-  const std::string mp4 = out_path + ".src.mp4";
-  std::remove(mp4.c_str());
-  if (remux_to_mp4(ts_source, mp4)) {
+  if (have_mp4) {
     std::printf("MP4 source (qtdemux path, remuxed from the TS)\n");
     const std::size_t mp4_frames = run_case(*be, mp4, input, out_path + ".mp4.ts");
     check("MP4 path: same frame count", mp4_frames == ts_frames && ts_frames);

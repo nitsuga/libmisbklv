@@ -33,3 +33,5 @@ diverge — e.g. fork 7 → ADR 0004; one fork can span several ADRs — fork 4 
 | 16 | [0018 — High-level API (Message + KlvStream/KlvSink facade)](./0018-high-level-api.md) | accepted |
 | 17 | [0019 — Cooperative extraction cancellation (stop token)](./0019-extract-cancellation.md) | accepted |
 | 18 | [0020 — Video passthrough on the insert path](./0020-video-passthrough.md) | accepted |
+| 19 | [0021 — Timestamps on the read path (`KlvPacket::pts_ns`)](./0021-read-path-timestamps.md) | accepted |
+| 20 | [0022 — "No output file on failure" spans the insert session](./0022-no-output-on-failure.md) | accepted |
