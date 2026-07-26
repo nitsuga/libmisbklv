@@ -1,15 +1,15 @@
 ---
 type: Component
 title: gstreamer media backend — scope & design
-description: Environment findings, component breakdown, and the B0–B4 phased plan for the gstreamer MPEG-TS backend.
+description: Environment findings, component breakdown, and the phased plan for the gstreamer MPEG-TS backend.
 tags: [component, backend, gstreamer, mpegts, phase-3]
 timestamp: 2026-07-19T06:00:00Z
 ---
 
 # gstreamer backend — scope
 
-> **Status: implemented.** B0–B4 complete and all scoping forks (F-A–F-D)
-> resolved — see the [decided register](./decisions/index.md). This is no longer
+> **Status: implemented.** Every phase below is done and all scoping forks
+> (F-A–F-D) resolved — see the [decided register](./decisions/index.md). This is no longer
 > a forward plan; it's retained for the environment findings and the design
 > rationale that shaped the backend (`misbklv-gst`).
 
@@ -127,8 +127,7 @@ Opened here during scoping, each resolved by an ADR (see the
   ending on a `udpsrc` idle timeout (no EOS crosses the wire). `gst_stream_test`:
   udp loopback (receiver `extract()` on a thread, realtime `push` on main) →
   byte-exact, 6 packets in ~165 ms (clock-paced). ADR
-  [`0017`](./decisions/0017-realtime-streaming.md), fork 15. **B0–B4
-  complete.**
+  [`0017`](./decisions/0017-realtime-streaming.md), fork 15.
 - **B5 — video passthrough on the insert path** (done): `InsertConfig::video_source`
   adds a `filesrc ! parsebin` branch to the same `mpegtsmux`, so one
   `open_insert` writes video + KLV. Parsed, never decoded (codec-agnostic); the

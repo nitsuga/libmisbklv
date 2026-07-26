@@ -61,4 +61,4 @@ _(`type: Decision` — ADRs: the *why* of resolved forks.)_
 
 _(`type: Component` — libmisbklv modules: KLV core, gstreamer backend, ffmpeg backend.)_
 
-* [gstreamer media backend — scope & design](./backend-scope.md) — environment findings (two extraction regimes: 0x06 vs 0x15), component breakdown, and the B0–B4 phased plan. B0–B4 complete.
+* [gstreamer media backend — scope & design](./backend-scope.md) — environment findings (two extraction regimes: 0x06 vs 0x15), component breakdown, and the phased plan — every phase of it implemented.

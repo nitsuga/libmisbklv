@@ -55,7 +55,10 @@ done and extending incrementally** — the state today:
 
 ## In progress
 
-- Nothing actively mid-change. Next work is pull-based (registry/data breadth as
+- **Video passthrough sits on the `feat/video-passthrough` branch**, green (full
+  CTest suite passing), not yet merged to `main`. `main` is unchanged and still
+  builds — the downstream consumer builds against this working tree.
+- Otherwise nothing mid-change. Next work is pull-based (registry/data breadth as
   samples require it) — see Next.
 
 ## Next

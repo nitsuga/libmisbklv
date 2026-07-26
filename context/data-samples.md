@@ -79,7 +79,7 @@ VMTI in any of them; the 0903 read path stays on hand-authored + jmisb vectors).
 | `Cheyenne.ts` | PID 0x102 | 407 | 37 (≤72) | H.264 + AAC + KLV (3 streams) |
 | `falls.ts` (stream 1) | PID 0x1000 | 1953 | 35 (≤65) | basic 0601; has target-location 40/41/42, ground range 57 |
 | `falls.ts` (stream 2) | PID 0x1002 | 1953 | (≤91) | **extended** 0601 — items 75–91 (some IMAPB), Security LS |
-| `klv_metadata_test_sync.ts` | PID 0x44 | 365 | 36 (≤72) | KLV listed first; name implies frame-sync |
+| `klv_metadata_test_sync.ts` | PID 0x44 | 365 | 36 (≤72) | KLV listed first; name implies frame-sync. H.264 720×480, ~14 s, no audio — small enough that it's also the **video source** for the passthrough test ([ADR 0020](./decisions/0020-video-passthrough.md)), whose own KLV track must be dropped |
 
 **All four KLV streams parse cleanly and round-trip byte-exact** (407/1953/1953/365
 = 4678 packets), through the full parse→codec→builder→checksum path — the
@@ -103,9 +103,11 @@ Findings worth acting on:
 - **Not yet exercised anywhere:** multi-byte BER-OID tags (≥128, e.g. Item 143
   MSID) — max tag across all samples is 91.
 
-These are ideal large-scale **round-trip regression** targets. Not yet wired as
-CTest cases (would need either committed `.klv` fixtures or build-time `ffmpeg`
-extraction from the LFS `.ts`).
+These are ideal large-scale **round-trip regression** targets, and are now wired
+as CTest cases: the KLV elementary streams were extracted once and **committed**
+under `../test/fixtures/`, rather than re-extracted at build time — a demuxer's
+exact byte output is not stable across ffmpeg versions, so committing them keeps
+the regression hermetic and drops the ffmpeg build dependency.
 
 # Relationships
 

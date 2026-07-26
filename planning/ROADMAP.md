@@ -29,9 +29,10 @@ beyond MSID passthrough.
   model, registry, error + C ABI, gstreamer backend (ADRs 0005–0012).
 - **Phase 3 — Implementation** (done, extending incrementally): the KLV core
   (milestones 1–6: round-trips, ST 1201 IMAPB, 0903 nesting / standalone /
-  VTarget Series) and the gstreamer backend (B0–B4: extraction 0x06 + 0x15,
-  file + live; insertion file + live, clock-paced) — both on stock gstreamer,
-  no custom element. The in-library PMT-rewrite element that ADR 0008 planned
+  VTarget Series) and the gstreamer backend (every B-phase in
+  [`backend-scope`](../context/backend-scope.md): extraction 0x06 + 0x15, file +
+  live; insertion file + live, clock-paced, with optional video passthrough) —
+  both on stock gstreamer, no custom element. The in-library PMT-rewrite element that ADR 0008 planned
   was proven unnecessary ([ADR 0015](../context/decisions/0015-no-pmt-rewrite.md)).
   Ongoing within this phase: registry breadth (below).
 - **Phase 4 — 0604 ES timestamps** (deferred — [ADR 0009](../context/decisions/0009-st0604-deferred.md)):
