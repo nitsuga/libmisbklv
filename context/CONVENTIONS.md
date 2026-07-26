@@ -121,7 +121,7 @@ ever ingested (deferred — see [`../planning/ROADMAP.md`](../planning/ROADMAP.m
 
 Prefer bundle-relative links resolved from `context/` — either sibling-relative
 `[ST 0601](./st0601.md)` (what the bundle mostly uses) or absolute
-`[ST 0601](/st0601.md)`. Relationship semantics — references,
+`[ST 0601](./st0601.md)`. Relationship semantics — references,
 nests-in, depends-on — live in the surrounding prose; the link itself is
 untyped. Broken links are not errors; they may be not-yet-written knowledge.
 

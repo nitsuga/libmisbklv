@@ -49,7 +49,7 @@ _(`type: Prior Art` — existing KLV libraries/plugins analyzed as design input.
 
 _(`type: Sample Data` — characterized input assets / test vectors.)_
 
-* [data/ — KLV MPEG-TS samples](./data-samples.md) — Day Flight & Night Flight IR; verified ST 0601 in MPEG-TS, `0x06`+`KLVA` signaling.
+* [data/ — KLV MPEG-TS samples](./data-samples.md) — the two canonical `.mpg` (Day Flight, Night Flight IR) plus Cheyenne / falls / klv_metadata_test_sync; all verified ST 0601, split across `0x06` and `0x15` signaling.
 
 ## Decisions
 

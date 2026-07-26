@@ -24,7 +24,8 @@ and [ADR 0009](context/decisions/0009-st0604-deferred.md).
 - **gst-free file extraction**: pull KLV from a `.ts` buffer with zero
   dependencies (`extract_ts_klv`); GStreamer is only needed for live sources.
 - **High-level API**: an owned, editable `Message` (typed `get<T>`/`set`,
-  byte-exact `encode`) plus a `KlvStream` / `KlvSink` read-edit-write facade.
+  byte-exact `encode`) plus a `KlvStream` / `KlvSink` read-edit-write facade —
+  read and write share one timeline, so editing a stream doesn't re-time it.
 
 ## Quick start
 

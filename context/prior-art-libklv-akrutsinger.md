@@ -25,7 +25,7 @@ there is little to evaluate for design.
 
 # Relationships
 
-Same domain ([0601](/st0601.md)); otherwise unrelated to our design.
+Same domain ([0601](./st0601.md)); otherwise unrelated to our design.
 
 # Citations
 

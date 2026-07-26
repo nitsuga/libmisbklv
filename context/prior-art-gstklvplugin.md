@@ -35,7 +35,7 @@ metadata signaling). Meson (primary) + CMake, gst-check tests, Doxygen.
   `tsdemux` expects raw KLV on `0x06 + KLVA`; plain `0x15` would need
   metadata access-unit wrapping that `mpegtsmux` doesn't produce. This is a
   concrete gotcha for our TS mux/demux — and it's the signaling the real
-  samples use (see [`data-samples`](/data-samples.md)).
+  samples use (see [`data-samples`](./data-samples.md)).
 - **JSON interchange format:** flat object, numeric string keys; nested local
   sets as `hex:`/`base64:`-prefixed strings. Useful as an optional tooling
   surface (our native API is C++).
@@ -47,9 +47,9 @@ metadata signaling). Meson (primary) + CMake, gst-check tests, Doxygen.
 
 # Relationships
 
-Profile of [0107](/st0107.md); items of [0601](/st0601.md) (at rev .8); ST 1402
-for the MPEG-TS carriage (complements our [0107](/st0107.md) §6 carriage
-knowledge). The [klvdata](/prior-art-klvdata.md) ffmpeg demux idiom is the
+Profile of [0107](./st0107.md); items of [0601](./st0601.md) (at rev .8); ST 1402
+for the MPEG-TS carriage (complements our [0107](./st0107.md) §6 carriage
+knowledge). The [klvdata](./prior-art-klvdata.md) ffmpeg demux idiom is the
 ffmpeg-path analog of this plugin's gstreamer demux.
 
 # Citations

@@ -33,7 +33,7 @@ C library (no license, 3★, updated 2024-10) to encode/decode ST 0601.**6**
 
 # Relationships
 
-Implements items of [0601](/st0601.md) (at revision .6).
+Implements items of [0601](./st0601.md) (at revision .6).
 
 # Citations
 

@@ -18,7 +18,7 @@ external deps. `pip install klvdata`.
 - `klvdata.StreamParser(bytes)` yields packets; `packet.structure()` prints a
   nested tree. Each item is a typed class (`PrecisionTimeStamp`,
   `SensorLatitude`, `UASLocalMetadataSet`, …). Unknown tags surface as
-  `UnknownElement` — the [0107](/st0107.md) skip-unknown / future-proof
+  `UnknownElement` — the [0107](./st0107.md) skip-unknown / future-proof
   pattern.
 - **Deliberately does not demux.** The README states klvdata alone cannot
   extract KLV from an MPEG-TS; it expects an external demuxer. Its own quick
@@ -30,15 +30,15 @@ external deps. `pip install klvdata`.
 - **Crib:** the per-item class names are a ready 0601 item vocabulary; the
   `StreamParser`-yields-packets API shape; the `UnknownElement` future-proofing.
 - **The ffmpeg idiom is load-bearing** and works on our exact sample
-  (see [`data-samples`](/data-samples.md); `data-re` is the KLV/data PID).
+  (see [`data-samples`](./data-samples.md); `data-re` is the KLV/data PID).
   Validates the [ffmpeg](#) extraction path; see
-  [gstklvplugin](/prior-art-gstklvplugin.md) for the gstreamer equivalent.
+  [gstklvplugin](./prior-art-gstklvplugin.md) for the gstreamer equivalent.
 - **Avoid:** Python (we are C++); it externalizes demux — which is precisely
   libmisbklv's differentiator (integrated, configurable gstreamer/ffmpeg demux).
 
 # Relationships
 
-Profile of [0107](/st0107.md); implements items of [0601](/st0601.md) + ST 0102.
+Profile of [0107](./st0107.md); implements items of [0601](./st0601.md) + ST 0102.
 
 # Citations
 

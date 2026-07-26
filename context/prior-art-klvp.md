@@ -30,13 +30,13 @@ Plus `klv2xml`, an example app that reads a KLV stream and emits XML.
   from the per-standard item registry. The `klv2xml` example is a good model
   for a debug/inspection CLI. CMake package export pattern.
 - **Avoid:** **no license** — design reference only, do not copy code; vcpkg
-  is a heavyweight dependency; covers 0601+0102, not [0903](/st0903.md) or
-  [0604](/st0604.md).
+  is a heavyweight dependency; covers 0601+0102, not [0903](./st0903.md) or
+  [0604](./st0604.md).
 - Closest in spirit to libmisbklv (C++), so the best architectural foil.
 
 # Relationships
 
-Profile of [0107](/st0107.md); items of [0601](/st0601.md) + ST 0102.
+Profile of [0107](./st0107.md); items of [0601](./st0601.md) + ST 0102.
 
 # Citations
 

@@ -11,7 +11,7 @@ resource: ../data
 
 Two MPEG-TS files in [`../data/`](../data/), the canonical KLV samples from
 `samples.ffmpeg.org/MPEG2/mpegts-klv/` — the same files
-[klvdata](/prior-art-klvdata.md)'s README uses. Ideal round-trip test vectors
+[klvdata](./prior-art-klvdata.md)'s README uses. Ideal round-trip test vectors
 for the read/write and demux paths.
 
 # Verified structure (both)
@@ -40,11 +40,11 @@ not KLV — a robust demuxer should ignore it.
 The KLV elementary stream is genuine ST 0601:
 
 - **UL key** `060e2b34020b01010e01030101000000` — matches the UAS Datalink LS
-  key in [0601](/st0601.md) §6.2.
+  key in [0601](./st0601.md) §6.2.
 - **BER long-form length** (value 144–145 B → `0x81 0x90` / `0x81 0x91`),
-  i.e. [0107](/st0107.md) long form in use.
+  i.e. [0107](./st0107.md) long form in use.
 - **First item tag `0x02`** = Precision Time Stamp, length 8 — the mandatory
-  "timestamp first" rule of [0601](/st0601.md) §6.3, honored.
+  "timestamp first" rule of [0601](./st0601.md) §6.3, honored.
 
 So each KLV PES is a well-formed 0601 packet — a clean parse target.
 
@@ -53,7 +53,7 @@ So each KLV PES is a well-formed 0601 packet — a clean parse target.
 The KLV PID uses **`stream_type = 0x06`** (PES private data) + a **`KLVA`
 registration descriptor`** — *not* `0x15` (the ST 1402 metadata stream type).
 This is exactly the pragmatic signaling
-[gstklvplugin](/prior-art-gstklvplugin.md) chose so GStreamer `tsdemux` (and
+[gstklvplugin](./prior-art-gstklvplugin.md) chose so GStreamer `tsdemux` (and
 `ffmpeg`) hand up raw KLV; `0x15` would expect metadata access-unit wrapping
 these muxers don't emit. **Implication:** when libmisbklv *inserts* a KLV stream
 into MPEG-TS, signal `0x06 + KLVA` to match these samples and the dominant
@@ -64,7 +64,7 @@ KLV PID by the `KLVA` registration descriptor, not by stream_type alone).
 
 - **Day Flight** — H.264 720p60, 3 min. Good general parse/round-trip target.
 - **Night Flight IR** — IR content, longer; relevant when we wire VMTI
-  ([0903](/st0903.md)) target-detection/overlay, since IR is a common VMTI
+  ([0903](./st0903.md)) target-detection/overlay, since IR is a common VMTI
   input.
 
 # Additional `.ts` samples (added 2026-07-18)
@@ -100,6 +100,15 @@ Findings worth acting on:
   (like Day/Night Flight); **`Cheyenne` and `klv_metadata_test_sync` = `0x15`**
   (metadata). This matters for extraction — stock `tsdemux` exposes `0x06`+KLVA as
   `meta/x-klv` but **drops `0x15`** (see [`./backend-scope.md`](./backend-scope.md)).
+- **PES timestamps (checked 2026-07-26):** `Cheyenne`, `falls` and
+  `klv_metadata_test_sync` carry a PTS on **every** KLV PES; **Day Flight's carry
+  none at all** (`PTS_DTS_flags` clear — 6 PES, 0 timestamped). That single
+  sample is where the long-standing "PES PTS is unreliable" reading came from, so
+  it is the one file whose extraction correctly reports `kNoPts` throughout, and
+  the reason correlation for it falls back to KLV Item 2
+  ([ADR 0021](./decisions/0021-read-path-timestamps.md)). Note the 0x15 pair is
+  timestamped but invisible to `tsdemux`, so only `extract_ts_klv` can read
+  either their KLV or their timing.
 - **Not yet exercised anywhere:** multi-byte BER-OID tags (≥128, e.g. Item 143
   MSID) — max tag across all samples is 91.
 
@@ -111,9 +120,9 @@ the regression hermetic and drops the ffmpeg build dependency.
 
 # Relationships
 
-Exercises [0601](/st0601.md) (UL + items) and [0107](/st0107.md) (BER, TLV);
-the `0x06`+`KLVA` signaling ties to [gstklvplugin](/prior-art-gstklvplugin.md)
-and the demux idiom to [klvdata](/prior-art-klvdata.md) (which extracts these
+Exercises [0601](./st0601.md) (UL + items) and [0107](./st0107.md) (BER, TLV);
+the `0x06`+`KLVA` signaling ties to [gstklvplugin](./prior-art-gstklvplugin.md)
+and the demux idiom to [klvdata](./prior-art-klvdata.md) (which extracts these
 via `ffmpeg -map data-re`).
 
 # Citations

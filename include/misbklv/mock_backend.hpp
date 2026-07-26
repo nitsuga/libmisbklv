@@ -33,14 +33,20 @@ class MockInserter : public Inserter {
 // 0013); open_insert() returns a MockInserter (also kept in `last_inserter`).
 class MockBackend : public MediaBackend {
  public:
-  explicit MockBackend(std::vector<ber::Bytes> packets = {})
-      : packets_(std::move(packets)) {}
+  // `pts` (optional, parallel to `packets`) are the timestamps extract() reports
+  // — nanoseconds from the start of the source, as a real backend does (ADR
+  // 0021). Omit it to replay an untimed stream: every packet gets kNoPts, which
+  // is what a capture like Day Flight actually yields.
+  explicit MockBackend(std::vector<ber::Bytes> packets = {},
+                       std::vector<std::int64_t> pts = {})
+      : packets_(std::move(packets)), pts_(std::move(pts)) {}
 
   Result<std::monostate> extract(std::string_view, const PacketHandler& on_packet,
                                  std::stop_token stop = {}) override {
-    for (const auto& p : packets_) {
+    for (std::size_t i = 0; i < packets_.size(); ++i) {
       if (stop.stop_requested()) break;  // cooperative cancel (ADR 0019)
-      on_packet(KlvPacket{std::span<const std::byte>(p), kNoPts});
+      on_packet(KlvPacket{std::span<const std::byte>(packets_[i]),
+                          i < pts_.size() ? pts_[i] : kNoPts});
     }
     return Result<std::monostate>::ok({});
   }
@@ -55,6 +61,7 @@ class MockBackend : public MediaBackend {
 
  private:
   std::vector<ber::Bytes> packets_;
+  std::vector<std::int64_t> pts_;  // short/empty -> kNoPts from there on
 };
 
 }  // namespace misbklv

@@ -21,12 +21,27 @@ int main() {
 
   MockBackend be({p1, p2});
   std::vector<ber::Bytes> got;
+  std::vector<std::int64_t> got_pts;
   auto r = be.extract("mock", [&](const KlvPacket& kp) {
     got.emplace_back(kp.bytes.begin(), kp.bytes.end());
+    got_pts.push_back(kp.pts_ns);
   });
   check(bool(r), "extract returns ok");
   check(got.size() == 2, "extract yielded 2 packets");
   check(got.size() == 2 && got[0] == p1 && got[1] == p2, "extract bytes match canned");
+  check(got_pts == std::vector<std::int64_t>{kNoPts, kNoPts},
+        "untimed stream extracts as kNoPts");
+
+  // ...and a timed one replays its timestamps (ADR 0021): the interface says
+  // pts_ns is ns from the start of the source, so the test double must be able
+  // to say something other than "no idea".
+  MockBackend timed({p1, p2}, {0, 40'000'000});
+  got_pts.clear();
+  (void)timed.extract("mock", [&](const KlvPacket& kp) {
+    got_pts.push_back(kp.pts_ns);
+  });
+  check(got_pts == std::vector<std::int64_t>{0, 40'000'000},
+        "timed stream extracts its timestamps");
 
   auto ins = be.open_insert({"file:out.ts"});
   check(bool(ins), "open_insert ok");

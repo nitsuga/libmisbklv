@@ -37,7 +37,13 @@ beyond MSID passthrough.
   Ongoing within this phase: registry breadth (below).
 - **Phase 4 — 0604 ES timestamps** (deferred — [ADR 0009](../context/decisions/0009-st0604-deferred.md)):
   SEI / `user_data` injection/extraction, emulation-prevention stuff/de-stuff.
-- **Phase 5 — Hardening**: tests, conformance, packaging, user docs.
+- **Phase 5 — Hardening** (largely landed, continuing alongside Phase 3): the
+  adversarial/real-world test pass (`hardening_test`, ASan+UBSan in CI),
+  conformance against the standards' own worked examples
+  (`st0601_examples_test`) and jmisb, `find_package` packaging with a consumer
+  smoke test, and the user guide ([`../docs/api.md`](../docs/api.md)). What keeps
+  it open is data-driven: conformance breadth follows the samples and the
+  registry (see PROGRESS "Known gaps").
 
 ## Open forks
 

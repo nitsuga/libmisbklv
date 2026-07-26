@@ -103,6 +103,9 @@ specified for what it can actually see.
   `KlvStream` → `KlvSink` round trip over a video source that checks the timing
   survives re-muxing. `ts_extract_test` checks the real captures: timestamps
   present on all packets or none, and non-decreasing.
+- `MockBackend` takes an optional per-packet `pts` vector, so the test double can
+  express the contract instead of only the sentinel; omitted, it replays an
+  untimed stream exactly as before.
 - One behavioural change for existing callers: code that treated `pts()` as
   always `-1` now sees real values. The insert path's `kNoPts` fallback is
   unchanged, so a KLV-only sink fed untimed input behaves exactly as before.

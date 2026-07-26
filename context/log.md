@@ -2,6 +2,21 @@
 
 ## 2026-07-26
 
+* **Lint (docs consistency + drift)**, after the two fixes above. Four real
+  findings, not cosmetics: (1) **~68 broken links** — most `context/` concepts
+  wrote sibling links root-absolute (`](/st0107.md)`), which resolves nowhere on
+  GitHub; now relative, and every relative link in the repo is verified to
+  resolve. (2) **`MockBackend` contradicted the interface it exists to model** —
+  it could only ever deliver `kNoPts`, i.e. the defect ADR 0021 fixed; it now
+  takes an optional per-packet `pts` vector (omitted = an untimed stream, as
+  before), covered in `mock_backend_test`. (3) **`data-samples.md` gained the PES
+  timestamp characterization** — which captures are timestamped and which is not
+  — the evidence ADR 0021 rests on. (4) **ROADMAP's Phase 5 had no status** while
+  its contents (hardening pass, sanitizer CI, conformance-by-worked-examples,
+  packaging, user guide) had landed; marked as such, with what keeps it open.
+  Also refreshed `index.md`'s sample-data line (still described two files of
+  five) and README's facade bullet (timing now carries through an edit).
+
 * **Read-path timestamps** (fork 19 →
   [ADR 0021](./decisions/0021-read-path-timestamps.md)): `KlvPacket::pts_ns` was
   a documented field that neither extractor ever set, so every consumer saw `-1`
