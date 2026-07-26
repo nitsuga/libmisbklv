@@ -7,16 +7,22 @@
 //   3. the video elementary stream is passthrough, not re-encoded
 //   4. the KLV PES timestamps are the ones we pushed (90 kHz rounding)
 //   5. the source's own KLV / audio streams are dropped, not forwarded
-//   6. a missing video source fails open_insert() and writes no output file
+//   6. a failed open_insert() writes no output file — and never deletes one it
+//      did not create
+// Runs the whole battery twice: once on the given MPEG-TS source, then again on
+// an MP4 remuxed from it (the `qtdemux` path — what a consumer converting MP4s
+// actually hits, and a different demuxer + caps negotiation into the muxer).
+// A non-TS source skips the source-comparison checks, which need a TS to read.
 // argv: <video-source.ts> <input.klv> <temp.ts>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
-#include <map>
 #include <span>
 #include <string>
 #include <vector>
+
+#include <gst/gst.h>
 
 #include "misbklv/backend.hpp"
 #include "misbklv/gst_backend.hpp"
@@ -32,6 +38,11 @@ static std::vector<std::byte> read_file(const char* path) {
   for (std::size_t i = 0; i < raw.size(); ++i)
     out[i] = static_cast<std::byte>(static_cast<unsigned char>(raw[i]));
   return out;
+}
+
+static bool file_exists(const std::string& p) {
+  std::ifstream f(p, std::ios::binary);
+  return f.good();
 }
 
 // --- a minimal MPEG-TS reader, just enough to check what we muxed ------------
@@ -55,6 +66,11 @@ struct Pes {
 
 inline unsigned u8(std::span<const std::byte> b, std::size_t i) {
   return static_cast<unsigned>(b[i]);
+}
+
+// Two sync bytes one packet apart — enough to tell an MPEG-TS from an MP4.
+bool is_mpegts(std::span<const std::byte> b) {
+  return b.size() > kPkt && u8(b, 0) == 0x47 && u8(b, kPkt) == 0x47;
 }
 
 // Parse the first PAT + PMT and return the program's elementary streams.
@@ -153,48 +169,60 @@ bool is_video(unsigned stream_type) {  // mpeg2, h264, h265
   return stream_type == 0x02 || stream_type == 0x1b || stream_type == 0x24;
 }
 
-}  // namespace
+bool g_pass = true;
+void check(const char* what, bool ok) {
+  std::printf("  %-28s %s\n", what, ok ? "PASS" : "FAIL");
+  g_pass = g_pass && ok;
+}
 
-int main(int argc, char** argv) {
-  if (argc < 4) {
-    std::fprintf(stderr,
-                 "usage: gst_video_insert_test <video.ts> <input.klv> <out.ts>\n");
-    return 2;
+// Remux a TS's video into an MP4, so the qtdemux path gets covered without
+// committing a binary fixture or needing an encoder. Returns false (and the case
+// is skipped) if the mp4 muxer isn't in this gstreamer install.
+bool remux_to_mp4(const std::string& ts, const std::string& mp4) {
+  gst_init(nullptr, nullptr);
+  GstElementFactory* f = gst_element_factory_find("mp4mux");
+  if (!f) return false;
+  gst_object_unref(f);
+  const std::string desc = "filesrc location=\"" + ts +
+                           "\" ! tsdemux ! h264parse ! mp4mux ! filesink "
+                           "location=\"" + mp4 + "\"";
+  GError* err = nullptr;
+  GstElement* p = gst_parse_launch(desc.c_str(), &err);
+  if (err) { g_error_free(err); }
+  if (!p) return false;
+  bool ok = gst_element_set_state(p, GST_STATE_PLAYING) !=
+            GST_STATE_CHANGE_FAILURE;
+  if (ok) {
+    GstBus* bus = gst_element_get_bus(p);
+    GstMessage* msg = gst_bus_timed_pop_filtered(
+        bus, 30 * GST_SECOND,
+        static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
+    ok = msg && GST_MESSAGE_TYPE(msg) == GST_MESSAGE_EOS;
+    if (msg) gst_message_unref(msg);
+    gst_object_unref(bus);
   }
-  const std::string video_source = argv[1];
-  const auto input = read_file(argv[2]);
-  const std::string out_path = argv[3];
+  gst_element_set_state(p, GST_STATE_NULL);
+  gst_object_unref(p);
+  return ok && file_exists(mp4);
+}
+
+// Mux `source`'s video + `input`'s KLV into `out_path` and check the result.
+// Returns the number of video PES in the output (0 on a hard failure), so a
+// later case can be compared against an earlier one.
+std::size_t run_case(MediaBackend& be, const std::string& source,
+                     const std::vector<std::byte>& input,
+                     const std::string& out_path) {
   std::span<const std::byte> buf = input;
-  auto be = make_gst_backend();
-  bool pass = true;
-  auto check = [&](const char* what, bool ok) {
-    std::printf("%-28s %s\n", what, ok ? "PASS" : "FAIL");
-    pass = pass && ok;
-  };
-
-  // --- 6. missing source: clean failure, no output file ---------------------
-  {
-    const std::string missing_out = out_path + ".missing.ts";
-    std::remove(missing_out.c_str());
-    auto r = be->open_insert({"file:" + missing_out, false,
-                              video_source + ".does-not-exist"});
-    const bool errored = !r;
-    std::ifstream f(missing_out, std::ios::binary);
-    check("missing source rejected", errored && !f.good());
-    if (f.good()) { f.close(); std::remove(missing_out.c_str()); }
-  }
-
-  // --- mux: video passthrough + KLV at known PTS ----------------------------
-  // 100 ms apart, on the source's timeline from zero — the contract a video
+  // KLV 100 ms apart, on the source's timeline from zero — the contract a video
   // branch imposes on the caller (kNoPts is rejected; checked below).
   constexpr std::int64_t kStepNs = 100'000'000;
   std::vector<std::int64_t> pushed;
   {
-    auto ins = be->open_insert({"file:" + out_path, false, video_source});
+    auto ins = be.open_insert({"file:" + out_path, false, source});
     if (!ins) {
-      std::fprintf(stderr, "open_insert failed: %d\n",
-                   static_cast<int>(ins.error()));
-      return 2;
+      std::printf("  open_insert failed: %d\n", static_cast<int>(ins.error()));
+      g_pass = false;
+      return 0;
     }
     check("kNoPts rejected",
           !(*ins)->push(buf.subspan(0, packet_frame_length(buf)), kNoPts));
@@ -204,60 +232,73 @@ int main(int argc, char** argv) {
       if (n == 0) break;
       const std::int64_t pts = static_cast<std::int64_t>(pushed.size()) * kStepNs;
       if (!(*ins)->push(buf.subspan(off, n), pts)) {
-        std::fprintf(stderr, "push failed at packet %zu\n", pushed.size());
-        return 2;
+        std::printf("  push failed at packet %zu\n", pushed.size());
+        g_pass = false;
+        return 0;
       }
       pushed.push_back(pts);
       off += n;
     }
     if (!(*ins)->finish()) {
-      std::fprintf(stderr, "finish failed\n");
-      return 2;
+      std::printf("  finish failed\n");
+      g_pass = false;
+      return 0;
     }
   }
   const auto out_ts = read_file(out_path.c_str());
-  std::printf("muxed %zu KLV packets + video -> %s (%zu bytes)\n", pushed.size(),
-              out_path.c_str(), out_ts.size());
+  std::printf("  muxed %zu KLV packets + video -> %zu bytes\n", pushed.size(),
+              out_ts.size());
 
   // --- 1. the PMT lists exactly one video ES and one KLV ES ------------------
   const auto es = read_pmt(out_ts);
-  unsigned video_pid = 0, klv_pid = 0, nvideo = 0, nklv = 0;
+  unsigned video_pid = 0, video_type = 0, nvideo = 0, nklv = 0, klv_pid = 0;
   for (const auto& e : es) {
     std::printf("  ES pid=0x%04x stream_type=0x%02x%s\n", e.pid, e.stream_type,
                 e.klva ? " KLVA" : "");
-    if (is_video(e.stream_type)) { ++nvideo; if (!video_pid) video_pid = e.pid; }
+    if (is_video(e.stream_type) && !video_pid) {
+      video_pid = e.pid;
+      video_type = e.stream_type;
+    }
+    if (is_video(e.stream_type)) ++nvideo;
     if (e.stream_type == 0x06 && e.klva) { ++nklv; klv_pid = e.pid; }
   }
   check("PMT: video + KLV, only", es.size() == 2 && nvideo == 1 && nklv == 1);
 
   // --- 2. KLV byte-exact through the mux ------------------------------------
   std::vector<std::byte> klv_back;
-  auto r = be->extract(out_path, [&](const KlvPacket& kp) {
+  auto r = be.extract(out_path, [&](const KlvPacket& kp) {
     klv_back.insert(klv_back.end(), kp.bytes.begin(), kp.bytes.end());
   });
   check("KLV byte-exact", r && klv_back == input);
 
   // --- 3. video is passthrough, not re-encoded ------------------------------
-  const auto src_ts = read_file(video_source.c_str());
-  const auto src_es = read_pmt(src_ts);
-  unsigned src_video_pid = 0, src_video_type = 0;
-  for (const auto& e : src_es)
-    if (is_video(e.stream_type) && !src_video_pid) {
-      src_video_pid = e.pid;
-      src_video_type = e.stream_type;
-    }
-  const auto src_video = read_pes(src_ts, src_video_pid);
   const auto out_video = read_pes(out_ts, video_pid);
-  std::printf("video ES: source %zu bytes / %zu PES, output %zu bytes / %zu PES\n",
-              src_video.payload.size(), src_video.pts_90k.size(),
-              out_video.payload.size(), out_video.pts_90k.size());
-  bool same_type = false;
-  for (const auto& e : es)
-    if (e.pid == video_pid) same_type = (e.stream_type == src_video_type);
-  check("video codec unchanged", same_type && src_video_type != 0);
-  check("video ES byte-exact", out_video.payload == src_video.payload);
-  check("video frame count kept",
-        out_video.pts_90k.size() == src_video.pts_90k.size());
+  const auto src_bytes = read_file(source.c_str());
+  if (is_mpegts(src_bytes)) {  // compare against the source's own video ES
+    unsigned src_video_pid = 0, src_video_type = 0;
+    for (const auto& e : read_pmt(src_bytes))
+      if (is_video(e.stream_type) && !src_video_pid) {
+        src_video_pid = e.pid;
+        src_video_type = e.stream_type;
+      }
+    const auto src_video = read_pes(src_bytes, src_video_pid);
+    std::printf("  video ES: source %zu bytes / %zu PES, output %zu / %zu\n",
+                src_video.payload.size(), src_video.pts_90k.size(),
+                out_video.payload.size(), out_video.pts_90k.size());
+    check("video codec unchanged", video_type == src_video_type && video_type);
+    check("video ES byte-exact", out_video.payload == src_video.payload);
+    check("video frame count kept",
+          out_video.pts_90k.size() == src_video.pts_90k.size());
+  } else {
+    // Not an MPEG-TS: this reader can't pull the source's elementary stream, so
+    // the source-comparison checks are skipped rather than reported as failures
+    // (the muxing is still fully checked — PMT, KLV, PTS, and the frame count
+    // against the TS case by the caller).
+    std::printf("  video ES: output %zu bytes / %zu PES"
+                " (source is not MPEG-TS — comparison skipped)\n",
+                out_video.payload.size(), out_video.pts_90k.size());
+    check("video carried", !out_video.payload.empty());
+  }
 
   // --- 4. KLV PTS survive the mux, on the video's timeline ------------------
   // mpegtsmux maps running time onto the TS clock with a fixed offset (it starts
@@ -274,8 +315,6 @@ int main(int argc, char** argv) {
   };
   const std::int64_t base = min_pts(out_klv.pts_90k);
   const std::int64_t vbase = min_pts(out_video.pts_90k);
-  std::printf("KLV PTS base %lld, video PTS base %lld (90 kHz)\n",
-              static_cast<long long>(base), static_cast<long long>(vbase));
   bool pts_ok = out_klv.pts_90k.size() == pushed.size();
   for (std::size_t i = 0; pts_ok && i < pushed.size(); ++i) {
     const std::int64_t want = (pushed[i] - pushed[0]) * 9 / 100'000;  // ns->90kHz
@@ -289,7 +328,74 @@ int main(int argc, char** argv) {
   check("KLV PTS preserved", pts_ok);
   // Both branches ran from zero, so their origins must coincide within a frame.
   check("KLV shares video timeline", std::llabs(base - vbase) <= 90000 / 20);
+  return out_video.pts_90k.size();
+}
 
-  std::printf("VIDEO PASSTHROUGH: %s\n", pass ? "PASS" : "FAIL");
-  return pass ? 0 : 1;
+}  // namespace
+
+int main(int argc, char** argv) {
+  if (argc < 4) {
+    std::fprintf(stderr,
+                 "usage: gst_video_insert_test <video.ts> <input.klv> <out.ts>\n");
+    return 2;
+  }
+  const std::string ts_source = argv[1];
+  const auto input = read_file(argv[2]);
+  const std::string out_path = argv[3];
+  auto be = make_gst_backend();
+
+  // --- 6. a failed open_insert leaves no output behind ----------------------
+  std::printf("failure paths\n");
+  {
+    // (a) missing source — rejected by the pre-flight check, before any element
+    //     exists, so nothing can have been created.
+    const std::string p = out_path + ".missing.ts";
+    std::remove(p.c_str());
+    auto r = be->open_insert({"file:" + p, false, ts_source + ".does-not-exist"});
+    check("missing source: rejected", !r);
+    check("missing source: no output", !file_exists(p));
+    std::remove(p.c_str());
+  }
+  {
+    // (b) a source that opens fine but has no video stream. This one only fails
+    //     in PAUSED — by which point the file sink has created its file — so it
+    //     is the case that proves the cleanup, not just the pre-flight check.
+    const std::string p = out_path + ".videoless.ts";
+    std::remove(p.c_str());
+    auto r = be->open_insert({"file:" + p, false, argv[2]});  // the .klv itself
+    check("videoless source: rejected", !r);
+    check("videoless source: no output", !file_exists(p));
+    std::remove(p.c_str());
+  }
+  {
+    // (c) ...but a file that was already there is the caller's, not ours to
+    //     delete: the cleanup must remove only what this call created. (The
+    //     file sink truncates whatever it opens, on the success path too, so
+    //     what's guaranteed here is that the path still exists — not that its
+    //     old contents survive a failed open.)
+    const std::string p = out_path + ".keepme.ts";
+    { std::ofstream f(p, std::ios::binary); f << "not ours to delete"; }
+    auto r = be->open_insert({"file:" + p, false, argv[2]});
+    check("pre-existing output not deleted", !r && file_exists(p));
+    std::remove(p.c_str());
+  }
+
+  // --- the full battery, on the TS source and then on an MP4 remuxed from it -
+  std::printf("MPEG-TS source (%s)\n", ts_source.c_str());
+  const std::size_t ts_frames = run_case(*be, ts_source, input, out_path);
+
+  const std::string mp4 = out_path + ".src.mp4";
+  std::remove(mp4.c_str());
+  if (remux_to_mp4(ts_source, mp4)) {
+    std::printf("MP4 source (qtdemux path, remuxed from the TS)\n");
+    const std::size_t mp4_frames = run_case(*be, mp4, input, out_path + ".mp4.ts");
+    check("MP4 path: same frame count", mp4_frames == ts_frames && ts_frames);
+    std::remove(mp4.c_str());
+    std::remove((out_path + ".mp4.ts").c_str());
+  } else {
+    std::printf("MP4 source: SKIPPED (no usable mp4mux in this gstreamer)\n");
+  }
+
+  std::printf("VIDEO PASSTHROUGH: %s\n", g_pass ? "PASS" : "FAIL");
+  return g_pass ? 0 : 1;
 }

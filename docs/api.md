@@ -53,8 +53,9 @@ out.close();
 - **Push in order, as the video flows.** The muxer waits on the slower stream and
   `emit` blocks, which is the backpressure working — but don't try to emit a
   whole file's KLV before the video has started.
-- `realtime` pacing is not supported with a video source, and a missing or
-  unreadable one fails at construction (`emit` then errors).
+- `realtime` pacing is not supported with a video source. A source that is
+  missing, unreadable, or carries no video stream fails at construction (`emit`
+  then errors) and leaves no output file behind.
 
 The same field exists on the lower level: `open_insert({.sink = "file:out.ts",
 .video_source = "in.mp4"})`. Leave it empty for the KLV-only pipeline.

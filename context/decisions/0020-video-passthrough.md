@@ -64,9 +64,17 @@ the matching defaulted constructor argument.
 - **`realtime` + `video_source` is rejected** (`Error::Unsupported`). Clock-paced
   output with a file-backed video branch is unexercised; better to refuse than to
   ship something untested. Revisit if a live-out consumer appears.
-- **A missing or unreadable `video_source` is checked before anything is built**,
-  so a failed `open_insert` leaves no partial output file (a `filesink` creates
-  its file the moment the pipeline leaves `NULL`).
+- **A failed `open_insert` leaves no output file**, in two layers. A missing or
+  unreadable `video_source` is caught before any element is built, so nothing can
+  have been created. But a *readable* source with no video stream only reveals
+  itself in `PAUSED` — and a `filesink` creates its file the moment the pipeline
+  leaves `NULL` — so failures past that point **unlink the sink file, and only if
+  this call created it**: the path is probed before the state change, and a file
+  that was already there is left alone (it is the caller's). What that guarantee
+  does *not* extend to is the old contents of such a file: opening a file sink
+  truncates, on the success path too. Pre-flighting the video branch in a
+  throwaway pipeline would avoid even that, and is more machinery than this
+  needs.
 
 Audio is **dropped**, deliberately, not carried. Pad handling makes carrying it
 nearly free, but "drop" is the choice that keeps the scope honest: this library
@@ -104,14 +112,25 @@ is trivially revisited if a consumer needs it (link non-video pads too).
 - Existing callers are untouched: empty `video_source` takes the original
   code path (straight to `PLAYING`, `kNoPts` still synthesized), and
   `gst_insert_test` passes unchanged as the regression guard.
-- New `gst_video_insert_test` (CTest `gst_video_insert`, ~0.3 s) muxes
+- New `gst_video_insert_test` (CTest `gst_video_insert`) muxes
   `data/klv_metadata_test_sync.ts`'s video with `dayflight.klv` and asserts, over
   the output TS read back with its own small TS/PES reader: the PMT lists exactly
   two elementary streams (video + `0x06`/`KLVA`, so the source's own KLV was
   dropped), the KLV re-extracts byte-exact, the video elementary stream is
   **byte-identical** to the source's with the same frame count and codec, the
-  pushed PTS intervals survive, both branches share one PTS origin, `kNoPts` is
-  refused, and a missing source fails without creating an output file.
+  pushed PTS intervals survive, both branches share one PTS origin, and `kNoPts`
+  is refused. Both failure paths are covered — a missing source *and* a readable
+  videoless one — each asserting no output file is left, plus that a pre-existing
+  file at the sink path is not deleted.
+- **Both demuxer paths are covered.** The test runs its whole battery a second
+  time against an MP4 remuxed from the TS source (`tsdemux ! h264parse ! mp4mux`,
+  skipped if `mp4mux` is absent), because `parsebin` auto-plugs `qtdemux` there —
+  a different demuxer negotiating different caps into the muxer, and the path a
+  consumer converting MP4s actually takes. The MP4 run asserts the same frame
+  count as the TS run; its elementary stream is *not* byte-compared, since
+  `avc` → byte-stream re-inserts parameter sets (2 774 895 vs 2 774 857 bytes for
+  the same 418 frames). A non-TS source skips the source-comparison checks rather
+  than failing them, so the binary is usable against a consumer's own file.
 - The muxer applies its own constant offset to the TS clock (it starts the stream
   an hour in so early timestamps can't go negative), so absolute 90 kHz PTS are
   not the pushed nanoseconds — the invariants are the *intervals* and the
@@ -131,8 +150,11 @@ is trivially revisited if a consumer needs it (link non-video pads too).
   if one matters, the choice of *which* stream would need to enter the API.
 - A source that is a valid file but has no video stream fails as
   `Error::Unsupported`, which is also what an unparseable file returns — the
-  distinction isn't visible to callers. Fine until someone needs to tell them
-  apart.
+  distinction isn't visible to callers. The pipeline's own error text (e.g.
+  "Could not determine type of stream") is logged via `g_warning` before being
+  dropped, since consuming it off the bus means `finish()` can't report it later;
+  that keeps the diagnosis available without widening the `Error` enum. Fine
+  until someone needs to tell the two apart programmatically.
 
 # Citations
 

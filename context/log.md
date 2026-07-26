@@ -2,6 +2,34 @@
 
 ## 2026-07-25
 
+* **Video passthrough — consumer review fixes** (`parrot-to-klv` reviewed the
+  branch and filed four findings; [ADR 0020](./decisions/0020-video-passthrough.md)
+  amended for the behaviour change).
+  **The defect**: a failed `open_insert` could leave a zero-byte `.ts`. The
+  pre-flight `fopen` check only catches a *missing* source; a readable one with
+  no video stream fails later, in `PAUSED`, by which point the file sink has
+  created its file — and a stale empty `.ts` reads as output to anything scanning
+  the directory. Failures past pipeline construction now unlink the sink file,
+  guarded by a probe taken *before* the state change so only a file this call
+  created is ever removed. Not covered: the truncation itself — opening a file
+  sink truncates whatever is at the path, on the success path too — so the
+  guarantee is "we delete only what we made", not "your old file survives".
+  **The test gap**: the suite only ever fed `parsebin` an MPEG-TS, i.e.
+  `tsdemux`. The consumer feeds MP4 — `qtdemux`, a different demuxer negotiating
+  different caps into the muxer — so a pad/caps regression could break the
+  consumer's only path with the suite green. Rather than commit a binary fixture
+  or depend on an encoder, the test now remuxes its own TS source into an MP4
+  (`tsdemux ! h264parse ! mp4mux`, skipped if `mp4mux` is missing) and runs the
+  whole battery a second time against it, asserting the same 418-frame count as
+  the TS run. Its ES is deliberately not byte-compared: `avc` → byte-stream
+  re-inserts parameter sets (2 774 895 vs 2 774 857 bytes, same frames).
+  **Polish**: a non-TS source now *skips* the three source-comparison checks with
+  a note instead of failing them (they need a TS to read, so pointing the binary
+  at an MP4 used to show red for no reason); and the bus ERROR consumed during
+  the pad wait is logged with its text via `g_warning` before being dropped —
+  it can't reach `finish()` afterwards, and every caller-visible failure here
+  collapses to `Error::Unsupported`. Full suite green.
+
 * **Video passthrough on the insert path** (fork 18 →
   [ADR 0020](./decisions/0020-video-passthrough.md)): `InsertConfig::video_source`
   (and a matching defaulted `KlvSink` argument) adds a `filesrc ! parsebin`

@@ -57,7 +57,10 @@ done and extending incrementally** — the state today:
 
 - **Video passthrough sits on the `feat/video-passthrough` branch**, green (full
   CTest suite passing), not yet merged to `main`. `main` is unchanged and still
-  builds — the downstream consumer builds against this working tree.
+  builds — the downstream consumer builds against this working tree. The
+  consumer's review of the branch is answered: the output-file-on-failure defect
+  is fixed, and the MP4/`qtdemux` path (its actual input format) is now covered
+  by the test alongside the TS/`tsdemux` one.
 - Otherwise nothing mid-change. Next work is pull-based (registry/data breadth as
   samples require it) — see Next.
 

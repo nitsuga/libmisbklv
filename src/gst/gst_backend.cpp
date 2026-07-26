@@ -348,6 +348,29 @@ class GstBackend : public MediaBackend {
       if (!f) return R::err(Error::Backend);  // missing / unreadable source
       std::fclose(f);
     }
+    // Not every failure can be caught before building: a videoless-but-readable
+    // source only reveals itself in PAUSED, by which point a file sink has
+    // already created its file. A leftover zero-byte .ts reads as output to
+    // anything scanning the directory and silently clobbers whatever was at that
+    // path, so failures below unlink it — but only if THIS call created it, so a
+    // pre-existing file the caller cared about is never deleted by a failed open.
+    std::string sink_path;
+    bool sink_preexisted = true;
+    if (cfg.sink.rfind("file:", 0) == 0) {
+      sink_path = cfg.sink.substr(5);
+      std::FILE* f = std::fopen(sink_path.c_str(), "rb");
+      sink_preexisted = (f != nullptr);
+      if (f) std::fclose(f);
+    }
+    // Teardown for every failure past pipeline construction. set_state(NULL)
+    // closes the sink's file before we unlink it.
+    auto fail = [&](GstElement* pipe, Error e) {
+      gst_element_set_state(pipe, GST_STATE_NULL);
+      gst_object_unref(pipe);
+      if (!sink_path.empty() && !sink_preexisted) std::remove(sink_path.c_str());
+      return R::err(e);
+    };
+
     GstElement* pipeline = gst_pipeline_new("misbklv-insert");
     GstElement* appsrc = gst_element_factory_make("appsrc", "src");
     GstElement* mux = gst_element_factory_make("mpegtsmux", "mux");
@@ -370,11 +393,8 @@ class GstBackend : public MediaBackend {
     gst_caps_unref(caps);
     if (cfg.realtime) g_object_set(sink, "sync", TRUE, nullptr);
     gst_bin_add_many(GST_BIN(pipeline), appsrc, mux, sink, nullptr);
-    if (!gst_element_link_many(appsrc, mux, sink, nullptr)) {
-      gst_element_set_state(pipeline, GST_STATE_NULL);
-      gst_object_unref(pipeline);
-      return R::err(Error::Backend);
-    }
+    if (!gst_element_link_many(appsrc, mux, sink, nullptr))
+      return fail(pipeline, Error::Backend);
 
     // Video passthrough: filesrc ! parsebin, joining the same muxer. parsebin
     // auto-plugs demuxer + parser for whatever the container holds and never
@@ -386,9 +406,7 @@ class GstBackend : public MediaBackend {
       if (!vsrc || !parse) {
         if (vsrc) gst_object_unref(vsrc);
         if (parse) gst_object_unref(parse);
-        gst_element_set_state(pipeline, GST_STATE_NULL);
-        gst_object_unref(pipeline);
-        return R::err(Error::Backend);
+        return fail(pipeline, Error::Backend);
       }
       g_object_set(vsrc, "location", video_path.c_str(), nullptr);
       video = std::make_unique<VideoCtx>();
@@ -398,11 +416,7 @@ class GstBackend : public MediaBackend {
       g_signal_connect(parse, "no-more-pads", G_CALLBACK(on_video_no_more_pads),
                        video.get());
       gst_bin_add_many(GST_BIN(pipeline), vsrc, parse, nullptr);
-      if (!gst_element_link(vsrc, parse)) {
-        gst_element_set_state(pipeline, GST_STATE_NULL);
-        gst_object_unref(pipeline);
-        return R::err(Error::Backend);
-      }
+      if (!gst_element_link(vsrc, parse)) return fail(pipeline, Error::Backend);
     }
 
     // parsebin exposes its pads while prerolling in PAUSED. Wait for the video
@@ -412,11 +426,8 @@ class GstBackend : public MediaBackend {
     // to PLAYING, exactly as before.)
     if (video) {
       if (gst_element_set_state(pipeline, GST_STATE_PAUSED) ==
-          GST_STATE_CHANGE_FAILURE) {
-        gst_element_set_state(pipeline, GST_STATE_NULL);
-        gst_object_unref(pipeline);
-        return R::err(Error::Backend);
-      }
+          GST_STATE_CHANGE_FAILURE)
+        return fail(pipeline, Error::Backend);
       GstBus* bus = gst_element_get_bus(pipeline);
       const auto deadline = std::chrono::steady_clock::now() + kVideoPadTimeout;
       bool linked = false;
@@ -434,28 +445,32 @@ class GstBackend : public MediaBackend {
         }
         GstMessage* msg = gst_bus_pop_filtered(bus, GST_MESSAGE_ERROR);
         if (msg) {  // not a media file / no demuxer for it
+          // The caller only ever sees Error::Unsupported, so surface the detail
+          // here rather than dropping it silently (it is also consumed from the
+          // bus, so finish() could not report it later).
+          GError* err = nullptr;
+          gchar* dbg = nullptr;
+          gst_message_parse_error(msg, &err, &dbg);
+          g_warning("misbklv: video source '%s': %s", video_path.c_str(),
+                    err ? err->message : "pipeline error");
+          if (err) g_error_free(err);
+          g_free(dbg);
           gst_message_unref(msg);
           break;
         }
         if (std::chrono::steady_clock::now() > deadline) break;
       }
       gst_object_unref(bus);
-      if (!linked) {  // unparseable source, or no video stream in it
-        gst_element_set_state(pipeline, GST_STATE_NULL);
-        gst_object_unref(pipeline);
-        return R::err(Error::Unsupported);
-      }
+      if (!linked)  // unparseable source, or no video stream in it
+        return fail(pipeline, Error::Unsupported);
       if (ignored)
         g_warning("misbklv: %d extra video stream(s) in '%s' not carried",
                   ignored, video_path.c_str());
     }
 
     if (gst_element_set_state(pipeline, GST_STATE_PLAYING) ==
-        GST_STATE_CHANGE_FAILURE) {
-      gst_element_set_state(pipeline, GST_STATE_NULL);
-      gst_object_unref(pipeline);
-      return R::err(Error::Backend);
-    }
+        GST_STATE_CHANGE_FAILURE)
+      return fail(pipeline, Error::Backend);
     return R::ok(std::make_unique<GstInserter>(pipeline, appsrc, std::move(video)));
   }
 };
