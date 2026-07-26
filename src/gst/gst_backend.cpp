@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 // gstreamer MediaBackend (ADR 0013). Extraction: {file|udp|srt}src ! tsdemux !
 // appsink; reassemble appsink fragments and frame whole KLV packets (B0 spike).
-// Insertion (B2): appsrc ! mpegtsmux ! {file|udp|srt}sink. Live sources/sinks
+// Insertion (B2): appsrc ! mpegtsmux ! {file|udp|srt}sink, optionally joined by
+// a video passthrough branch filesrc ! parsebin (ADR 0020). Live sources/sinks
 // (udp/srt) add real-time pacing + idle-timeout termination (B4, ADR 0017).
 #include "misbklv/gst_backend.hpp"
 
+#include <chrono>
+#include <condition_variable>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
+#include <mutex>
 #include <span>
 #include <string>
 #include <vector>
@@ -139,23 +145,90 @@ GstElement* make_sink(const std::string& spec) {
   return nullptr;
 }
 
+// --- video passthrough branch (ADR 0020) ------------------------------------
+// State shared with parsebin's dynamic-pad callbacks. parsebin exposes one pad
+// per elementary stream once it has parsed the container; we link the FIRST
+// video/* pad to a mpegtsmux request pad and ignore every other pad (audio,
+// subtitles, and any KLV the source already carries — the caller supplies its
+// own). open_insert() waits on `cv` for that pad, so the muxer never writes a
+// PMT before the video stream has joined. Lives as long as the pipeline.
+//
+// Bound on that wait: parsing a container header is fast (milliseconds), so this
+// only ever fires on a source that never yields a pad at all.
+inline constexpr std::chrono::seconds kVideoPadTimeout{10};
+
+struct VideoCtx {
+  GstElement* mux = nullptr;
+  std::mutex mu;
+  std::condition_variable cv;
+  bool linked = false;         // a video pad reached the muxer
+  bool no_more_pads = false;   // parsebin is done exposing pads
+  int ignored_video_pads = 0;  // 2nd+ video stream: carried? no. recorded? yes.
+};
+
+// True for caps whose media type is video/* (video/x-h264, video/x-h265, ...).
+bool caps_are_video(GstCaps* caps) {
+  if (!caps || gst_caps_is_empty(caps)) return false;
+  const gchar* name = gst_structure_get_name(gst_caps_get_structure(caps, 0));
+  return name && std::strncmp(name, "video/", 6) == 0;
+}
+
+void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
+  auto* ctx = static_cast<VideoCtx*>(user);
+  GstCaps* caps = gst_pad_get_current_caps(pad);
+  if (!caps) caps = gst_pad_query_caps(pad, nullptr);
+  const bool video = caps_are_video(caps);
+  if (caps) gst_caps_unref(caps);
+  if (!video) return;  // audio / subtitles / source-side KLV: dropped
+
+  std::lock_guard<std::mutex> lk(ctx->mu);
+  if (ctx->linked) {  // a second video stream: carry the first, note this one
+    ++ctx->ignored_video_pads;
+    return;
+  }
+#if GST_CHECK_VERSION(1, 20, 0)
+  GstPad* mpad = gst_element_request_pad_simple(ctx->mux, "sink_%d");
+#else
+  GstPad* mpad = gst_element_get_request_pad(ctx->mux, "sink_%d");
+#endif
+  if (mpad) {
+    if (gst_pad_link(pad, mpad) == GST_PAD_LINK_OK) ctx->linked = true;
+    gst_object_unref(mpad);
+  }
+  ctx->cv.notify_all();  // wake open_insert (linked, or a failure it will time out on)
+}
+
+void on_video_no_more_pads(GstElement*, gpointer user) {
+  auto* ctx = static_cast<VideoCtx*>(user);
+  {
+    std::lock_guard<std::mutex> lk(ctx->mu);
+    ctx->no_more_pads = true;
+  }
+  ctx->cv.notify_all();
+}
+
 // appsrc(meta/x-klv) ! mpegtsmux ! sink. push() blocks on appsrc backpressure;
 // finish() sends EOS and drains. Stock mpegtsmux (gst >= 1.20) already emits
 // stream_type 0x06 + KLVA, so no PMT rewrite is needed (fork 13; verified by
 // round-trip).
 class GstInserter : public Inserter {
  public:
-  GstInserter(GstElement* pipeline, GstElement* appsrc)
-      : pipeline_(pipeline), appsrc_(appsrc) {}
+  GstInserter(GstElement* pipeline, GstElement* appsrc,
+              std::unique_ptr<VideoCtx> video = nullptr)
+      : pipeline_(pipeline), appsrc_(appsrc), video_(std::move(video)) {}
   ~GstInserter() override {
     if (pipeline_) {
-      gst_element_set_state(pipeline_, GST_STATE_NULL);
-      gst_object_unref(pipeline_);
+      gst_element_set_state(pipeline_, GST_STATE_NULL);  // joins the streaming
+      gst_object_unref(pipeline_);  // threads, so video_ outlives its callbacks
     }
   }
 
   Result<std::monostate> push(std::span<const std::byte> pkt,
                               std::int64_t pts_ns) override {
+    // With a video branch both streams must share the source's timeline, so the
+    // synthesized ~30 fps counter is a caller error, not a fallback (ADR 0020).
+    if (video_ && pts_ns == kNoPts)
+      return Result<std::monostate>::err(Error::Unsupported);
     GstBuffer* buf = gst_buffer_new_allocate(nullptr, pkt.size(), nullptr);
     gst_buffer_fill(buf, 0, pkt.data(), pkt.size());
     GST_BUFFER_PTS(buf) = (pts_ns == kNoPts) ? pts_
@@ -186,6 +259,7 @@ class GstInserter : public Inserter {
   static constexpr GstClockTime kFrameDur = 33'000'000;  // ~30 fps pacing
   GstElement* pipeline_;
   GstElement* appsrc_;
+  std::unique_ptr<VideoCtx> video_;  // null = KLV-only pipeline
   GstClockTime pts_ = 0;
 };
 
@@ -260,7 +334,20 @@ class GstBackend : public MediaBackend {
   }
 
   Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg) override {
+    using R = Result<std::unique_ptr<Inserter>>;
     gst_init(nullptr, nullptr);
+    // Validate the video source BEFORE anything is built: a filesink creates its
+    // file the moment the pipeline leaves NULL, and a failed open_insert must not
+    // leave a partial output behind (ADR 0020).
+    std::string video_path;
+    if (!cfg.video_source.empty()) {
+      if (cfg.realtime) return R::err(Error::Unsupported);  // untested pairing
+      video_path = cfg.video_source;
+      if (video_path.rfind("file:", 0) == 0) video_path.erase(0, 5);
+      std::FILE* f = std::fopen(video_path.c_str(), "rb");
+      if (!f) return R::err(Error::Backend);  // missing / unreadable source
+      std::fclose(f);
+    }
     GstElement* pipeline = gst_pipeline_new("misbklv-insert");
     GstElement* appsrc = gst_element_factory_make("appsrc", "src");
     GstElement* mux = gst_element_factory_make("mpegtsmux", "mux");
@@ -283,15 +370,93 @@ class GstBackend : public MediaBackend {
     gst_caps_unref(caps);
     if (cfg.realtime) g_object_set(sink, "sync", TRUE, nullptr);
     gst_bin_add_many(GST_BIN(pipeline), appsrc, mux, sink, nullptr);
-    if (!gst_element_link_many(appsrc, mux, sink, nullptr) ||
-        gst_element_set_state(pipeline, GST_STATE_PLAYING) ==
-            GST_STATE_CHANGE_FAILURE) {
+    if (!gst_element_link_many(appsrc, mux, sink, nullptr)) {
       gst_element_set_state(pipeline, GST_STATE_NULL);
       gst_object_unref(pipeline);
-      return Result<std::unique_ptr<Inserter>>::err(Error::Backend);
+      return R::err(Error::Backend);
     }
-    return Result<std::unique_ptr<Inserter>>::ok(
-        std::make_unique<GstInserter>(pipeline, appsrc));
+
+    // Video passthrough: filesrc ! parsebin, joining the same muxer. parsebin
+    // auto-plugs demuxer + parser for whatever the container holds and never
+    // decodes, which is what keeps this codec-agnostic (H.264 / H.265 alike).
+    std::unique_ptr<VideoCtx> video;
+    if (!video_path.empty()) {
+      GstElement* vsrc = gst_element_factory_make("filesrc", "vsrc");
+      GstElement* parse = gst_element_factory_make("parsebin", "vparse");
+      if (!vsrc || !parse) {
+        if (vsrc) gst_object_unref(vsrc);
+        if (parse) gst_object_unref(parse);
+        gst_element_set_state(pipeline, GST_STATE_NULL);
+        gst_object_unref(pipeline);
+        return R::err(Error::Backend);
+      }
+      g_object_set(vsrc, "location", video_path.c_str(), nullptr);
+      video = std::make_unique<VideoCtx>();
+      video->mux = mux;
+      g_signal_connect(parse, "pad-added", G_CALLBACK(on_video_pad_added),
+                       video.get());
+      g_signal_connect(parse, "no-more-pads", G_CALLBACK(on_video_no_more_pads),
+                       video.get());
+      gst_bin_add_many(GST_BIN(pipeline), vsrc, parse, nullptr);
+      if (!gst_element_link(vsrc, parse)) {
+        gst_element_set_state(pipeline, GST_STATE_NULL);
+        gst_object_unref(pipeline);
+        return R::err(Error::Backend);
+      }
+    }
+
+    // parsebin exposes its pads while prerolling in PAUSED. Wait for the video
+    // pad here, before PLAYING, so the muxer's PMT is written with both
+    // elementary streams — otherwise a caller pushing KLV immediately could race
+    // the video pad and produce a KLV-only PMT. (KLV-only keeps going straight
+    // to PLAYING, exactly as before.)
+    if (video) {
+      if (gst_element_set_state(pipeline, GST_STATE_PAUSED) ==
+          GST_STATE_CHANGE_FAILURE) {
+        gst_element_set_state(pipeline, GST_STATE_NULL);
+        gst_object_unref(pipeline);
+        return R::err(Error::Backend);
+      }
+      GstBus* bus = gst_element_get_bus(pipeline);
+      const auto deadline = std::chrono::steady_clock::now() + kVideoPadTimeout;
+      bool linked = false;
+      int ignored = 0;
+      for (;;) {
+        {  // woken by pad-added / no-more-pads; short waits so we also see errors
+          std::unique_lock<std::mutex> lk(video->mu);
+          if (video->cv.wait_for(lk, std::chrono::milliseconds(50), [&] {
+                return video->linked || video->no_more_pads;
+              })) {
+            linked = video->linked;
+            ignored = video->ignored_video_pads;
+            break;
+          }
+        }
+        GstMessage* msg = gst_bus_pop_filtered(bus, GST_MESSAGE_ERROR);
+        if (msg) {  // not a media file / no demuxer for it
+          gst_message_unref(msg);
+          break;
+        }
+        if (std::chrono::steady_clock::now() > deadline) break;
+      }
+      gst_object_unref(bus);
+      if (!linked) {  // unparseable source, or no video stream in it
+        gst_element_set_state(pipeline, GST_STATE_NULL);
+        gst_object_unref(pipeline);
+        return R::err(Error::Unsupported);
+      }
+      if (ignored)
+        g_warning("misbklv: %d extra video stream(s) in '%s' not carried",
+                  ignored, video_path.c_str());
+    }
+
+    if (gst_element_set_state(pipeline, GST_STATE_PLAYING) ==
+        GST_STATE_CHANGE_FAILURE) {
+      gst_element_set_state(pipeline, GST_STATE_NULL);
+      gst_object_unref(pipeline);
+      return R::err(Error::Backend);
+    }
+    return R::ok(std::make_unique<GstInserter>(pipeline, appsrc, std::move(video)));
   }
 };
 

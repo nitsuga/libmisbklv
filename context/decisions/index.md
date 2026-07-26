@@ -32,3 +32,4 @@ diverge — e.g. fork 7 → ADR 0004; one fork can span several ADRs — fork 4 
 | 15 | [0017 — Real-time streaming (live pacing + idle-timeout)](./0017-realtime-streaming.md) | accepted |
 | 16 | [0018 — High-level API (Message + KlvStream/KlvSink facade)](./0018-high-level-api.md) | accepted |
 | 17 | [0019 — Cooperative extraction cancellation (stop token)](./0019-extract-cancellation.md) | accepted |
+| 18 | [0020 — Video passthrough on the insert path](./0020-video-passthrough.md) | accepted |

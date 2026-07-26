@@ -79,14 +79,16 @@ void KlvStream::pull() {
 
 // --- KlvSink ----------------------------------------------------------------
 KlvSink::KlvSink(std::unique_ptr<MediaBackend> backend, std::string sink,
-                 bool realtime)
+                 bool realtime, std::string video_source)
     : backend_(std::move(backend)) {
-  auto ins = backend_->open_insert({std::move(sink), realtime});
+  auto ins = backend_->open_insert(
+      {std::move(sink), realtime, std::move(video_source)});
   if (ins) inserter_ = std::move(*ins);  // else inserter_ null -> emit() errors
 }
 
-KlvSink::KlvSink(std::string sink, bool realtime)
-    : KlvSink(make_gst_backend(), std::move(sink), realtime) {}
+KlvSink::KlvSink(std::string sink, bool realtime, std::string video_source)
+    : KlvSink(make_gst_backend(), std::move(sink), realtime,
+              std::move(video_source)) {}
 
 Result<std::monostate> KlvSink::emit(const Message& m) {
   if (!inserter_) return Result<std::monostate>::err(Error::Backend);

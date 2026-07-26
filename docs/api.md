@@ -28,6 +28,37 @@ out.close();
 idle for a live source). `emit` re-encodes and muxes; `close` drains. See
 [`examples/klv_edit.cpp`](../examples/klv_edit.cpp).
 
+## Write video + KLV in one pass
+
+To *author* a stream rather than edit one — video from an existing file, KLV you
+generated — give the sink a `video_source`. Its video elementary stream is
+re-muxed **unchanged** (parsed, never decoded, so H.264 and H.265 both just
+work); the source's audio and any KLV it already carries are dropped.
+
+```cpp
+KlvSink out("file:output.ts", /*realtime=*/false, "input.mp4");
+
+for (auto& [pts_ns, msg] : my_klv) {   // your converted metadata
+  msg.set_pts(pts_ns);                 // REQUIRED: see the timeline note
+  out.emit(msg);
+}
+out.close();
+```
+
+- **One timeline.** The video is timestamped from the start of `input.mp4`, and
+  your KLV must be on that same timeline — presentation time from the start of
+  the source, in nanoseconds. Not wall-clock, not epoch. A Message with no PTS is
+  **rejected** (`Error::Unsupported`) rather than given a synthetic one, because a
+  synthetic timestamp drifts silently against real frame timing.
+- **Push in order, as the video flows.** The muxer waits on the slower stream and
+  `emit` blocks, which is the backpressure working — but don't try to emit a
+  whole file's KLV before the video has started.
+- `realtime` pacing is not supported with a video source, and a missing or
+  unreadable one fails at construction (`emit` then errors).
+
+The same field exists on the lower level: `open_insert({.sink = "file:out.ts",
+.video_source = "in.mp4"})`. Leave it empty for the KLV-only pipeline.
+
 ## Just a packet (no gstreamer)
 
 `Message` needs no media backend — hand it raw KLV bytes (e.g. from

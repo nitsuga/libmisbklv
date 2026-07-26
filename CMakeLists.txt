@@ -152,6 +152,15 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
     "${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight.klv"
     "${CMAKE_CURRENT_BINARY_DIR}/insert_roundtrip.ts")
 
+  # Video passthrough on the insert path (ADR 0020). The source carries video +
+  # its own KLV, so it also proves the source's KLV is dropped, not forwarded.
+  add_executable(gst_video_insert_test test/gst_video_insert_test.cpp)
+  target_link_libraries(gst_video_insert_test PRIVATE misbklv-gst)
+  add_test(NAME gst_video_insert COMMAND gst_video_insert_test
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/klv_metadata_test_sync.ts"
+    "${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight.klv"
+    "${CMAKE_CURRENT_BINARY_DIR}/video_insert.ts")
+
   add_executable(gst_stream_test test/gst_stream_test.cpp)  # B4 real-time udp round-trip
   target_link_libraries(gst_stream_test PRIVATE misbklv-gst Threads::Threads)
   add_test(NAME gst_stream COMMAND gst_stream_test

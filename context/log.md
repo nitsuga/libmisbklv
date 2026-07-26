@@ -2,6 +2,34 @@
 
 ## 2026-07-25
 
+* **Video passthrough on the insert path** (fork 18 →
+  [ADR 0020](./decisions/0020-video-passthrough.md)): `InsertConfig::video_source`
+  (and a matching defaulted `KlvSink` argument) adds a `filesrc ! parsebin`
+  branch to the existing `mpegtsmux`, so one `open_insert` writes a TS carrying
+  both video and KLV. Empty keeps the old pipeline exactly, so existing callers
+  and `gst_insert_test` are untouched. Driven by the `parrot-to-klv` consumer
+  spec.
+  **What the implementation had to get right.** (1) `open_insert` prerolls in
+  `PAUSED` and *waits* for `parsebin`'s video pad before `PLAYING` — otherwise a
+  caller pushing KLV immediately races the video branch and the muxer writes a
+  KLV-only PMT. (2) The first `video/*` pad is linked; all other pads are
+  dropped, including the source's own KLV track (the sample source
+  `klv_metadata_test_sync.ts` has one, so the test proves the drop). (3) With a
+  video branch, `push(pkt, kNoPts)` is rejected — the synthesized ~30 fps counter
+  would drift silently against real frame timing. (4) The source is checked for
+  readability before any element is made, so a failed open leaves no partial
+  `.ts`. `realtime` + video is rejected as unexercised.
+  **Codec-agnostic, verified**: the same code path carried H.264-in-TS,
+  H.264-in-MP4 (`avc` → byte-stream inside `h264parse`) and H.265-in-MP4 — the
+  explicit `qtdemux ! h264parse|h265parse` fallback the spec allowed was not
+  needed. New `gst_video_insert_test` (25 CTest cases now, all green) reads the
+  output back with its own small TS/PES parser: PMT = exactly video + `0x06`/KLVA,
+  KLV byte-exact, **video elementary stream byte-identical** to the source's (418
+  PES, same codec), pushed PTS intervals preserved and sharing the video's origin.
+  Note for future readers: `mpegtsmux` starts the TS clock an hour in, so absolute
+  90 kHz PTS are not the pushed nanoseconds — intervals and shared origin are the
+  invariants.
+
 * **ST 0601 registry breadth — the full item set**: the registry was a
   Milestone-1 subset (27 items, the ones Day Flight's first packet carries);
   everything else round-tripped as raw bytes. Transcribed the remaining

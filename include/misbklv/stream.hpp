@@ -75,11 +75,18 @@ class KlvStream {
 
 // Emit (edited) Messages to a sink ("file:out.ts" / "udp:host:port" / "srt:uri").
 // realtime=true paces output on the clock (ADR 0017).
+//
+// `video_source` (a path / "file:PATH", empty by default) re-muxes that file's
+// video elementary stream, unchanged, alongside the KLV — see InsertConfig for
+// the full contract. With it set, every emitted Message must carry a real PTS on
+// the source's timeline (`Message::set_pts`, nanoseconds from the start of the
+// file); an unset PTS is rejected rather than synthesized.
 class KlvSink {
  public:
-  explicit KlvSink(std::string sink, bool realtime = false);
+  explicit KlvSink(std::string sink, bool realtime = false,
+                   std::string video_source = {});
   KlvSink(std::unique_ptr<MediaBackend> backend, std::string sink,
-          bool realtime = false);
+          bool realtime = false, std::string video_source = {});
 
   Result<std::monostate> emit(const Message& m);  // m.encode() -> push
   Result<std::monostate> close();                 // drain + finish

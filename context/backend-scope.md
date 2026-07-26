@@ -129,6 +129,12 @@ Opened here during scoping, each resolved by an ADR (see the
   byte-exact, 6 packets in ~165 ms (clock-paced). ADR
   [`0017`](./decisions/0017-realtime-streaming.md), fork 15. **B0–B4
   complete.**
+- **B5 — video passthrough on the insert path** (done): `InsertConfig::video_source`
+  adds a `filesrc ! parsebin` branch to the same `mpegtsmux`, so one
+  `open_insert` writes video + KLV. Parsed, never decoded (codec-agnostic); the
+  source's audio/KLV pads are dropped; KLV must carry real PTS on the video's
+  timeline. ADR [`0020`](./decisions/0020-video-passthrough.md), fork 18;
+  `gst_video_insert_test`.
 
 ## Risks
 
@@ -145,5 +151,6 @@ Built as **`misbklv-gst`** (`src/gst/gst_backend.cpp`, `src/gst/stream.cpp`): th
 `MediaBackend`/`Inserter` implementation plus the `KlvStream`/`KlvSink` facade
 (ADR [`0018`](./decisions/0018-high-level-api.md)), live `extract` cancellable via
 a stop token (ADR [`0019`](./decisions/0019-extract-cancellation.md)). Extraction
-+ insertion, file + live (`udp`/`srt`), all on **stock gstreamer — no custom
-element**. Consumable via `find_package(misbklv COMPONENTS gst)`.
++ insertion (KLV alone, or alongside a passed-through video stream — ADR
+[`0020`](./decisions/0020-video-passthrough.md)), file + live (`udp`/`srt`), all
+on **stock gstreamer — no custom element**. Consumable via `find_package(misbklv COMPONENTS gst)`.

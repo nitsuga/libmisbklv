@@ -20,12 +20,19 @@ done and extending incrementally** — the state today:
   pack are registered `bytes`: named and raw-accessible, byte-identical
   round-trip. Scales are held by `st0601_examples_test`, which runs the
   standard's own per-item worked examples.
-- **gstreamer media backend — complete (B0–B4)**: extraction (0x06 + 0x15, file
+- **gstreamer media backend — complete (B0–B5)**: extraction (0x06 + 0x15, file
   + live udp/srt) and insertion (file + live, clock-paced), all on **stock
   gstreamer, no custom element** (the ADR 0008 PMT-rewrite was proven
   unnecessary — [ADR 0015](../context/decisions/0015-no-pmt-rewrite.md)). File
   extraction needs no gstreamer at all ([ADR 0016](../context/decisions/0016-ts-0x15-extraction.md)).
   Design/scope: [`backend-scope.md`](../context/backend-scope.md).
+- **Insertion can carry video** ([ADR 0020](../context/decisions/0020-video-passthrough.md)):
+  `InsertConfig::video_source` / `KlvSink(sink, realtime, video_source)` re-muxes
+  a source file's video elementary stream, parsed but never decoded, alongside
+  the KLV — so one call authors a TS with both a video PID and a KLV PID.
+  Codec-agnostic (H.264/H.265, TS or MP4 in); the source's audio and its own KLV
+  are dropped. The caller must push KLV with real PTS on the video's timeline
+  (`kNoPts` is rejected); `realtime` + video is refused as unexercised.
 - **Real-world hardening** done: multi-byte BER-OID tags (≥128), Report-on-Change
   trimmed packets, and adversarial/malformed input (integer-overflow OOB guards in
   the length arithmetic, length validation in `codec::decode`) — all covered by
