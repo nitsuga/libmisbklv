@@ -179,6 +179,7 @@ inline constexpr std::chrono::seconds kVideoPadTimeout{10};
 
 struct VideoCtx {
   GstElement* mux = nullptr;
+  GstElement* pipeline = nullptr;  // for creating fakesinks
   std::mutex mu;
   std::condition_variable cv;
   bool linked = false;         // a video pad reached the muxer
@@ -199,21 +200,69 @@ void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
   if (!caps) caps = gst_pad_query_caps(pad, nullptr);
   const bool video = caps_are_video(caps);
   if (caps) gst_caps_unref(caps);
-  if (!video) return;  // audio / subtitles / source-side KLV: dropped
+
+  if (!video) {
+    // audio / subtitles / source-side KLV: dropped, but parsebin requires all pads
+    // to be linked. Link to fakesink to satisfy parsebin and prevent "not-linked" errors.
+    GstElement* fakesink = gst_element_factory_make("fakesink", nullptr);
+    if (fakesink) {
+      gst_bin_add(GST_BIN(ctx->pipeline), fakesink);
+      gst_element_sync_state_with_parent(fakesink);  // sync state before linking
+      GstPad* sinkpad = gst_element_get_static_pad(fakesink, "sink");
+      if (sinkpad) {
+        GstPadLinkReturn ret = gst_pad_link(pad, sinkpad);
+        if (ret != GST_PAD_LINK_OK) {
+          g_warning("misbklv: failed to link non-video pad to fakesink: %d", ret);
+        }
+        gst_object_unref(sinkpad);
+      }
+    }
+    return;
+  }
 
   std::lock_guard<std::mutex> lk(ctx->mu);
   if (ctx->linked) {  // a second video stream: carry the first, note this one
     ++ctx->ignored_video_pads;
     return;
   }
-#if GST_CHECK_VERSION(1, 20, 0)
-  GstPad* mpad = gst_element_request_pad_simple(ctx->mux, "sink_%d");
-#else
-  GstPad* mpad = gst_element_get_request_pad(ctx->mux, "sink_%d");
-#endif
-  if (mpad) {
-    if (gst_pad_link(pad, mpad) == GST_PAD_LINK_OK) ctx->linked = true;
-    gst_object_unref(mpad);
+
+  // parsebin outputs H.264 in avc format (with codec_data), but mpegtsmux needs
+  // byte-stream format. Insert h264parse to convert the format.
+  GstElement* parse = gst_element_factory_make("h264parse", nullptr);
+  if (!parse) {
+    g_warning("misbklv: failed to create h264parse element");
+    ctx->cv.notify_all();
+    return;
+  }
+
+  gst_bin_add(GST_BIN(ctx->pipeline), parse);
+  gst_element_sync_state_with_parent(parse);
+
+  // Link: parsebin pad -> h264parse -> muxer
+  GstPad* parse_sink = gst_element_get_static_pad(parse, "sink");
+  if (!parse_sink) {
+    g_warning("misbklv: failed to get h264parse sink pad");
+    ctx->cv.notify_all();
+    return;
+  }
+
+  GstPadLinkReturn ret = gst_pad_link(pad, parse_sink);
+  gst_object_unref(parse_sink);
+
+  if (ret != GST_PAD_LINK_OK) {
+    g_warning("misbklv: failed to link video pad to h264parse: %d (parsebin parent: %s, h264parse parent: %s)",
+              ret,
+              GST_ELEMENT_NAME(gst_pad_get_parent_element(pad)),
+              GST_ELEMENT_NAME(GST_ELEMENT_PARENT(parse)));
+    ctx->cv.notify_all();
+    return;
+  }
+
+  // Link h264parse to muxer using gst_element_link (simpler and handles pad requests)
+  if (gst_element_link(parse, ctx->mux)) {
+    ctx->linked = true;
+  } else {
+    g_warning("misbklv: failed to link h264parse to muxer");
   }
   ctx->cv.notify_all();  // wake open_insert (linked, or a failure it will time out on)
 }
@@ -456,6 +505,7 @@ class GstBackend : public MediaBackend {
       g_object_set(vsrc, "location", video_path.c_str(), nullptr);
       video = std::make_unique<VideoCtx>();
       video->mux = mux;
+      video->pipeline = pipeline;  // for creating fakesinks in pad callback
       g_signal_connect(parse, "pad-added", G_CALLBACK(on_video_pad_added),
                        video.get());
       g_signal_connect(parse, "no-more-pads", G_CALLBACK(on_video_no_more_pads),
@@ -496,12 +546,21 @@ class GstBackend : public MediaBackend {
           GError* err = nullptr;
           gchar* dbg = nullptr;
           gst_message_parse_error(msg, &err, &dbg);
-          g_warning("misbklv: video source '%s': %s", video_path.c_str(),
-                    err ? err->message : "pipeline error");
+          // Check if this is a "not-linked" error from qtdemux - this can happen
+          // transiently during pad linking but doesn't mean the video source is invalid
+          const bool is_not_linked = (dbg && std::strstr(dbg, "not-linked"));
+          if (!is_not_linked) {
+            g_warning("misbklv: video source '%s': %s", video_path.c_str(),
+                      err ? err->message : "pipeline error");
+            if (err) g_error_free(err);
+            g_free(dbg);
+            gst_message_unref(msg);
+            break;
+          }
+          // Ignore transient not-linked errors - wait for linked status instead
           if (err) g_error_free(err);
           g_free(dbg);
           gst_message_unref(msg);
-          break;
         }
         if (std::chrono::steady_clock::now() > deadline) break;
       }

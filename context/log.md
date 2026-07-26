@@ -2,6 +2,22 @@
 
 ## 2026-07-26
 
+* **Fix MP4 video source pipeline failures** (`src/gst/gst_backend.cpp`):
+  `KlvSink` initialization with MP4 video sources (via ADR 0020's video
+  passthrough) failed with "Internal data stream error: streaming stopped,
+  reason not-linked (-1)" from qtdemux. Two root causes: (1) **parsebin requires
+  all pads to be linked** — audio/subtitle/metadata pads were ignored (returned
+  early), leaving them unlinked and causing qtdemux to error; now linked to
+  `fakesink` to satisfy parsebin. (2) **H.264 format mismatch** — parsebin
+  outputs H.264 in "avc" format (with codec_data), but mpegtsmux requires
+  "byte-stream"; now insert an `h264parse` element dynamically in
+  `on_video_pad_added` to convert the format. Also: ignore transient
+  "not-linked" errors during PAUSED state while pads are still being linked;
+  wait for `linked` flag instead of failing immediately. Found by
+  `parrot-to-klv` consumer using real Parrot MP4s with audio tracks.
+  `gst_video_insert_test` already covered MP4 sources (remuxed from TS) and now
+  passes; full CTest suite green (25/25).
+
 * **Lint (docs consistency + drift)**, after the two fixes above. Four real
   findings, not cosmetics: (1) **~68 broken links** — most `context/` concepts
   wrote sibling links root-absolute (`](/st0107.md)`), which resolves nowhere on
