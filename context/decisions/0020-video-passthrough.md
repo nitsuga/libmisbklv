@@ -152,6 +152,18 @@ is trivially revisited if a consumer needs it (link non-video pads too).
   `realtime` with video) is out of scope and currently rejected.
 - **Only the first video stream is carried.** Multi-video sources are rare here;
   if one matters, the choice of *which* stream would need to enter the API.
+- **ST 0604 SEI passthrough limitation (2026-07-27):** Sources with ST 0604
+  Precision Time Stamps embedded as H.264 SEI Picture Timing messages (e.g.,
+  Parrot MP4s) will have those SEI messages preserved in the output, but the
+  AVC→byte-stream remux path (parsebin→h264parse→mpegtsmux) doesn't fully
+  maintain VUI/SPS/SEI association context. Some downstream readers may warn
+  "didn't get the associated sequence parameter set" when parsing these SEI
+  messages. This is a known consequence of ST 0604 deferral
+  ([`0009`](./0009-st0604-deferred.md)) — proper SEI handling requires NAL/VUI
+  work this design explicitly avoided. The KLV stream (ST 0601 item 2) carries
+  timestamps independently. Mitigation: `h264parse config-interval=-1` ensures
+  SPS/PPS are inserted with every IDR frame, which helps but doesn't fully
+  resolve the VUI association issue.
 - A source that is a valid file but has no video stream fails as
   `Error::Unsupported`, which is also what an unparseable file returns — the
   distinction isn't visible to callers. The pipeline's own error text (e.g.

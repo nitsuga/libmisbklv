@@ -235,6 +235,13 @@ void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
     return;
   }
 
+  // config-interval=-1: insert SPS/PPS with every IDR frame, which helps maintain
+  // parameter set availability for downstream readers. Note: ST 0604 Picture Timing
+  // SEI messages (present in sources like Parrot MP4s) may still generate warnings
+  // in some readers due to VUI/SPS association complexities in the remux path — full
+  // ST 0604 support is deferred (ADR 0009).
+  g_object_set(parse, "config-interval", -1, nullptr);
+
   gst_bin_add(GST_BIN(ctx->pipeline), parse);
   gst_element_sync_state_with_parent(parse);
 

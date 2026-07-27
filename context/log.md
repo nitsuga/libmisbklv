@@ -1,5 +1,23 @@
 # Knowledge Bundle Log
 
+## 2026-07-27
+
+* **H.264 SEI/SPS limitation in video passthrough** (`src/gst/gst_backend.cpp`,
+  ADRs 0009/0020): Parrot drone MP4 sources contain ST 0604 Precision Time
+  Stamps embedded as H.264 SEI Picture Timing messages. After ADR 0020's video
+  passthrough remuxes them to TS, some downstream readers warn "didn't get the
+  associated sequence parameter set for the current access unit" when parsing
+  these SEI messages. Root cause: Picture Timing SEI references VUI fields in
+  the SPS, and the AVC→byte-stream remux path (parsebin→h264parse→mpegtsmux)
+  doesn't fully maintain the VUI/SPS/SEI association context some readers
+  require. Mitigation: set `h264parse config-interval=-1` to insert SPS/PPS
+  with every IDR frame, improving parameter set availability. **Known
+  limitation**: SEI warnings may still appear in strict readers; this is a
+  consequence of ST 0604 deferral (ADR 0009) — we pass through the video ES
+  but don't implement full 0604 SEI handling. The KLV stream (ST 0601 item 2)
+  carries timestamps independently. Notes added to ADRs 0009/0020. Full CTest
+  suite green (25/25).
+
 ## 2026-07-26
 
 * **Fix MP4 video source pipeline failures** (`src/gst/gst_backend.cpp`):

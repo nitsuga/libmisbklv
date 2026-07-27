@@ -56,6 +56,14 @@ revisited after v1. The core KLV value proposition does not depend on it.
   together is natural.
 - Scope when revisited: Precision Time Stamp first; Nano (H.265-only) and
   Commercial time-code as follow-ons.
+- **Passthrough limitation (2026-07-27):** Video passthrough
+  ([`0020`](./0020-video-passthrough.md)) preserves existing ST 0604 SEI
+  messages from the source but doesn't fully maintain their VUI/SPS association
+  context through the remux. Some downstream readers warn "didn't get the
+  associated sequence parameter set" when parsing Picture Timing SEI. This is a
+  known consequence of deferring 0604 — proper SEI handling requires the
+  NAL/SEI/VUI work this deferral explicitly postponed. The KLV stream (ST 0601
+  item 2) carries timestamps independently.
 - **Prior-art scan (2026-07-18):** [`jmisb`](../prior-art-jmisb.md) (broad KLV
   lib, 20+ standards) implements **no 0604** — no SEI/NAL/H.26x anywhere —
   independently confirming 0604 is a *video-ES* subsystem, not KLV, and won't
