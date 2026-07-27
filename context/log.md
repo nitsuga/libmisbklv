@@ -1,5 +1,21 @@
 # Knowledge Bundle Log
 
+## 2026-07-27
+
+* **Fix H.264 SEI/SPS association in video passthrough**
+  (`src/gst/gst_backend.cpp`): Parrot drone MP4 sources contain ST 0604
+  Precision Time Stamps embedded as H.264 SEI Picture Timing messages. After
+  ADR 0020's video passthrough remuxed them to TS, other software reading the
+  output warned "didn't get the associated sequence parameter set for the
+  current access unit" — the Picture Timing SEI references an SPS, but the
+  format conversion (AVC → byte-stream via `h264parse`) wasn't ensuring SPS/PPS
+  availability at every access unit boundary. Now set `h264parse`'s
+  `config-interval=-1`, which inserts SPS/PPS with every IDR frame, so SEI
+  messages always have their associated parameter sets. This is **not full ST
+  0604 support** (ADR 0009 deferred) — we don't parse, validate, or generate
+  0604 timestamps — but the passthrough now preserves them correctly when
+  present. Full CTest suite green (25/25).
+
 ## 2026-07-26
 
 * **Fix MP4 video source pipeline failures** (`src/gst/gst_backend.cpp`):

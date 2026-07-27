@@ -235,6 +235,12 @@ void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
     return;
   }
 
+  // config-interval=-1: insert SPS/PPS with every IDR frame. Ensures SEI messages
+  // (including ST 0604 Picture Timing SEI from sources like Parrot drones) always
+  // have their associated SPS available, fixing "didn't get the associated sequence
+  // parameter set" warnings when the output is read by other software.
+  g_object_set(parse, "config-interval", -1, nullptr);
+
   gst_bin_add(GST_BIN(ctx->pipeline), parse);
   gst_element_sync_state_with_parent(parse);
 
