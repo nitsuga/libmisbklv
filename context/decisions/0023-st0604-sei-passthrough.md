@@ -215,11 +215,11 @@ discontinuity from the KLV timestamp sequence is a follow-on, not part of this.
 - **H.264 only** — H.265 uses different UUID (deferred)
 - **Always enabled** — superseded 2026-07-28: generation is opt-in via
   `Sei0604` ([`0024`](./0024-sei-generation-opt-in.md)), default `Preserve`
-- **Time Status is fixed at `0x9F`** — Lock Unknown / Normal / Forward, per
-  [`st0603`](../st0603.md) §7.4 Table 3 (see the 2026-07-28 Time Status note
-  below). Bits 6/5 are asserted rather than derived: we always say the time is
-  incrementing linearly, though a discontinuity in the KLV sequence would be
-  detectable from the map we keep.
+- **Time Status: bit 7 is fixed at Lock Unknown**, per [`st0603`](../st0603.md)
+  §7.4 Table 3 (see the 2026-07-28 note below). Bits 6/5 were asserted here and
+  are now **derived** from the KLV timestamp sequence
+  ([`0024`](./0024-sei-generation-opt-in.md)), so the byte is `0x9F` in normal
+  running and reports a discontinuity when there is one.
 - **Picture Timing SEI stripping** now happens only under `Sei0604::Generate`
   ([`0024`](./0024-sei-generation-opt-in.md)) — a caller who did not ask us to
   rewrite the stream keeps theirs.

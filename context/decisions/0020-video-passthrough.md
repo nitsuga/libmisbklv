@@ -40,6 +40,15 @@ the matching defaulted constructor argument.
   would have hardcoded exactly the container/codec knowledge we are avoiding.
   **If this API ever grows a codec or encoder option, the feature has moved into
   the wrong repository.**
+
+  *Amended 2026-07-28:* the MP4 audio-track fix put an unconditional `h264parse`
+  on every video pad, which silently falsified the codec-agnostic claim above —
+  an H.265 or MPEG-2 source could not link. The parser is now selected from the
+  pad's caps (`h264parse` / `h265parse` / none), restoring one code path with a
+  codec-shaped seam in it, and H.265 and MPEG-1/2 sources are covered by tests
+  ([`0024`](./0024-sei-generation-opt-in.md)). The seam is a *parser* choice, not
+  a codec or encoder option — the elementary stream still reaches the muxer
+  without being decoded.
 - **First video pad wins; everything else is dropped.** `parsebin`'s `pad-added`
   links the first `video/*` pad to a `mpegtsmux` request pad. Audio, subtitles,
   and any KLV the source already carries are ignored — the caller is supplying

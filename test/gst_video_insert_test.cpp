@@ -28,6 +28,7 @@
 #include <fstream>
 #include <span>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include <gst/gst.h>
@@ -176,8 +177,9 @@ Pes read_pes(std::span<const std::byte> ts, unsigned want_pid) {
   return out;
 }
 
-bool is_video(unsigned stream_type) {  // mpeg2, h264, h265
-  return stream_type == 0x02 || stream_type == 0x1b || stream_type == 0x24;
+bool is_video(unsigned stream_type) {  // mpeg1, mpeg2, h264, h265
+  return stream_type == 0x01 || stream_type == 0x02 || stream_type == 0x1b ||
+         stream_type == 0x24;
 }
 
 // Compare a library extractor's per-packet timestamps against the ones pushed.
@@ -255,6 +257,44 @@ void check(const char* what, bool ok) {
 // Remux a TS's video into an MP4, so the qtdemux path gets covered without
 // committing a binary fixture or needing an encoder. Returns false (and the case
 // is skipped) if the mp4 muxer isn't in this gstreamer install.
+// Run a gst-launch description to completion. Returns false if any element in
+// it is missing, so a build without a given encoder skips rather than fails.
+bool run_pipeline(const std::string& desc, const std::string& out) {
+  gst_init(nullptr, nullptr);
+  GError* err = nullptr;
+  GstElement* p = gst_parse_launch(desc.c_str(), &err);
+  if (err) g_error_free(err);
+  if (!p) return false;
+  bool ok = gst_element_set_state(p, GST_STATE_PLAYING) != GST_STATE_CHANGE_FAILURE;
+  if (ok) {
+    GstBus* bus = gst_element_get_bus(p);
+    GstMessage* msg = gst_bus_timed_pop_filtered(
+        bus, 60 * GST_SECOND,
+        static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
+    ok = msg && GST_MESSAGE_TYPE(msg) == GST_MESSAGE_EOS;
+    if (msg) gst_message_unref(msg);
+    gst_object_unref(bus);
+  }
+  gst_element_set_state(p, GST_STATE_NULL);
+  gst_object_unref(p);
+  return ok && file_exists(out);
+}
+
+// A short video-only TS in some codec other than H.264, for the codec-dependent
+// paths: which parser the passthrough branch picks, and Generate's refusal.
+// Empty if this gstreamer cannot encode it.
+bool make_video_ts(const char* encoder, const char* parser, const std::string& out) {
+  gst_init(nullptr, nullptr);
+  GstElementFactory* f = gst_element_factory_find(encoder);
+  if (!f) return false;
+  gst_object_unref(f);
+  const std::string desc =
+      std::string("videotestsrc num-buffers=60 ! videoconvert ! ") +
+      "video/x-raw,format=I420,width=320,height=240,framerate=30/1 ! " + encoder +
+      " ! " + parser + " ! mpegtsmux ! filesink location=\"" + out + "\"";
+  return run_pipeline(desc, out);
+}
+
 bool remux_to_mp4(const std::string& ts, const std::string& mp4) {
   gst_init(nullptr, nullptr);
   GstElementFactory* f = gst_element_factory_find("mp4mux");
@@ -431,9 +471,14 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
     for (const auto& s : seen) {
       if (std::find(expected.begin(), expected.end(), s.timestamp_us) != expected.end()) {
         ++ours;
-        // ADR 0023: we relay a timestamp whose lock state we do not know, so the
-        // Time Status must say Lock Unknown (bit 7 = 1) — not Locked.
-        if (s.time_status != 0x9F) ++wrong_status;
+        // Bit 7 (Lock Unknown) and the reserved bits are fixed; bits 6/5 are
+        // derived per packet, so only the shape is asserted here — the
+        // derivation itself is driven with controlled input below.
+        const bool lock_and_reserved_ok = (s.time_status & 0x9F) == 0x9F;
+        const bool defined_combination = s.time_status == 0x9F ||   // normal
+                                         s.time_status == 0xDF ||   // fwd jump
+                                         s.time_status == 0xFF;     // reverse
+        if (!lock_and_reserved_ok || !defined_combination) ++wrong_status;
       } else if (std::find(from_source.begin(), from_source.end(), s.timestamp_us) !=
                  from_source.end()) {
         ++kept;
@@ -460,9 +505,9 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
       check("Generate: SEI written from KLV", ours > 0);
       check("Generate: source ST 0604 replaced, not duplicated", kept == 0);
       if (wrong_status)
-        std::printf("  %zu generated SEI(s) with a Time Status other than 0x9F\n",
-                    wrong_status);
-      check("generated SEI says Lock Unknown (ST 0603.5 Table 3)", wrong_status == 0);
+        std::printf("  %zu generated SEI(s) with a malformed Time Status\n", wrong_status);
+      check("generated SEI Time Status well-formed (ST 0603.5 Table 3)",
+            wrong_status == 0);
     }
   }
 
@@ -540,6 +585,95 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
 }
 
 }  // namespace
+
+// ST 0603.5 Table 3 bits 6/5 are derived from how the KLV's absolute time moves
+// against the media timeline (ADR 0024), so drive them with timestamps we
+// control: rewrite item 2 in the fixture's packets and see what comes back out
+// of the video elementary stream.
+//
+// `step_us` is what each packet's absolute time advances by, against a fixed
+// 100 ms push spacing. Equal means linear — Normal. A short/long step is a
+// forward jump; a negative one is a reverse.
+std::vector<unsigned> statuses_for(MediaBackend& be, const std::string& source,
+                                   const std::vector<std::byte>& input,
+                                   const std::string& out_path,
+                                   const std::vector<std::int64_t>& steps_us) {
+  constexpr std::int64_t kStepNs = 100'000'000;  // push spacing
+  constexpr std::uint64_t kBaseUs = 1'600'000'000'000'000ULL;  // ~2020, plausible
+
+  // One fixture packet as a template, re-parsed per push (Message is move-only)
+  // with item 2 rewritten to the timestamp under test.
+  std::span<const std::byte> buf = input;
+  const std::size_t n = packet_frame_length(buf);
+  if (n == 0 || !Message::parse(buf.subspan(0, n))) return {};
+
+  std::remove(out_path.c_str());
+  {
+    auto ins = be.open_insert({"file:" + out_path, false, source, Sei0604::Generate});
+    if (!ins) return {};
+    std::uint64_t ts = kBaseUs;
+    for (std::size_t i = 0; i < steps_us.size(); ++i) {
+      if (i) ts = static_cast<std::uint64_t>(static_cast<std::int64_t>(ts) + steps_us[i]);
+      auto m = Message::parse(buf.subspan(0, n));
+      if (!m || !m->set(2, Value{ts})) return {};
+      auto bytes = m->encode();
+      if (!bytes) return {};
+      if (!(*ins)->push(*bytes, static_cast<std::int64_t>(i) * kStepNs)) return {};
+    }
+    if (!(*ins)->finish()) return {};
+  }
+
+  const auto muxed = read_file(out_path.c_str());
+  unsigned vpid = 0;
+  for (const auto& e : read_pmt(muxed))
+    if (is_video(e.stream_type) && !vpid) vpid = e.pid;
+  std::vector<unsigned> out;
+  if (vpid)
+    for (const auto& s : decode_0604_seis(read_pes(muxed, vpid).payload))
+      out.push_back(s.time_status);
+  std::remove(out_path.c_str());
+  return out;
+}
+
+void check_time_status_derivation(MediaBackend& be, const std::string& source,
+                                  const std::vector<std::byte>& input,
+                                  const std::string& out_path) {
+  std::printf("Time Status derivation (ST 0603.5 Table 3)\n");
+
+  // Absolute time advancing in step with the media timeline: nothing to report.
+  // This is the shape real usage has — a consumer pushing each sample at its own
+  // presentation time.
+  {
+    const auto got = statuses_for(be, source, input, out_path,
+                                  {0, 100'000, 100'000, 100'000, 100'000, 100'000});
+    check("linear time: SEI emitted", !got.empty());
+    bool all_normal = !got.empty();
+    for (unsigned s : got) all_normal = all_normal && s == 0x9F;
+    check("linear time: Normal / Forward (0x9F)", all_normal);
+  }
+
+  // A forward jump the media timeline does not account for — a relock, an edit.
+  {
+    const auto got = statuses_for(be, source, input, out_path,
+                                  {0, 100'000, 5'000'000, 100'000, 100'000, 100'000});
+    bool saw_jump = false, saw_reverse = false;
+    for (unsigned s : got) {
+      if (s == 0xDF) saw_jump = true;
+      if (s == 0xFF) saw_reverse = true;
+    }
+    check("forward jump: Discontinuity reported (0xDF)", saw_jump);
+    check("forward jump: not called a reverse", !saw_reverse);
+  }
+
+  // Absolute time going backwards.
+  {
+    const auto got = statuses_for(be, source, input, out_path,
+                                  {0, 100'000, -3'000'000, 100'000, 100'000, 100'000});
+    bool saw_reverse = false;
+    for (unsigned s : got) saw_reverse = saw_reverse || s == 0xFF;
+    check("reverse jump: Discontinuity + Reverse reported (0xFF)", saw_reverse);
+  }
+}
 
 int main(int argc, char** argv) {
   if (argc < 4) {
@@ -674,6 +808,55 @@ int main(int argc, char** argv) {
                                           ts_source, Sei0604::Generate);
   check("Generate: same frame count as Preserve", gen_frames == ts_frames && ts_frames);
   std::remove((out_path + ".sei.ts").c_str());
+
+  check_time_status_derivation(*be, ts_source, input, out_path + ".status.ts");
+
+  // --- codec-dependent paths (ADR 0024) -------------------------------------
+  // Passthrough is meant to be codec-agnostic, and ST 0604 generation is H.264
+  // only. Both need a non-H.264 source to mean anything, so synthesize one.
+  for (const auto& [label, encoder, parser] :
+       {std::tuple{"H.265", "x265enc", "h265parse"},
+        std::tuple{"MPEG-1/2", "mpeg2enc", "mpegvideoparse"}}) {
+    const std::string src = out_path + "." + encoder + ".ts";
+    std::remove(src.c_str());
+    if (!make_video_ts(encoder, parser, src)) {
+      std::printf("%s source: %s unavailable, skipped\n", label, encoder);
+      continue;
+    }
+    std::printf("%s source (codec-agnostic passthrough + Generate refusal)\n", label);
+
+    // Preserve carries it through: a codec we do not generate SEI for is still
+    // a codec we mux. This is the ADR 0020 promise, which forcing h264parse on
+    // every video pad had quietly broken.
+    const std::string out = out_path + "." + encoder + ".out.ts";
+    std::remove(out.c_str());
+    {
+      auto ins = be->open_insert({"file:" + out, false, src, Sei0604::Preserve});
+      check((std::string(label) + ": Preserve accepts the source").c_str(), bool(ins));
+      if (ins) {
+        std::span<const std::byte> buf = input;
+        (*ins)->push(buf.subspan(0, packet_frame_length(buf)), 0);
+        check((std::string(label) + ": Preserve finishes").c_str(), bool((*ins)->finish()));
+      }
+    }
+    if (file_exists(out)) {
+      const auto muxed = read_file(out.c_str());
+      unsigned vpid = 0;
+      for (const auto& e : read_pmt(muxed))
+        if (is_video(e.stream_type) && !vpid) vpid = e.pid;
+      check((std::string(label) + ": video reached the output").c_str(), vpid != 0);
+    }
+    std::remove(out.c_str());
+
+    // Generate refuses rather than writing video with no timestamps in it.
+    const std::string refused = out_path + "." + encoder + ".refused.ts";
+    std::remove(refused.c_str());
+    auto bad = be->open_insert({"file:" + refused, false, src, Sei0604::Generate});
+    check((std::string(label) + ": Generate rejected (not H.264)").c_str(), !bad);
+    check((std::string(label) + ": rejected session left no output").c_str(), !file_exists(refused));
+    std::remove(refused.c_str());
+    std::remove(src.c_str());
+  }
 
   if (have_mp4) {
     std::printf("MP4 source (qtdemux path, remuxed from the TS)\n");

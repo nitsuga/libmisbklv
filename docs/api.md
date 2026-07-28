@@ -103,8 +103,18 @@ KlvSink out({.sink         = "file:output.ts",
 A frame with no KLV timestamp within 200 ms gets no ST 0604 rather than a made-up
 one — and under `Generate` the source's is removed there too, so provenance
 doesn't silently vary frame to frame. If your KLV covers the video, as it
-normally does, every frame gets one. H.264 only; other codecs still pass through,
-just without generated SEI.
+normally does, every frame gets one.
+
+`Generate` is **H.264 only**: on any other codec `open_insert` / the `KlvSink`
+constructor fails with `Error::Unsupported` rather than handing you a file whose
+video quietly has no timestamps. `Preserve` carries every codec.
+
+The Time Status byte that rides with each timestamp (ST 0603.5 §7.4) is derived,
+not assumed. Bit 7 always says **Lock Unknown** — we are relaying your item 2 and
+cannot know how the source clock was disciplined. Bits 6/5 report a
+**Discontinuity** when your absolute time stops tracking the media timeline
+between packets (and whether it jumped forward or back), so an edit or a clock
+relock is visible to a reader instead of being smoothed over.
 
 ## Just a packet (no gstreamer)
 

@@ -12,6 +12,7 @@
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
+#include <cstdlib>
 #include <cstring>
 #include <map>
 #include <memory>
@@ -115,6 +116,30 @@ inline constexpr guint64 kIdleTimeoutNs = 500'000'000;  // 500 ms
 // headroom. Backward-only matching prevents incorrect matches across discontinuities.
 inline constexpr uint64_t kPtsMatchToleranceNs = 200'000'000;  // 200 ms
 
+// ST 0603.5 §7.4 Table 3 — the Time Status byte carried with a Precision Time
+// Stamp. Bits 4-0 are reserved and always set.
+inline constexpr uint8_t kTimeStatusReserved = 0b0001'1111;
+inline constexpr uint8_t kTimeStatusLockUnknown = 0b1000'0000;    // bit 7
+inline constexpr uint8_t kTimeStatusDiscontinuity = 0b0100'0000;  // bit 6
+inline constexpr uint8_t kTimeStatusReverse = 0b0010'0000;        // bit 5
+// Our floor: we relay a timestamp out of ST 0601 item 2, which says nothing
+// about the source clock's lock state, so bit 7 is always Lock Unknown
+// (ADR 0023). Bits 6/5 are derived per packet, below.
+inline constexpr uint8_t kTimeStatusBase = kTimeStatusLockUnknown | kTimeStatusReserved;
+
+// How far the KLV's absolute time may drift from the media timeline between two
+// packets before it counts as a discontinuity rather than clock jitter. Both
+// measure the same real seconds, so over a normal inter-packet gap they track
+// each other to microseconds; a genuine break (a relock, a GPS fix, an edit) is
+// tens of milliseconds at least. 50 ms sits well clear of both.
+inline constexpr std::int64_t kTimeLinearToleranceUs = 50'000;
+
+// The absolute time for one frame, and what ST 0603 says about it.
+struct SensorTime {
+  std::uint64_t timestamp_us = 0;
+  std::uint8_t status = kTimeStatusBase;
+};
+
 // Build the source element from a spec: a bare path / "file:PATH" (EOS-ending),
 // or a live "udp:HOST:PORT" / "srt:URI". Sets `*live` for the live schemes.
 // Returns nullptr on a malformed spec.
@@ -199,12 +224,18 @@ struct VideoCtx {
   bool linked = false;         // a video pad reached the muxer
   bool no_more_pads = false;   // parsebin is done exposing pads
   int ignored_video_pads = 0;  // 2nd+ video stream: carried? no. recorded? yes.
+  bool sei_codec_unsupported = false;  // Generate asked for, video isn't H.264
   bool generate_sei = false;   // generate ST 0604 SEI from frame PTS (fork 21)
 
   // PTS (ns) → sensorTimestamp (µs) mapping for ST 0604 SEI generation (fork 21).
   // Populated from KLV packets in push(), looked up in video pad probe.
   std::mutex timestamp_mu;
-  std::map<uint64_t, uint64_t> pts_to_sensor_timestamp;
+  std::map<uint64_t, SensorTime> pts_to_sensor_timestamp;
+  // Last packet pushed, for deriving the Time Status of the next one. Written
+  // under timestamp_mu from push() only.
+  bool have_prev_push = false;
+  std::uint64_t prev_push_pts_ns = 0;
+  std::uint64_t prev_push_ts_us = 0;
 
   // H.264 NAL/SEI parser for the SEI probe (fork 21). Owned for the session and
   // touched only from the streaming thread inside the probe, so it needs no lock.
@@ -222,10 +253,31 @@ bool caps_are_video(GstCaps* caps) {
   return name && std::strncmp(name, "video/", 6) == 0;
 }
 
+// The caps' media type, or "" — "video/x-h264", "video/x-h265", "video/mpeg", ...
+std::string caps_media_type(GstCaps* caps) {
+  if (!caps || gst_caps_is_empty(caps)) return {};
+  const gchar* name = gst_structure_get_name(gst_caps_get_structure(caps, 0));
+  return name ? std::string(name) : std::string();
+}
+
+// The parser this codec needs between parsebin and mpegtsmux, or nullptr for
+// "link it straight through".
+//
+// parsebin hands H.26x out of an MP4 in its container form (avc/hvc1, with
+// codec_data), and mpegtsmux wants byte-stream — so those two need a parser to
+// convert. Anything else (MPEG-2 video, say) is already in a form the muxer
+// takes, and inserting the wrong parser would simply fail to link.
+const char* parser_for_media_type(const std::string& type) {
+  if (type == "video/x-h264") return "h264parse";
+  if (type == "video/x-h265") return "h265parse";
+  return nullptr;
+}
+
 // Generate ST 0604 Precision Time Stamp SEI payload (fork 21, ADR 0023).
 // Returns SEI payload: type (5) + length (28) + UUID (16) + status (1) + timestamp (11).
 // Layout per ST 0604.6 §7 (UUID, status byte, 0xFF emulation prevention Table 2).
-std::vector<std::byte> generate_0604_sei_payload(uint64_t timestamp_microsec) {
+std::vector<std::byte> generate_0604_sei_payload(uint64_t timestamp_microsec,
+                                                 uint8_t time_status) {
   std::vector<std::byte> payload;
 
   // SEI User Unregistered: type 5, payload length 28
@@ -238,16 +290,9 @@ std::vector<std::byte> generate_0604_sei_payload(uint64_t timestamp_microsec) {
     payload.push_back(std::byte{uuid[i]});
   }
 
-  // Time Status (1 byte) per ST 0603.5 §7.4 Table 3, bits 4-0 reserved '11111':
-  //   bit 7 = 1  Lock Unknown — we relay a timestamp out of ST 0601 item 2,
-  //              which carries no lock information, so we cannot claim the
-  //              source clock was locked to an absolute reference (ADR 0023).
-  //   bit 6 = 0  Normal — time incrementing forward linearly.
-  //   bit 5 = 0  Forward — only meaningful when bit 6 signals a discontinuity.
-  // Bits 6/5 are still asserted rather than derived; a discontinuity in the KLV
-  // timestamp sequence is detectable from pts_to_sensor_timestamp if that ever
-  // matters.
-  payload.push_back(std::byte{0b10011111});
+  // Time Status (1 byte) per ST 0603.5 §7.4 Table 3 — derived in push(), see
+  // sensor_time_status().
+  payload.push_back(std::byte{time_status});
 
   // Modified Precision Time Stamp (11 bytes): the 8-byte big-endian timestamp in
   // 2-byte groups separated by 0xFF emulation-prevention bytes, per ST 0604.6
@@ -278,13 +323,29 @@ std::vector<std::byte> generate_0604_sei_payload(uint64_t timestamp_microsec) {
 // because gstreamer 1.20's SEI writer has no user_data_unregistered payload type
 // (GstH264SEIPayloadType gained it later). Everything else — NAL boundaries, SEI
 // message parsing — goes through the codecparsers API.
-std::vector<std::byte> build_0604_sei_nal(uint64_t timestamp_microsec) {
+std::vector<std::byte> build_0604_sei_nal(const SensorTime& t) {
   std::vector<std::byte> nal{std::byte{0x00}, std::byte{0x00}, std::byte{0x01},
                              std::byte{0x06}};  // start code + NAL type 6 (SEI)
-  const auto payload = generate_0604_sei_payload(timestamp_microsec);
+  const auto payload = generate_0604_sei_payload(t.timestamp_us, t.status);
   nal.insert(nal.end(), payload.begin(), payload.end());
   nal.push_back(std::byte{0x80});  // RBSP stop bit
   return nal;
+}
+
+// Time Status for a KLV packet, from how its absolute time moved relative to the
+// media timeline since the previous packet (ST 0603.5 §7.4 Table 3).
+//
+// Both clocks measure the same real seconds, so in normal running the absolute
+// timestamp advances by the same amount as the presentation timestamp. When it
+// does not, time did not increment forward linearly — which is exactly what
+// bit 6 reports; bit 5 then says which way it jumped. The first packet has
+// nothing to compare against and is reported Normal.
+std::uint8_t sensor_time_status(std::int64_t delta_ts_us, std::int64_t delta_pts_us) {
+  if (delta_ts_us < 0)  // absolute time went backwards
+    return kTimeStatusBase | kTimeStatusDiscontinuity | kTimeStatusReverse;
+  if (std::llabs(delta_ts_us - delta_pts_us) > kTimeLinearToleranceUs)
+    return kTimeStatusBase | kTimeStatusDiscontinuity;  // forward, but not linear
+  return kTimeStatusBase;
 }
 
 // True for VCL NAL types — the coded slices an SEI must precede within its
@@ -363,7 +424,7 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad*, GstPadProbeInfo* info,
   // vary frame to frame with nothing in the stream to signal which is which
   // (ADR 0024).
   const uint64_t pts_ns = GST_BUFFER_PTS(buffer);
-  uint64_t timestamp_microsec = 0;
+  SensorTime sensor_time;
   bool matched = false;
   {
     std::lock_guard<std::mutex> lock(ctx->timestamp_mu);
@@ -371,7 +432,7 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad*, GstPadProbeInfo* info,
     if (it != ctx->pts_to_sensor_timestamp.begin()) {
       --it;  // first entry at or before pts_ns
       if (pts_ns - it->first <= kPtsMatchToleranceNs) {
-        timestamp_microsec = it->second;
+        sensor_time = it->second;
         matched = true;
       }
     }
@@ -412,8 +473,7 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad*, GstPadProbeInfo* info,
     return GST_PAD_PROBE_OK;
   }
 
-  const auto sei_nal =
-      inject ? build_0604_sei_nal(timestamp_microsec) : std::vector<std::byte>{};
+  const auto sei_nal = inject ? build_0604_sei_nal(sensor_time) : std::vector<std::byte>{};
   gsize stripped = 0;
   for (const auto& [s, e] : strip) stripped += e - s;
   const gsize new_size = map.size - stripped + sei_nal.size();
@@ -480,29 +540,46 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad*, GstPadProbeInfo* info,
   return GST_PAD_PROBE_OK;
 }
 
+// Link a pad we are not carrying to a fakesink. parsebin requires every pad it
+// exposes to be linked; an unlinked one errors the whole pipeline as not-linked.
+void drop_pad_to_fakesink(GstPad* pad, VideoCtx* ctx) {
+  GstElement* fakesink = gst_element_factory_make("fakesink", nullptr);
+  if (!fakesink) return;
+  gst_bin_add(GST_BIN(ctx->pipeline), fakesink);
+  gst_element_sync_state_with_parent(fakesink);  // sync state before linking
+  if (GstPad* sinkpad = gst_element_get_static_pad(fakesink, "sink")) {
+    const GstPadLinkReturn ret = gst_pad_link(pad, sinkpad);
+    if (ret != GST_PAD_LINK_OK)
+      g_warning("misbklv: failed to link unused pad to fakesink: %d", ret);
+    gst_object_unref(sinkpad);
+  }
+}
+
 void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
   auto* ctx = static_cast<VideoCtx*>(user);
   GstCaps* caps = gst_pad_get_current_caps(pad);
   if (!caps) caps = gst_pad_query_caps(pad, nullptr);
   const bool video = caps_are_video(caps);
+  const std::string media_type = caps_media_type(caps);
   if (caps) gst_caps_unref(caps);
 
-  if (!video) {
-    // audio / subtitles / source-side KLV: dropped, but parsebin requires all pads
-    // to be linked. Link to fakesink to satisfy parsebin and prevent "not-linked" errors.
-    GstElement* fakesink = gst_element_factory_make("fakesink", nullptr);
-    if (fakesink) {
-      gst_bin_add(GST_BIN(ctx->pipeline), fakesink);
-      gst_element_sync_state_with_parent(fakesink);  // sync state before linking
-      GstPad* sinkpad = gst_element_get_static_pad(fakesink, "sink");
-      if (sinkpad) {
-        GstPadLinkReturn ret = gst_pad_link(pad, sinkpad);
-        if (ret != GST_PAD_LINK_OK) {
-          g_warning("misbklv: failed to link non-video pad to fakesink: %d", ret);
-        }
-        gst_object_unref(sinkpad);
-      }
+  // ST 0604 SEI generation is H.264-only (ADR 0024). Asking for it on another
+  // codec is a caller error, not something to do quietly by half: refuse the
+  // session rather than write an output whose video silently has no timestamps.
+  if (video && ctx->generate_sei && media_type != "video/x-h264") {
+    std::lock_guard<std::mutex> lk(ctx->mu);
+    if (!ctx->linked) {
+      g_warning("misbklv: Sei0604::Generate needs H.264 video; source carries %s",
+                media_type.empty() ? "an unknown codec" : media_type.c_str());
+      ctx->sei_codec_unsupported = true;
+      drop_pad_to_fakesink(pad, ctx);
+      ctx->cv.notify_all();
+      return;
     }
+  }
+
+  if (!video) {  // audio / subtitles / source-side KLV: carried by nothing
+    drop_pad_to_fakesink(pad, ctx);
     return;
   }
 
@@ -512,11 +589,23 @@ void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
     return;
   }
 
-  // parsebin outputs H.264 in avc format (with codec_data), but mpegtsmux needs
-  // byte-stream format. Insert h264parse to convert the format.
-  GstElement* parse = gst_element_factory_make("h264parse", nullptr);
+  // H.26x arrives from an MP4 in container form and the muxer wants byte-stream,
+  // so those need a parser in between; other codecs link straight through.
+  const char* parser_name = parser_for_media_type(media_type);
+  if (!parser_name) {
+    GstPad* mux_sink = gst_element_request_pad_simple(ctx->mux, "sink_%d");
+    if (mux_sink && gst_pad_link(pad, mux_sink) == GST_PAD_LINK_OK)
+      ctx->linked = true;
+    else
+      g_warning("misbklv: failed to link %s pad to muxer", media_type.c_str());
+    if (mux_sink) gst_object_unref(mux_sink);
+    ctx->cv.notify_all();
+    return;
+  }
+
+  GstElement* parse = gst_element_factory_make(parser_name, nullptr);
   if (!parse) {
-    g_warning("misbklv: failed to create h264parse element");
+    g_warning("misbklv: failed to create %s element", parser_name);
     ctx->cv.notify_all();
     return;
   }
@@ -533,7 +622,7 @@ void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
   // Link: parsebin pad -> h264parse -> muxer
   GstPad* parse_sink = gst_element_get_static_pad(parse, "sink");
   if (!parse_sink) {
-    g_warning("misbklv: failed to get h264parse sink pad");
+    g_warning("misbklv: failed to get %s sink pad", parser_name);
     ctx->cv.notify_all();
     return;
   }
@@ -542,19 +631,19 @@ void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
   gst_object_unref(parse_sink);
 
   if (ret != GST_PAD_LINK_OK) {
-    g_warning("misbklv: failed to link video pad to h264parse: %d (parsebin parent: %s, h264parse parent: %s)",
-              ret,
+    g_warning("misbklv: failed to link video pad to %s: %d (parsebin parent: %s, parser parent: %s)",
+              parser_name, ret,
               GST_ELEMENT_NAME(gst_pad_get_parent_element(pad)),
               GST_ELEMENT_NAME(GST_ELEMENT_PARENT(parse)));
     ctx->cv.notify_all();
     return;
   }
 
-  // Link h264parse to muxer using gst_element_link (simpler and handles pad requests)
+  // Link parser to muxer using gst_element_link (simpler, handles pad requests)
   if (gst_element_link(parse, ctx->mux)) {
     ctx->linked = true;
 
-    // Add pad probe to generate and inject ST 0604 SEI (fork 21, ADR 0023)
+    // ST 0604 SEI generation (ADR 0023/0024) — H.264 only, guaranteed above.
     if (ctx->generate_sei) {
       GstPad* parse_src = gst_element_get_static_pad(parse, "src");
       if (parse_src) {
@@ -564,7 +653,7 @@ void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
       }
     }
   } else {
-    g_warning("misbklv: failed to link h264parse to muxer");
+    g_warning("misbklv: failed to link %s to muxer", parser_name);
   }
   ctx->cv.notify_all();  // wake open_insert (linked, or a failure it will time out on)
 }
@@ -620,12 +709,27 @@ class GstInserter : public Inserter {
         if (msg.has(2)) {
           auto ts_result = msg.get<std::uint64_t>(2);
           if (ts_result) {
-            std::uint64_t sensor_timestamp_us = *ts_result;
+            const std::uint64_t sensor_timestamp_us = *ts_result;
+            const auto pts = static_cast<std::uint64_t>(pts_ns);
             std::lock_guard<std::mutex> lock(video_->timestamp_mu);
-            video_->pts_to_sensor_timestamp[static_cast<std::uint64_t>(pts_ns)] = sensor_timestamp_us;
-            // No pruning: map persists for session lifetime. Memory cost is minimal
-            // (~16 bytes/entry, ~1KB/minute @ 30fps), and video pipeline may lag behind
-            // KLV push() by many seconds, requiring lookups to old entries.
+
+            // Derive the ST 0603 Time Status from how absolute time moved
+            // against the media timeline since the last packet (ADR 0024).
+            SensorTime entry{sensor_timestamp_us, kTimeStatusBase};
+            if (video_->have_prev_push) {
+              entry.status = sensor_time_status(
+                  static_cast<std::int64_t>(sensor_timestamp_us) -
+                      static_cast<std::int64_t>(video_->prev_push_ts_us),
+                  (static_cast<std::int64_t>(pts) -
+                   static_cast<std::int64_t>(video_->prev_push_pts_ns)) / 1000);
+            }
+            video_->have_prev_push = true;
+            video_->prev_push_pts_ns = pts;
+            video_->prev_push_ts_us = sensor_timestamp_us;
+
+            video_->pts_to_sensor_timestamp[pts] = entry;
+            // No pruning: the map persists for the session. Video can lag KLV
+            // push() by many seconds, so old entries still get looked up.
           }
         }
       }

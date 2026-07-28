@@ -51,9 +51,14 @@ done and extending incrementally** — the state today:
   only — H.265 and reading 0604 back out stay deferred
   ([ADR 0009](../context/decisions/0009-st0604-deferred.md)). NAL and SEI
   parsing go through gstreamer's `codecparsers`; both modes are checked by
-  decoding SEI back out of the muxed output. The Time Status says **Lock
-  Unknown** (`0x9F`, [`st0603`](../context/st0603.md) §7.4 Table 3) — we relay a
-  timestamp whose clock discipline we cannot know, so we don't claim otherwise.
+  decoding SEI back out of the muxed output. `Generate` is **H.264 only** and
+  *refuses* other codecs rather than emitting timestamp-free video; the parser
+  on the passthrough branch is picked from the pad's caps, so H.265 and MPEG-1/2
+  sources carry through (they could not, before). The Time Status
+  ([`st0603`](../context/st0603.md) §7.4 Table 3) is **derived**: bit 7 always
+  says Lock Unknown — we relay a timestamp whose clock discipline we cannot
+  know — and bits 6/5 report a discontinuity when the KLV's absolute time stops
+  tracking the media timeline.
 - **Read and write share one timeline**
   ([ADR 0021](../context/decisions/0021-read-path-timestamps.md)): both
   extractors report `pts_ns` as nanoseconds from the start of the source — the

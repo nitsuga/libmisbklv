@@ -2,6 +2,32 @@
 
 ## 2026-07-28
 
+* **Time Status bits 6/5 derived; `Generate` refuses non-H.264** (fork 22
+  follow-ons, [ADR 0024](./decisions/0024-sei-generation-opt-in.md)) — the two
+  items ADR 0023 had left open, both closed because both turn on what `Generate`
+  means.
+
+  Bits 6/5 (Normal/Discontinuity, Forward/Reverse) had been asserted. They are
+  now computed in `push()`: the KLV's absolute time and the media timeline
+  measure the same real seconds, so a packet whose two deltas disagree by more
+  than 50 ms did not increment linearly — which is what bit 6 reports. Status is
+  stored per map entry and travels with the timestamp. Bit 7 stays Lock Unknown.
+  Driven in test with controlled timestamps: linear → `0x9F`, forward jump →
+  `0xDF`, backward jump → `0xFF`. The existing battery's flat `0x9F` assertion
+  had to be relaxed to shape-only — the `dayflight.klv` fixture's item 2 jumps
+  6–98 *seconds* between packets pushed 100 ms apart, so the derivation flags it,
+  correctly.
+
+  `Sei0604::Generate` on non-H.264 now fails `open_insert` with
+  `Error::Unsupported` instead of quietly producing video with no timestamps.
+  Learning the codec to make that check **exposed a real bug**: `h264parse` was
+  being inserted for *every* video pad since the MP4 audio fix, so ADR 0020's
+  codec-agnostic claim had been false and an H.265 or MPEG-2 source could not
+  link at all. The parser is now chosen from the pad's caps
+  (`h264parse` / `h265parse` / none). Tests build H.265 and MPEG-1/2 sources at
+  run time from `videotestsrc` (skipped where the encoder is absent) and cover
+  both passthrough and the refusal. ADR 0020 amended.
+
 * **Fork 22 — ST 0604 SEI generation is opt-in** (accepted,
   [ADR 0024](./decisions/0024-sei-generation-opt-in.md)): `Sei0604::Preserve`
   (default) / `::Generate` on `InsertConfig` and `KlvSink`, plus a

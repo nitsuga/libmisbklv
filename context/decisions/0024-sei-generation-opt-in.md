@@ -85,6 +85,34 @@ in [`0023`](./0023-st0604-sei-passthrough.md).
   property of an insert session, not a different operation. It composes with
   `realtime` and `video_source` on the same config.
 
+# Two follow-ons this closed
+
+Both were left open on [`0023`](./0023-st0604-sei-passthrough.md) and are
+resolved here, since both turn on what `Generate` means.
+
+**`Generate` on non-H.264 is an error, not a no-op.** The generator only knows
+H.264 NAL syntax. Accepting the request and quietly producing video with no
+timestamps in it is the failure mode this whole fork exists to prevent, so
+`open_insert` fails with `Error::Unsupported` when the source's video is
+anything else. `Preserve` still carries every codec.
+
+Making that check possible meant learning the codec from the pad's caps, which
+exposed a real bug: **`h264parse` was being inserted for every video pad**,
+whatever the codec — so ADR 0020's "codec-agnostic (H.264/H.265)" claim had been
+false since the MP4 fix that introduced it. The parser is now chosen by media
+type (`h264parse` / `h265parse` / none, linking straight to the muxer), and the
+tests cover H.265 and MPEG-1/2 sources built at run time from `videotestsrc`.
+
+**Time Status bits 6/5 are derived, not asserted.** ST 0603.5 Table 3 bit 6
+reports whether time incremented forward linearly and bit 5 which way it jumped.
+We had been claiming Normal/Forward unconditionally. Both clocks in play measure
+the same real seconds, so in normal running a packet's absolute time advances by
+the same amount as its presentation time; when it does not, that is precisely a
+discontinuity. `push()` now compares the two deltas against a 50 ms tolerance and
+stores the resulting status with the timestamp. Bit 7 stays Lock Unknown always
+([`0023`](./0023-st0604-sei-passthrough.md)) — that one genuinely is unknowable
+from item 2.
+
 # Consequences
 
 - **Behaviour changes for anyone on `0023`.** Passing a `video_source` no longer
@@ -96,6 +124,10 @@ in [`0023`](./0023-st0604-sei-passthrough.md).
   sources that had one. This is a deliberate loss: see the Decision. Callers
   whose KLV covers the whole video (the expected case) never see it.
 - **`Preserve` costs nothing** — no parser, no probe, no per-buffer work.
+- **Non-H.26x video is muxed without a parser element**, which is new: it used to
+  get `h264parse` and fail. Covered by a generated MPEG-1/2 source.
+- **A stream whose KLV time jumps now says so**, per packet, instead of every SEI
+  claiming linear time.
 - Source compatibility is kept: every new parameter is defaulted, and the
   existing `KlvSink` constructors still compile unchanged.
 
@@ -107,11 +139,14 @@ in [`0023`](./0023-st0604-sei-passthrough.md).
   with it a source ST 0604 in that same NAL would too. Not observed in the
   samples (`Generate` leaves 0 source SEI on `klv_metadata_test_sync.ts`), and
   the alternative drops bystander messages. Revisit if a real stream packs them.
-- **H.265 is unaffected** — `Generate` is accepted and does nothing on non-H.264
-  video, which still passes through. Whether that should instead be an error is
-  open; it is currently silent.
-- Bits 6/5 of the Time Status remain asserted rather than derived
-  ([`0023`](./0023-st0604-sei-passthrough.md)).
+- The linearity tolerance for the Time Status (50 ms) is a judgement, not a
+  standard's number: wide enough that clock drift between the KLV's absolute
+  time and the media timeline never trips it, narrow enough to catch a real
+  relock or edit. Nothing in ST 0603 says where the line is.
+- Whether a frame should inherit the Discontinuity flag of the KLV entry it
+  matched, when several frames share one entry, is a judgement too. The status
+  describes the timestamp being carried, and those frames all carry the same
+  timestamp, so they all report it.
 
 # Citations
 

@@ -62,8 +62,9 @@ enum class Sei0604 {
   // Time Stamp per access unit and it agrees with the KLV. Frames with no KLV
   // timestamp within tolerance get no SEI rather than an invented one.
   //
-  // H.264 only. On other codecs this is accepted and does nothing — the video
-  // still passes through, just without generated SEI.
+  // H.264 only: `open_insert` fails with `Error::Unsupported` if the source's
+  // video is anything else, rather than writing an output whose video silently
+  // has no timestamps in it. `Preserve` carries every codec, as it always did.
   Generate,
 };
 
@@ -73,11 +74,12 @@ struct InsertConfig {
   // v1 signals 0x06 async (0x15 sync deferred, ADR 0008).
 
   // Optional video passthrough (ADR 0020). A bare path or "file:PATH" to a media
-  // file whose *first* video elementary stream is re-muxed, UNCHANGED, alongside
-  // the KLV. Empty (the default) keeps the KLV-only pipeline exactly as it was.
+  // file whose *first* video elementary stream is re-muxed alongside the KLV —
+  // unchanged unless `sei_0604` below asks otherwise. Empty (the default) keeps
+  // the KLV-only pipeline exactly as it was.
   //
   // The stream is parsed, never decoded: whatever codec the source carries
-  // (H.264, H.265, ...) is what the output carries. Every non-video stream in
+  // (H.264, H.265, MPEG-2, ...) is what the output carries. Every non-video stream in
   // the source is dropped — audio, subtitles, and any KLV the source already
   // has (the caller supplies its own KLV through push()).
   //
