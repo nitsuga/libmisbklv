@@ -50,7 +50,7 @@ Implementation approach:
    - Observed lag typically submillisecond; 200ms = 6 frames @ 30fps headroom
 4. **SEI generation** per ST 0604.6 §7:
    - UUID `MISPmicrosectime` (16 bytes)
-   - Status byte (GPS locked, normal time)  
+   - Status byte (GPS locked, normal time)
    - Modified Precision Time Stamp (absolute Unix µs + 0xFF emulation prevention)
 5. **Picture Timing SEI stripping**: Remove type 1 SEI from source to prevent parser warnings
 6. **Injection**: Insert before first slice NAL (types 1-5, 19-21)
@@ -72,7 +72,8 @@ the downstream consumer's SEI decoder implementations.
 
 # Consequences
 
-- **Video ES is larger** — ~35 bytes of SEI per frame (~14KB for 418 frames)
+- **Video ES is larger** — ~35 bytes of SEI per frame (~24 KB over the 699-frame
+  parrot-to-klv clip), less whatever Picture Timing SEI was stripped
 - **Test updated** — `gst_video_insert_test` now checks ES size >= source
   instead of byte-exact
 - **Always enabled** — all video passthrough operations generate ST 0604,
@@ -120,9 +121,7 @@ the downstream consumer's SEI decoder implementations.
 - Emulation prevention matches ST 0604.6 Table 2 exactly
 - Always creates new buffer (doesn't mutate) — safe for gstreamer refcounting
 
-# Validation & Troubleshooting
-
-## Verifying SEI Generation
+# Wire format produced
 
 Check output has ST 0604 SEI:
 ```bash
@@ -141,28 +140,10 @@ xxxxxx  63 74 69 6d 65 1f XX XX  ff XX XX ff XX XX ff XX  |ctime...........|
 - `1f` - status byte
 - `XX XX ff XX XX ff XX XX ff XX XX` - timestamp with 0xFF emulation prevention
 
-## If parrot-to-klv isn't picking it up:
+SEI appears only when `video_source` is set — without it the insert path writes
+KLV alone and there is no video ES to carry a timestamp.
 
-1. **Verify parrot-to-klv rebuilt against updated libmisbklv:**
-   ```bash
-   cd parrot-to-klv && rm -rf build && cmake -B build && cmake --build build
-   ```
-
-2. **Check video passthrough is being used:**
-   - parrot-to-klv must call `KlvSink` with video_source parameter
-   - Look for: `KlvSink("file:" + output, false, input_video_path)`
-   - Without video_source, no SEI is generated
-
-3. **Verify output has video PID:**
-   - SEI only generated when video is present
-   - Check PMT has both KLV (0x06) and video (0x1b) PIDs
-
-4. **Check downstream extraction:**
-   - the downstream consumer's SEI decoder expects byte-stream format
-   - Verify tsdemux → h264parse path preserves SEI
-   - If tsdemux strips SEI, extraction must happen on raw TS
-
-## Known Limitations
+# Known limitations
 
 - **H.264 only** — H.265 uses different UUID (deferred)
 - **Always enabled** — no way to disable SEI generation for video passthrough
@@ -176,9 +157,14 @@ xxxxxx  63 74 69 6d 65 1f XX XX  ff XX XX ff XX XX ff XX  |ctime...........|
   within 1µs, which gstreamer provides.
 - **Emulation prevention correctness:** Generated per ST 0604.6 §7.4 Table 2
   (0xFF at byte positions 3, 6, 9); downstream must de-stuff correctly.
-- **End-to-end validation pending:** Verified via hexdump (UUID present), but
-  actual extraction with the downstream consumer's SEI decoder needs
-  testing with parrot-to-klv → downstream client.
+- **Validation is manual; automated coverage is weak.** Verified by hand on a
+  parrot-to-klv run (SEI present by hexdump, and extracted by the downstream consumer's
+  the downstream consumer's SEI decoder). `gst_video_insert_test` only
+  asserts the output ES is *no smaller* than the source — it does not look for
+  the `MISPmicrosectime` UUID, decode a timestamp, or check it against the KLV
+  it came from. A regression that emitted malformed or misaligned SEI would
+  still pass. Worth an assertion on the UUID and a round-trip of one frame's
+  timestamp.
 
 # Citations
 
