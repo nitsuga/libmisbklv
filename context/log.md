@@ -32,6 +32,31 @@
     against eight LGPL plugins with no decoder present, which is what the whole
     thing was for.
 
+* **The CI hang, found: a circular preroll deadlock, plus a version-dependent
+  miss.** Reproduced locally at last by building the CI environment in docker
+  (`ubuntu:24.04`, gstreamer **1.24.2**; this box has 1.20.3), which turned an
+  11-minute CI round trip into a 90-second one. Two distinct faults, both only
+  visible on 1.24:
+
+  1. **Dropped streams deadlocked the pipeline.** A demuxer pushes every stream
+     from one thread; a sink in PAUSED prerolls one buffer and then blocks that
+     thread until PLAYING. So the `fakesink` taking the source's own KLV stream
+     blocked the video queued behind it, the muxer never prerolled, the pipeline
+     never reached PLAYING, and the sink never unblocked. `async=false` does not
+     help — blocking in PAUSED is what a sink is *supposed* to do. The fix is a
+     `queue` per dropped branch, `leaky=downstream`, so a stream we discard can
+     never apply backpressure to one we carry. `tsdemux` logged it plainly once
+     asked: `sparse stream, pushing GAP event`, and that thread never spoke again.
+  2. **`Generate` stopped replacing the source's ST 0604.** 1.22 added a parsed
+     payload type for `user_data_unregistered`; before that it arrived as an
+     *unhandled* payload, which is all our detection knew about. On 1.24 the
+     source's 418 SEIs were therefore not recognised and survived alongside ours
+     — the exact duplication [ADR 0024](./decisions/0024-sei-generation-opt-in.md)
+     exists to prevent, failing silently. Now handled both ways, guarded by
+     `GST_CHECK_VERSION`.
+
+  Suite green on both: 25/25 under 1.20.3 and under 1.24.2.
+
 * **A second video pad was counted but never linked.** `on_video_pad_added`
   incremented `ignored_video_pads` and returned, leaving that pad dangling.
   parsebin requires every pad it exposes to be linked, and the resulting

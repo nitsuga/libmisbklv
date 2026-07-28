@@ -435,16 +435,24 @@ bool nal_is_vcl(guint type) {
 // the source already carried — we are about to write our own, and two of them in
 // one access unit leaves a reader guessing which is authoritative (ADR 0024).
 //
-// gstreamer 1.20 has no payload type for user_data_unregistered, so a source
-// ST 0604 arrives as an unhandled payload: match type 5 and the ST 0604.6 §7.1
-// identifier at the front of its data.
+// How a source ST 0604 SEI arrives depends on the gstreamer version, and getting
+// this wrong is silent: the message is simply not recognised, so the source's
+// timestamp is left in place next to ours. 1.22 added a parsed payload type for
+// user_data_unregistered; before that it came through as an unhandled payload
+// and had to be matched by its raw type 5 plus the §7.1 identifier.
 bool sei_message_is_replaced(const GstH264SEIMessage& msg) {
   if (msg.payloadType == GST_H264_SEI_PIC_TIMING) return true;
-  if (msg.payloadType != GST_H264_SEI_UNHANDLED_PAYLOAD) return false;
 
-  const auto& raw = msg.payload.unhandled_payload;
   static const char kId[] = "MISPmicrosectime";
   constexpr guint kIdLen = 16;
+
+#if GST_CHECK_VERSION(1, 22, 0)
+  if (msg.payloadType == GST_H264_SEI_USER_DATA_UNREGISTERED)
+    return std::memcmp(msg.payload.user_data_unregistered.uuid, kId, kIdLen) == 0;
+#endif
+
+  if (msg.payloadType != GST_H264_SEI_UNHANDLED_PAYLOAD) return false;
+  const auto& raw = msg.payload.unhandled_payload;
   if (raw.payloadType != 5 || !raw.data || raw.size < kIdLen) return false;
   return std::memcmp(raw.data, kId, kIdLen) == 0;
 }
@@ -617,14 +625,40 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad*, GstPadProbeInfo* info,
 // Link a pad we are not carrying to a fakesink. The demuxer requires every pad it
 // exposes to be linked; an unlinked one errors the whole pipeline as not-linked.
 void drop_pad_to_fakesink(GstPad* pad, VideoCtx* ctx) {
+  // queue ! fakesink, and the queue is the part that matters.
+  //
+  // A demuxer pushes every stream it has from one streaming thread. A sink in
+  // PAUSED takes a buffer, prerolls, and then blocks that thread until the
+  // pipeline reaches PLAYING — so dropping the source's audio or metadata
+  // straight into a sink stops the video queued behind it on the same thread.
+  // The muxer then never prerolls, so the pipeline never reaches PLAYING, so
+  // the sink never unblocks: a circular preroll deadlock. (Not hypothetical —
+  // it hung CI on every run under gstreamer 1.24.)
+  //
+  // The queue gives this branch its own thread, so the demuxer's thread returns
+  // immediately and keeps feeding the video. `leaky=downstream` means a stream
+  // we are discarding can never apply backpressure to one we are carrying.
+  GstElement* queue = gst_element_factory_make("queue", nullptr);
   GstElement* fakesink = gst_element_factory_make("fakesink", nullptr);
-  if (!fakesink) return;
-  gst_bin_add(GST_BIN(ctx->pipeline), fakesink);
-  gst_element_sync_state_with_parent(fakesink);  // sync state before linking
-  if (GstPad* sinkpad = gst_element_get_static_pad(fakesink, "sink")) {
+  if (!queue || !fakesink) {
+    if (queue) gst_object_unref(queue);
+    if (fakesink) gst_object_unref(fakesink);
+    return;
+  }
+  g_object_set(queue, "leaky", 2 /* downstream */, "max-size-buffers", 5,
+               "max-size-bytes", 0, "max-size-time", G_GUINT64_CONSTANT(0), nullptr);
+  g_object_set(fakesink, "async", FALSE, "sync", FALSE, nullptr);
+  gst_bin_add_many(GST_BIN(ctx->pipeline), queue, fakesink, nullptr);
+  gst_element_sync_state_with_parent(queue);
+  gst_element_sync_state_with_parent(fakesink);
+  if (!gst_element_link(queue, fakesink)) {
+    g_warning("misbklv: failed to link the drop queue to its sink");
+    return;
+  }
+  if (GstPad* sinkpad = gst_element_get_static_pad(queue, "sink")) {
     const GstPadLinkReturn ret = gst_pad_link(pad, sinkpad);
     if (ret != GST_PAD_LINK_OK)
-      g_warning("misbklv: failed to link unused pad to fakesink: %d", ret);
+      g_warning("misbklv: failed to link unused pad to drop queue: %d", ret);
     gst_object_unref(sinkpad);
   }
 }
