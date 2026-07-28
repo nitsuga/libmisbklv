@@ -2,6 +2,19 @@
 
 ## 2026-07-28
 
+* **A second video pad was counted but never linked.** `on_video_pad_added`
+  incremented `ignored_video_pads` and returned, leaving that pad dangling.
+  parsebin requires every pad it exposes to be linked, and the resulting
+  "not-linked" error is exactly the one the `open_insert` wait loop swallows as
+  transient (from the MP4 audio fix) — so the pipeline can stall with nothing
+  reported anywhere. Non-video pads have been dropped to a `fakesink` since that
+  same fix; this path was missed. Now it is dropped the same way.
+
+  Also: `gst_video_insert_test` line-buffers stdout. The first CI run under the
+  new guards timed out *without* showing the test's own progress output — ctest
+  kills the process and block-buffered `printf` output dies in the buffer, which
+  is precisely what was needed to identify the failing case.
+
 * **`finish()` could wait forever; CI hung for six hours a run because of it.**
   `Inserter::finish()` drained the pipeline with `gst_bus_timed_pop_filtered(...,
   GST_CLOCK_TIME_NONE, ...)` — the only unbounded wait in the library. A video

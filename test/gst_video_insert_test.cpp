@@ -676,6 +676,11 @@ void check_time_status_derivation(MediaBackend& be, const std::string& source,
 }
 
 int main(int argc, char** argv) {
+  // Line-buffer stdout: when this test hangs it is killed by ctest's timeout,
+  // and block-buffered progress output dies in the buffer — which is exactly
+  // the output needed to tell which case hung.
+  std::setvbuf(stdout, nullptr, _IOLBF, 0);
+
   if (argc < 4) {
     std::fprintf(stderr,
                  "usage: gst_video_insert_test <video.ts> <input.klv> <out.ts>\n");

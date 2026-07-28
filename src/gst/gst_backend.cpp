@@ -597,6 +597,12 @@ void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
   std::lock_guard<std::mutex> lk(ctx->mu);
   if (ctx->linked) {  // a second video stream: carry the first, note this one
     ++ctx->ignored_video_pads;
+    // ...and still link it, to a fakesink. parsebin requires every pad it
+    // exposes to be linked; leaving this one dangling posts a "not-linked"
+    // error that the wait loop below treats as transient and swallows, so the
+    // pipeline stalls with nothing reported. Non-video pads have been dropped
+    // this way since the MP4 audio fix; this path was missed.
+    drop_pad_to_fakesink(pad, ctx);
     return;
   }
 
