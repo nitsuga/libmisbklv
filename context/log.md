@@ -2,6 +2,32 @@
 
 ## 2026-07-28
 
+* **`finish()` could wait forever; CI hung for six hours a run because of it.**
+  `Inserter::finish()` drained the pipeline with `gst_bus_timed_pop_filtered(...,
+  GST_CLOCK_TIME_NONE, ...)` — the only unbounded wait in the library. A video
+  branch that never reaches EOS therefore blocked the caller with no escape.
+  CI had been hanging on `gst_video_insert` since `f9070fb` (the MP4 pad-linking
+  fix, which is what made a stall reachable): the last green run was `f818fd9`,
+  and nine runs afterwards sat in progress, one of them cancelled after **5h58m**
+  on that single test. Bounded at 5 minutes — generous, because the drain carries
+  whatever video is left and a caller that pushed its KLV early leaves most of the
+  file to remux; it is a stall guard, not a performance budget.
+
+  A timeout also had to change what success means: the old code read
+  `ok = !(msg && ERROR)`, so a *null* message counted as success — harmless when
+  the wait was infinite, wrong the moment it can time out. Now only a clean EOS
+  passes, so a stall takes the ADR 0022 cleanup path instead of leaving a
+  half-written output.
+
+  CI gained the guards that would have caught this in minutes rather than hours:
+  `timeout-minutes` on all three jobs (there were none, so a hang ran to GitHub's
+  6-hour cap) and `ctest --timeout 600`, which names the offending test instead of
+  killing the job anonymously. Nine hung runs cancelled.
+
+  Not directly reproduced: the test passes locally in ~1.5 s and only stalls in
+  CI, so the timeout is a fix for the unbounded wait itself, on the strong
+  circumstantial evidence above.
+
 * **CONVENTIONS § Linking said "either X or X".** The 2026-07-27 root-absolute
   lint rewrote the bad example in the guidance itself, leaving a sentence
   offering sibling-relative *or* "absolute" with two byte-identical examples.

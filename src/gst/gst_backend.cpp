@@ -108,6 +108,17 @@ GstFlowReturn on_new_sample(GstElement* sink, gpointer user) {
 // it never trips mid-stream; short enough to end the extract promptly (B4).
 inline constexpr guint64 kIdleTimeoutNs = 500'000'000;  // 500 ms
 
+// How long finish() will wait for the pipeline to drain after EOS before giving
+// up. This was an unbounded wait, which meant a video branch that never reaches
+// EOS blocked the caller forever — it hung CI for six hours a run, and a
+// consumer would simply never return from close().
+//
+// Generous on purpose: the drain has to carry whatever video is left, and a
+// caller that pushed its KLV early can leave most of the file to remux here. So
+// this is a *stall* guard, not a performance budget — it should only ever fire
+// when nothing is happening at all.
+inline constexpr GstClockTime kFinishDrainTimeout = 300 * GST_SECOND;  // 5 min
+
 // Tolerance for PTS fuzzy matching when looking up sensorTimestamp for ST 0604
 // SEI generation (fork 21). Video and KLV flow through separate gstreamer
 // pipelines with different buffering, so video frames can arrive at the probe
@@ -751,9 +762,16 @@ class GstInserter : public Inserter {
     gst_app_src_end_of_stream(GST_APP_SRC(appsrc_));
     GstBus* bus = gst_element_get_bus(pipeline_);
     GstMessage* msg = gst_bus_timed_pop_filtered(
-        bus, GST_CLOCK_TIME_NONE,
+        bus, kFinishDrainTimeout,
         static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
-    const bool ok = !(msg && GST_MESSAGE_TYPE(msg) == GST_MESSAGE_ERROR);
+    // Only a clean EOS is success. A null message is the timeout above — the
+    // pipeline stalled — and is a failure like any other, so the ADR 0022
+    // cleanup below runs rather than leaving a half-written output behind.
+    const bool ok = msg && GST_MESSAGE_TYPE(msg) == GST_MESSAGE_EOS;
+    if (!msg)
+      g_warning("misbklv: pipeline did not drain within %" G_GUINT64_FORMAT
+                "s of EOS; giving up",
+                static_cast<guint64>(kFinishDrainTimeout / GST_SECOND));
     if (msg) gst_message_unref(msg);
     gst_object_unref(bus);
     gst_element_set_state(pipeline_, GST_STATE_NULL);  // flush/close the sink

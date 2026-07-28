@@ -8,6 +8,9 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    # A hung test otherwise runs to GitHub's 6-hour cap: gst_video_insert did
+    # exactly that, nine times over, before finish() grew a drain timeout.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
         with:
@@ -25,7 +28,8 @@ jobs:
       - name: Build
         run: cmake --build build
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        # --timeout names the test that hung; the job timeout above is the backstop.
+        run: ctest --test-dir build --output-on-failure --timeout 600
       - name: Install
         run: cmake --install build --prefix "$PWD/_install"
       - name: Consumer smoke test (find_package, core + gst component)
@@ -50,6 +54,7 @@ jobs:
           cmake --build /tmp/consumer/build
 
   sanitizers:
+    timeout-minutes: 20
     # Real-world hardening: the core parse/codec paths must be free of UB / OOB
     # on adversarial input. gstreamer is off so ASan isn't noised by gst internals.
     runs-on: ubuntu-latest
@@ -66,12 +71,13 @@ jobs:
       - name: Build
         run: cmake --build build-san
       - name: Test under sanitizers
-        run: ctest --test-dir build-san --output-on-failure
+        run: ctest --test-dir build-san --output-on-failure --timeout 600
         env:
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
           ASAN_OPTIONS: abort_on_error=1
 
   registry-drift:
+    timeout-minutes: 10
     # ADR 0012: the committed constexpr tables must match a fresh regeneration.
     runs-on: ubuntu-latest
     steps:
