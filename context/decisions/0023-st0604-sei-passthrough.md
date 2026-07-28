@@ -17,8 +17,8 @@ encode/decode, just codec-agnostic video pass-through.
 **Real-world finding (2026-07-27):** A consumer (`parrot-to-klv`) converts
 Parrot drone MP4s to TS with KLV via libmisbklv's video passthrough. The
 consumer's downstream client actively extracts **both** ST 0601 timestamps
-(from KLV metadata) and ST 0604 timestamps (from H.264 SEI via
-the downstream consumer's SEI decoder). The client needs frame-accurate
+(from KLV metadata) and ST 0604 timestamps (from H.264 SEI, via its own SEI
+decoder). The client needs frame-accurate
 timestamps directly in the video elementary stream, independent of the metadata
 stream.
 
@@ -56,8 +56,9 @@ Implementation approach:
 6. **Injection**: Insert before first slice NAL (types 1-5, 19-21)
 7. Always enabled for video passthrough (no configuration needed)
 
-Based on the downstream consumer's SEI encoder and
-the downstream consumer's SEI decoder implementations.
+Byte layout and injection point follow ST 0604.6 §7, cross-checked against the
+encode/decode behaviour of the downstream consumer's existing SEI implementation
+so the two interoperate without changes on their side.
 
 # Alternatives considered
 
@@ -78,8 +79,8 @@ the downstream consumer's SEI decoder implementations.
   instead of byte-exact
 - **Always enabled** — all video passthrough operations generate ST 0604,
   whether parrot-to-klv or other consumers
-- **Downstream compatible** — existing the downstream consumer's SEI decoder
-  extracts generated SEI with no changes needed
+- **Downstream compatible** — the consumer's existing SEI decoder extracts what
+  we generate with no changes needed on their side
 - **Timestamps from KLV sensorTimestamp** — absolute Unix microseconds from
   ST 0601 tag 2, matched to video frames by PTS via fuzzy lookup
 - **H.264 only** — H.265 uses different UUID (Nano, ST 0604.6 §8), deferred
@@ -117,7 +118,8 @@ the downstream consumer's SEI decoder implementations.
 - **Thread-safe**: Map protected by mutex, accessed from push() (app thread) and probe (streaming thread)
 - **No pruning**: Map persists all entries for session lifetime (memory cost minimal: ~16 bytes/entry, ~1KB/minute @ 30fps). Video pipeline can run behind KLV push() requiring lookups to old entries. Initial 300-entry prune limit caused failures after 10s when probe needed already-removed entries.
 - **Picture Timing removal**: Eliminates parser warnings from source SEI without proper VUI
-- Injection before slice (not before SPS/PPS) per the downstream consumer pattern
+- Injection before slice (not before SPS/PPS) — where the downstream decoder
+  looks for it
 - Emulation prevention matches ST 0604.6 Table 2 exactly
 - Always creates new buffer (doesn't mutate) — safe for gstreamer refcounting
 
@@ -158,8 +160,8 @@ KLV alone and there is no video ES to carry a timestamp.
 - **Emulation prevention correctness:** Generated per ST 0604.6 §7.4 Table 2
   (0xFF at byte positions 3, 6, 9); downstream must de-stuff correctly.
 - **Validation is manual; automated coverage is weak.** Verified by hand on a
-  parrot-to-klv run (SEI present by hexdump, and extracted by the downstream consumer's
-  the downstream consumer's SEI decoder). `gst_video_insert_test` only
+  parrot-to-klv run (SEI present by hexdump, and extracted successfully by the
+  downstream consumer's SEI decoder). `gst_video_insert_test` only
   asserts the output ES is *no smaller* than the source — it does not look for
   the `MISPmicrosectime` UUID, decode a timestamp, or check it against the KLV
   it came from. A regression that emitted malformed or misaligned SEI would
@@ -174,5 +176,6 @@ KLV alone and there is no video ES to carry a timestamp.
     implements the generation side).
 [3] [`0020`](./0020-video-passthrough.md) — video passthrough design; this
     extends it with SEI generation.
-[4] the downstream consumer's SEI implementation — reference implementation
-    for encode/decode that this matches.
+[4] The downstream consumer's existing H.264 SEI encode/decode implementation —
+    the interoperability target this was cross-checked against (not vendored;
+    ST 0604.6 §7 is the normative source for the layout).

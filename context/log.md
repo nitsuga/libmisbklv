@@ -6,7 +6,8 @@
   (accepted, [ADR 0023](./decisions/0023-st0604-sei-passthrough.md)):
   `src/gst/gst_backend.cpp` +~240 lines, new `gstreamer-codecparsers-1.0`
   dependency, `gst_video_insert_test` relaxed from byte-exact ES to size-only.
-  Verified by hand against parrot-to-klv (699 frames) and the downstream consumer's decoder;
+  Verified by hand against parrot-to-klv (699 frames) and the downstream
+  consumer's SEI decoder;
   full CTest suite green (25/25). Scopes down the ST 0604 deferral in
   [`0009`](./decisions/0009-st0604-deferred.md) and makes the passthrough ES of
   [`0020`](./decisions/0020-video-passthrough.md) no longer byte-identical.

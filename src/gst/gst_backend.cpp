@@ -215,7 +215,7 @@ bool caps_are_video(GstCaps* caps) {
 
 // Generate ST 0604 Precision Time Stamp SEI payload (fork 21, ADR 0023).
 // Returns SEI payload: type (5) + length (28) + UUID (16) + status (1) + timestamp (11).
-// Based on the downstream consumer's SEI encoder and ST 0604.6 §7.
+// Layout per ST 0604.6 §7 (UUID, status byte, 0xFF emulation prevention Table 2).
 std::vector<std::byte> generate_0604_sei_payload(uint64_t timestamp_microsec) {
   std::vector<std::byte> payload;
 
@@ -262,8 +262,8 @@ std::vector<std::byte> generate_0604_sei_payload(uint64_t timestamp_microsec) {
 
 // Pad probe to generate and inject ST 0604 SEI into H.264 buffers (fork 21, ADR 0023).
 // Generates SEI from sensorTimestamp (looked up by PTS), inserts before first slice NAL,
-// strips Picture Timing SEI. Based on the downstream consumer's SEI encoder
-// and ST 0604.6 §7.
+// strips Picture Timing SEI. Payload layout per ST 0604.6 §7; injection point matches
+// what a downstream consumer's SEI decoder expects (see ADR 0023).
 GstPadProbeReturn on_h264_buffer_inject_sei(GstPad*, GstPadProbeInfo* info,
                                               gpointer user) {
   auto* ctx = static_cast<VideoCtx*>(user);
