@@ -464,10 +464,9 @@ void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
   }
 
   // config-interval=-1: insert SPS/PPS with every IDR frame, which helps maintain
-  // parameter set availability for downstream readers. Note: ST 0604 Picture Timing
-  // SEI messages (present in sources like Parrot MP4s) may still generate warnings
-  // in some readers due to VUI/SPS association complexities in the remux path — full
-  // ST 0604 support is deferred (ADR 0009).
+  // parameter set availability for downstream readers. The video probe strips
+  // Picture Timing SEI (type 1) and generates ST 0604 SEI (type 5) with absolute
+  // timestamps from KLV sensorTimestamp (fork 21, ADR 0023).
   g_object_set(parse, "config-interval", -1, nullptr);
 
   gst_bin_add(GST_BIN(ctx->pipeline), parse);
