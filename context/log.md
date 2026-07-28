@@ -32,6 +32,23 @@
     against eight LGPL plugins with no decoder present, which is what the whole
     thing was for.
 
+* **Added `tools/gst-container/`** — the docker repro that found the hang, kept
+  as a dev tool: `run.sh` builds this repo against a distro-pinned gstreamer
+  (`UBUNTU=24.04` → 1.24, `22.04` → 1.20) and runs the suite, so the version gap
+  that hid two bugs from a 1.20 host is testable without waiting on CI. Its
+  package list mirrors the CI workflow's, deliberately.
+
+  **The image and the in-container build+test are proven** (25/25 under 1.24.2,
+  twice — that is how the bugs below were found). **`run.sh` itself is not**: two
+  wrapper bugs were fixed while writing it, then the host's docker daemon went
+  unresponsive before a clean end-to-end run. Committed as a starting point with
+  that stated in its README; confirm it before relying on it.
+
+  Also captured there: the MTU trap. Docker's bridge defaults to 1500 and WSL2's
+  interface is 1420, so every packet over the host MTU is silently dropped and
+  `apt` crawls rather than fails — 24 minutes versus 73 seconds. `run.sh` builds
+  with `--network=host` for that reason.
+
 * **The CI hang, found: a circular preroll deadlock, plus a version-dependent
   miss.** Reproduced locally at last by building the CI environment in docker
   (`ubuntu:24.04`, gstreamer **1.24.2**; this box has 1.20.3), which turned an
