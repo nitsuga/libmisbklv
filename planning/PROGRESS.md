@@ -65,13 +65,7 @@ done and extending incrementally** — the state today:
 
 ## In progress
 
-- Nothing mid-change. Video passthrough (ADR 0020) and all three follow-on
-  findings the `parrot-to-klv` consumer raised while building on it are resolved:
-  (1) read-path timestamps (ADR 0021), (2) cleanup after a *late* failure
-  (ADR 0022), and (3) **MP4 video sources with audio tracks** (parsebin pad
-  linking + H.264 format conversion) — full CTest suite green (25/25), sanitizer
-  build clean. Next work is pull-based (registry/data breadth as samples require
-  it) — see Next.
+None currently.
 
 ## Next
 

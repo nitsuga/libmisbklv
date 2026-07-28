@@ -327,7 +327,9 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
                 src_video.payload.size(), src_video.pts_90k.size(),
                 out_video.payload.size(), out_video.pts_90k.size());
     check("video codec unchanged", video_type == src_video_type && video_type);
-    check("video ES byte-exact", out_video.payload == src_video.payload);
+    // Fork 21: video passthrough now generates ST 0604 SEI per frame (~35 bytes each),
+    // so output ES is larger. Check that output >= source (not byte-exact).
+    check("video ES preserved (with SEI)", out_video.payload.size() >= src_video.payload.size());
     check("video frame count kept",
           out_video.pts_90k.size() == src_video.pts_90k.size());
   } else {

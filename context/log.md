@@ -2,6 +2,46 @@
 
 ## 2026-07-27
 
+* **Fork 21 — ST 0604 SEI generation (accepted)** ([ADR 0023](./decisions/0023-st0604-sei-passthrough.md),
+  `src/gst/gst_backend.cpp` +~240 lines, `test/gst_video_insert_test.cpp`):
+  Implemented ST 0604 Precision Time Stamp generation for video passthrough using
+  **absolute Unix timestamps** from KLV `sensorTimestamp`. Downstream client needs
+  **both** ST 0601 (KLV) and ST 0604 (H.264 SEI) timestamps. Parrot MP4s don't
+  have SEI — they use metadata track — so parrot-to-klv needs to *generate* SEI.
+  
+  **Architecture**: KLV parsing in `push()` extracts tag 2 (sensorTimestamp µs),
+  populates thread-safe `pts_to_sensor_timestamp` map (no pruning — all entries
+  persist for session, ~16 bytes/entry). Video pad probe performs **backward-only
+  fuzzy PTS matching** (200ms tolerance via `kPtsMatchToleranceNs`) to handle video
+  pipeline running ahead of KLV push(). Never matches future frames. Falls back to
+  relative PTS if no match. Observed lag typically submillisecond. Initial 300-entry
+  prune limit caused failures after 10s when video probe needed already-removed
+  entries; removed for final implementation.
+  
+  **SEI generation**: `generate_0604_sei_payload()` creates User Unregistered SEI
+  (UUID "MISPmicrosectime" + status byte + 8-byte absolute Unix µs with 0xFF
+  emulation prevention per ST 0604.6 §7). `on_h264_buffer_inject_sei()` strips
+  Picture Timing SEI (type 1, causes parser warnings), injects ST 0604 SEI (type 5)
+  before slice NALs. Always enabled for video passthrough.
+  
+  Added `gstreamer-codecparsers-1.0` dependency, `misbklv/message.hpp` include for
+  KLV parsing. Test updated to expect larger video ES. Verified end-to-end with
+  parrot-to-klv (699 frames, 23s video) and the downstream consumer's
+  the downstream consumer's SEI decoder. Full CTest suite green (25/25).
+  Status: accepted, implementation complete and validated.
+
+* **Fork 21 opened — ST 0604 SEI passthrough preservation**
+  ([ADR 0023](./decisions/0023-st0604-sei-passthrough.md)): Real-world finding
+  from `parrot-to-klv` consumer: Parrot MP4s embed ST 0604 Precision Time
+  Stamps as H.264 SEI User Unregistered messages (UUID `MISPmicrosectime`), and
+  the consumer's downstream client actively extracts these for metadata/video
+  correlation. Video passthrough (ADR 0020) doesn't preserve them through the
+  parsebin→h264parse→mpegtsmux path — they're absent or corrupted in the
+  output, breaking the client. This is a *preservation* task (not generation),
+  distinct from the original 0604 deferral (ADR 0009). Fork 21 opened with
+  status `proposed`; decision pending on implementation approach (custom pad
+  probe, custom element, direct NAL manipulation, or declare unsupported).
+
 * **H.264 SEI/SPS limitation in video passthrough** (`src/gst/gst_backend.cpp`,
   ADRs 0009/0020): Parrot drone MP4 sources contain ST 0604 Precision Time
   Stamps embedded as H.264 SEI Picture Timing messages. After ADR 0020's video

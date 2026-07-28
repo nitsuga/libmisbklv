@@ -53,9 +53,10 @@ A *fork* is a decision point — a branch in the plan/design that needs a choice
 Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 `status: proposed`) · `DECIDED` / `DEFERRED` (has an ADR — see the register).
 
-**None open** — every fork so far is resolved; the count and status live in the
-decided register ([`../context/decisions/index.md`](../context/decisions/index.md)),
-not here. Candidate future forks (not yet opened), mostly downstream of
+**No open forks** — all design decisions resolved. See the decided register
+([`../context/decisions/index.md`](../context/decisions/index.md)) for fork → ADR mapping.
+
+**Candidate future forks** (not yet opened), mostly downstream of
 registry/data breadth:
 
 - ST 0102 Security LS as a typed nested registry (seen as tag 48 in `falls`;

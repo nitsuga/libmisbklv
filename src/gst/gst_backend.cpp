@@ -5,12 +5,14 @@
 // a video passthrough branch filesrc ! parsebin (ADR 0020). Live sources/sinks
 // (udp/srt) add real-time pacing + idle-timeout termination (B4, ADR 0017).
 #include "misbklv/gst_backend.hpp"
+#include "misbklv/message.hpp"  // for KLV parsing in push()
 
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <span>
@@ -19,6 +21,9 @@
 
 #include <gst/app/app.h>
 #include <gst/gst.h>
+#define GST_USE_UNSTABLE_API
+#include <gst/codecparsers/gsth264parser.h>
+#undef GST_USE_UNSTABLE_API
 
 #include "misbklv/packet.hpp"
 #include "../pts_marks.hpp"
@@ -100,6 +105,14 @@ GstFlowReturn on_new_sample(GstElement* sink, gpointer user) {
 // as ended (no EOS crosses udp/srt). Longer than the ~33 ms inter-packet gap, so
 // it never trips mid-stream; short enough to end the extract promptly (B4).
 inline constexpr guint64 kIdleTimeoutNs = 500'000'000;  // 500 ms
+
+// Tolerance for PTS fuzzy matching when looking up sensorTimestamp for ST 0604
+// SEI generation (fork 21). Video and KLV flow through separate gstreamer
+// pipelines with different buffering, so video frames can arrive at the probe
+// slightly ahead of their corresponding KLV packets in push(). At 30fps, 200ms
+// = ~6 frames. Observed lag is typically submillisecond; 200ms provides ample
+// headroom. Backward-only matching prevents incorrect matches across discontinuities.
+inline constexpr uint64_t kPtsMatchToleranceNs = 200'000'000;  // 200 ms
 
 // Build the source element from a spec: a bare path / "file:PATH" (EOS-ending),
 // or a live "udp:HOST:PORT" / "srt:URI". Sets `*live` for the live schemes.
@@ -185,6 +198,12 @@ struct VideoCtx {
   bool linked = false;         // a video pad reached the muxer
   bool no_more_pads = false;   // parsebin is done exposing pads
   int ignored_video_pads = 0;  // 2nd+ video stream: carried? no. recorded? yes.
+  bool generate_sei = false;   // generate ST 0604 SEI from frame PTS (fork 21)
+
+  // PTS (ns) → sensorTimestamp (µs) mapping for ST 0604 SEI generation (fork 21).
+  // Populated from KLV packets in push(), looked up in video pad probe.
+  std::mutex timestamp_mu;
+  std::map<uint64_t, uint64_t> pts_to_sensor_timestamp;
 };
 
 // True for caps whose media type is video/* (video/x-h264, video/x-h265, ...).
@@ -192,6 +211,215 @@ bool caps_are_video(GstCaps* caps) {
   if (!caps || gst_caps_is_empty(caps)) return false;
   const gchar* name = gst_structure_get_name(gst_caps_get_structure(caps, 0));
   return name && std::strncmp(name, "video/", 6) == 0;
+}
+
+// Generate ST 0604 Precision Time Stamp SEI payload (fork 21, ADR 0023).
+// Returns SEI payload: type (5) + length (28) + UUID (16) + status (1) + timestamp (11).
+// Based on the downstream consumer's SEI encoder and ST 0604.6 §7.
+std::vector<std::byte> generate_0604_sei_payload(uint64_t timestamp_microsec) {
+  std::vector<std::byte> payload;
+
+  // SEI User Unregistered: type 5, payload length 28
+  payload.push_back(std::byte{5});   // payload type
+  payload.push_back(std::byte{28});  // payload size (16-byte UUID + 1 status + 11 timestamp)
+
+  // UUID "MISPmicrosectime" (16 bytes) per ST 0604.6 §7.2
+  const uint8_t uuid[16] = {'M','I','S','P','m','i','c','r','o','s','e','c','t','i','m','e'};
+  for (int i = 0; i < 16; i++) {
+    payload.push_back(std::byte{uuid[i]});
+  }
+
+  // Status byte (1 byte): GPS locked, normal time, forward time
+  // Bit 7: 0=GPS locked, bit 6: 0=normal, bit 5: 0=forward, bits 4-0: reserved (1s)
+  payload.push_back(std::byte{0b00011111});
+
+  // Modified Precision Time Stamp (11 bytes): 8-byte uint64 microseconds with
+  // start-code emulation prevention bytes (0xFF) inserted at positions 3, 6, 9.
+  // Per ST 0604.6 §7.4 Table 2.
+  uint8_t* ts_bytes = reinterpret_cast<uint8_t*>(&timestamp_microsec);
+
+  // Bytes 0-1: MSB of timestamp
+  payload.push_back(std::byte{ts_bytes[7]});
+  payload.push_back(std::byte{ts_bytes[6]});
+  // Byte 2: emulation prevention
+  payload.push_back(std::byte{0xFF});
+  // Bytes 3-4: timestamp continues
+  payload.push_back(std::byte{ts_bytes[5]});
+  payload.push_back(std::byte{ts_bytes[4]});
+  // Byte 5: emulation prevention
+  payload.push_back(std::byte{0xFF});
+  // Bytes 6-7: timestamp continues
+  payload.push_back(std::byte{ts_bytes[3]});
+  payload.push_back(std::byte{ts_bytes[2]});
+  // Byte 8: emulation prevention
+  payload.push_back(std::byte{0xFF});
+  // Bytes 9-10: LSB of timestamp
+  payload.push_back(std::byte{ts_bytes[1]});
+  payload.push_back(std::byte{ts_bytes[0]});
+
+  return payload;
+}
+
+// Pad probe to generate and inject ST 0604 SEI into H.264 buffers (fork 21, ADR 0023).
+// Generates SEI from sensorTimestamp (looked up by PTS), inserts before first slice NAL,
+// strips Picture Timing SEI. Based on the downstream consumer's SEI encoder
+// and ST 0604.6 §7.
+GstPadProbeReturn on_h264_buffer_inject_sei(GstPad*, GstPadProbeInfo* info,
+                                              gpointer user) {
+  auto* ctx = static_cast<VideoCtx*>(user);
+  if (!ctx->generate_sei) return GST_PAD_PROBE_OK;
+
+  GstBuffer* buffer = GST_PAD_PROBE_INFO_BUFFER(info);
+
+  // Look up absolute sensorTimestamp (µs) from KLV by this frame's PTS (ns).
+  // Uses fuzzy matching (closest entry within 50ms tolerance) to handle timing
+  // races where the video probe runs before the corresponding KLV arrives.
+  // If not found, fall back to relative PTS.
+  if (!GST_BUFFER_PTS_IS_VALID(buffer)) return GST_PAD_PROBE_OK;
+  uint64_t pts_ns = GST_BUFFER_PTS(buffer);
+  uint64_t timestamp_microsec = pts_ns / 1000;  // fallback: relative
+
+  {
+    std::lock_guard<std::mutex> lock(ctx->timestamp_mu);
+    if (!ctx->pts_to_sensor_timestamp.empty()) {
+      // Find closest entry at or before pts_ns (never match future frames).
+      // Video and KLV buffering can cause either stream to arrive out of order,
+      // but matching a video frame to a future KLV timestamp produces incorrect results.
+      auto it = ctx->pts_to_sensor_timestamp.upper_bound(pts_ns);
+
+      // upper_bound returns first entry > pts_ns, so step back to get entry <= pts_ns
+      if (it != ctx->pts_to_sensor_timestamp.begin()) {
+        --it;
+        uint64_t distance = pts_ns - it->first;  // always positive since it->first <= pts_ns
+
+        // Use this entry if within tolerance
+        if (distance <= kPtsMatchToleranceNs) {
+          timestamp_microsec = it->second;
+        }
+      }
+    }
+  }
+
+  // Generate ST 0604 SEI payload for this frame's timestamp
+  auto sei_payload = generate_0604_sei_payload(timestamp_microsec);
+
+  GstMapInfo map;
+  if (!gst_buffer_map(buffer, &map, GST_MAP_READ)) return GST_PAD_PROBE_OK;
+
+  // Scan buffer to find: Picture Timing SEI (type 1) to strip, and first slice NAL (injection point).
+  // Picture Timing SEI causes warnings if SPS lacks VUI timing info; ST 0604 replaces it.
+  const std::byte* current = reinterpret_cast<const std::byte*>(map.data);
+  const std::byte* end = current + map.size;
+  const std::byte* insertion_point = nullptr;
+  std::vector<std::pair<const std::byte*, const std::byte*>> sei_pic_timing_ranges;  // start, end pairs
+
+  while (current < end - 3) {
+    // Look for start code: 0x00 0x00 0x01
+    if (current[0] == std::byte{0} && current[1] == std::byte{0} &&
+        current[2] == std::byte{1}) {
+      std::byte nal_type = current[3] & std::byte{0x1F};
+
+      // SEI NAL (type 6): scan payload for Picture Timing (type 1)
+      if (nal_type == std::byte{6}) {
+        const std::byte* sei_payload_start = current + 4;  // after start code + NAL header
+        const std::byte* sei_scan = sei_payload_start;
+        while (sei_scan < end && sei_scan[0] != std::byte{0x80}) {  // RBSP stop bit
+          uint8_t sei_type = static_cast<uint8_t>(sei_scan[0]);
+          uint8_t sei_size = (sei_scan + 1 < end) ? static_cast<uint8_t>(sei_scan[1]) : 0;
+          if (sei_type == 1) {  // Picture Timing
+            // Mark entire SEI NAL for removal (start code through next start code or RBSP stop)
+            const std::byte* sei_end = current + 4;
+            while (sei_end < end - 2) {
+              if (sei_end[0] == std::byte{0} && sei_end[1] == std::byte{0} &&
+                  (sei_end[2] == std::byte{0} || sei_end[2] == std::byte{1})) break;
+              sei_end++;
+            }
+            sei_pic_timing_ranges.push_back({current, sei_end});
+            break;  // found Picture Timing in this SEI NAL
+          }
+          sei_scan += 2 + sei_size;
+        }
+        current += 3;
+      }
+      // Slice types: 1-5, 19-21 (injection point)
+      else if ((nal_type >= std::byte{1} && nal_type <= std::byte{5}) ||
+               nal_type == std::byte{19} || nal_type == std::byte{20} || nal_type == std::byte{21}) {
+        if (!insertion_point) insertion_point = current;  // first slice
+        current += 3;
+      } else {
+        current += 3;
+      }
+    } else {
+      current++;
+    }
+  }
+
+  gst_buffer_unmap(buffer, &map);
+
+  if (!insertion_point) return GST_PAD_PROBE_OK;  // no slice found
+
+  // Build ST 0604 SEI NAL unit: start code + NAL header + payload + RBSP stop bit
+  std::vector<std::byte> sei_nal;
+  sei_nal.push_back(std::byte{0x00});  // start code
+  sei_nal.push_back(std::byte{0x00});
+  sei_nal.push_back(std::byte{0x01});
+  sei_nal.push_back(std::byte{0x06});  // NAL type: SEI
+  sei_nal.insert(sei_nal.end(), sei_payload.begin(), sei_payload.end());
+  sei_nal.push_back(std::byte{0x80});  // RBSP stop bit
+
+  // Calculate new buffer size: original - stripped Picture Timing SEI + new ST 0604 SEI
+  std::size_t stripped_size = 0;
+  for (const auto& range : sei_pic_timing_ranges) {
+    stripped_size += (range.second - range.first);
+  }
+
+  if (!gst_buffer_map(buffer, &map, GST_MAP_READ)) return GST_PAD_PROBE_OK;
+  const std::size_t insertion_offset = insertion_point - reinterpret_cast<const std::byte*>(map.data);
+  const std::size_t new_size = map.size - stripped_size + sei_nal.size();
+
+  GstBuffer* new_buffer = gst_buffer_new_allocate(nullptr, new_size, nullptr);
+  gst_buffer_copy_into(new_buffer, buffer,
+                       static_cast<GstBufferCopyFlags>(GST_BUFFER_COPY_METADATA),
+                       0, gst_buffer_get_size(buffer));
+
+  GstMapInfo new_map;
+  if (gst_buffer_map(new_buffer, &new_map, GST_MAP_WRITE)) {
+    // Copy original, skipping Picture Timing SEI ranges, and inject ST 0604 SEI at insertion point
+    std::byte* dest = reinterpret_cast<std::byte*>(new_map.data);
+    const std::byte* src = reinterpret_cast<const std::byte*>(map.data);
+    const std::byte* src_end = src + map.size;
+
+    for (const std::byte* copy_src = src; copy_src < src_end; ) {
+      // Check if current position is start of a stripped range
+      bool in_stripped_range = false;
+      for (const auto& range : sei_pic_timing_ranges) {
+        if (copy_src == range.first) {
+          copy_src = range.second;  // skip stripped range
+          in_stripped_range = true;
+          break;
+        }
+      }
+      if (in_stripped_range) continue;
+
+      // If reached insertion point, inject ST 0604 SEI first
+      if (copy_src == insertion_point) {
+        std::memcpy(dest, sei_nal.data(), sei_nal.size());
+        dest += sei_nal.size();
+      }
+
+      // Copy one byte from original
+      *dest++ = *copy_src++;
+    }
+
+    gst_buffer_unmap(new_buffer, &new_map);
+  }
+  gst_buffer_unmap(buffer, &map);
+
+  // Replace buffer in probe
+  GST_PAD_PROBE_INFO_DATA(info) = new_buffer;
+  gst_buffer_unref(buffer);
+
+  return GST_PAD_PROBE_OK;
 }
 
 void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
@@ -268,6 +496,16 @@ void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
   // Link h264parse to muxer using gst_element_link (simpler and handles pad requests)
   if (gst_element_link(parse, ctx->mux)) {
     ctx->linked = true;
+
+    // Add pad probe to generate and inject ST 0604 SEI (fork 21, ADR 0023)
+    if (ctx->generate_sei) {
+      GstPad* parse_src = gst_element_get_static_pad(parse, "src");
+      if (parse_src) {
+        gst_pad_add_probe(parse_src, GST_PAD_PROBE_TYPE_BUFFER,
+                          on_h264_buffer_inject_sei, ctx, nullptr);
+        gst_object_unref(parse_src);
+      }
+    }
   } else {
     g_warning("misbklv: failed to link h264parse to muxer");
   }
@@ -314,6 +552,28 @@ class GstInserter : public Inserter {
     // synthesized ~30 fps counter is a caller error, not a fallback (ADR 0020).
     if (video_ && pts_ns == kNoPts)
       return Result<std::monostate>::err(Error::Unsupported);
+
+    // If video passthrough + SEI generation: parse KLV to extract sensorTimestamp
+    // (tag 2) and map it to this packet's PTS for ST 0604 SEI generation (fork 21).
+    if (video_ && video_->generate_sei && pts_ns != kNoPts) {
+      auto msg_result = Message::parse(pkt);
+      if (msg_result) {
+        auto& msg = *msg_result;
+        // ST 0601 sensorTimestamp is tag 2, type uint64 (microseconds)
+        if (msg.has(2)) {
+          auto ts_result = msg.get<std::uint64_t>(2);
+          if (ts_result) {
+            std::uint64_t sensor_timestamp_us = *ts_result;
+            std::lock_guard<std::mutex> lock(video_->timestamp_mu);
+            video_->pts_to_sensor_timestamp[static_cast<std::uint64_t>(pts_ns)] = sensor_timestamp_us;
+            // No pruning: map persists for session lifetime. Memory cost is minimal
+            // (~16 bytes/entry, ~1KB/minute @ 30fps), and video pipeline may lag behind
+            // KLV push() by many seconds, requiring lookups to old entries.
+          }
+        }
+      }
+    }
+
     GstBuffer* buf = gst_buffer_new_allocate(nullptr, pkt.size(), nullptr);
     gst_buffer_fill(buf, 0, pkt.data(), pkt.size());
     GST_BUFFER_PTS(buf) = (pts_ns == kNoPts) ? pts_
@@ -513,6 +773,11 @@ class GstBackend : public MediaBackend {
       video = std::make_unique<VideoCtx>();
       video->mux = mux;
       video->pipeline = pipeline;  // for creating fakesinks in pad callback
+
+      // Enable ST 0604 SEI generation (fork 21, ADR 0023)
+      // Always enabled for video passthrough — generates from frame PTS
+      video->generate_sei = true;
+
       g_signal_connect(parse, "pad-added", G_CALLBACK(on_video_pad_added),
                        video.get());
       g_signal_connect(parse, "no-more-pads", G_CALLBACK(on_video_no_more_pads),
