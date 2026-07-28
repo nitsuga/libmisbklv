@@ -26,10 +26,16 @@ done and extending incrementally** — the state today:
   unnecessary — [ADR 0015](../context/decisions/0015-no-pmt-rewrite.md)). File
   extraction needs no gstreamer at all ([ADR 0016](../context/decisions/0016-ts-0x15-extraction.md)).
   Design/scope: [`backend-scope.md`](../context/backend-scope.md).
-- **Insertion can carry video** ([ADR 0020](../context/decisions/0020-video-passthrough.md)):
+- **Insertion can carry video** ([ADR 0020](../context/decisions/0020-video-passthrough.md),
+  mechanism per [ADR 0025](../context/decisions/0025-explicit-demuxer-passthrough.md)):
   `InsertConfig::video_source` / `KlvSink(sink, realtime, video_source)` re-muxes
   a source file's video elementary stream, parsed but never decoded, alongside
-  the KLV — so one call authors a TS with both a video PID and a KLV PID.
+  the KLV — so one call authors a TS with both a video PID and a KLV PID. The
+  chain is `filesrc ! demuxer`, container sniffed up front and demuxer picked
+  from a table (MP4/MOV, MPEG-TS, Matroska); anything else is refused at open
+  with the container named. It was `parsebin` until that proved to need a decoder
+  in the registry before it would expose a parsed stream — so the library can now
+  be bundled with the LGPL plugins alone, no decoders.
   Codec-agnostic (H.264/H.265, TS or MP4 in); the source's audio and its own KLV
   are dropped. The caller must push KLV with real PTS on the video's timeline
   (`kNoPts` is rejected); `realtime` + video is refused as unexercised.

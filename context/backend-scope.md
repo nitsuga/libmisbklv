@@ -137,8 +137,12 @@ Opened here during scoping, each resolved by an ADR (see the
   byte-exact, 6 packets in ~165 ms (clock-paced). ADR
   [`0017`](./decisions/0017-realtime-streaming.md), fork 15.
 - **B5 — video passthrough on the insert path** (done): `InsertConfig::video_source`
-  adds a `filesrc ! parsebin` branch to the same `mpegtsmux`, so one
-  `open_insert` writes video + KLV. Parsed, never decoded (codec-agnostic); the
+  adds a `filesrc ! demuxer` branch to the same `mpegtsmux`, so one
+  `open_insert` writes video + KLV. The container is sniffed up front and the
+  demuxer picked from a table — it was `parsebin` until that turned out to need
+  a decoder in the registry before exposing a parsed stream (ADR
+  [`0025`](./decisions/0025-explicit-demuxer-passthrough.md), fork 23). Parsed,
+  never decoded (codec-agnostic); the
   source's audio/KLV pads are dropped; KLV must carry real PTS on the video's
   timeline. ADR [`0020`](./decisions/0020-video-passthrough.md), fork 18;
   `gst_video_insert_test`. Two follow-ons from the consumer using it: extraction

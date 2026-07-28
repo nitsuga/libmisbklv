@@ -2,6 +2,36 @@
 
 ## 2026-07-28
 
+* **Video passthrough no longer needs a decoder installed to avoid decoding.**
+  Fork 23, [ADR 0025](./decisions/0025-explicit-demuxer-passthrough.md): the
+  chain is built explicitly — `filesrc ! demuxer`, container sniffed up front —
+  instead of by `parsebin`.
+  - **What parsebin was doing.** It decides a stream is fully parsed by asking
+    whether any *decoder* in the registry accepts its caps. It never instantiates
+    one; it just needs one to exist. Every ordinary system has one, so the
+    dependency never showed. Restrict the plugin set to what this library
+    actually uses and passthrough fails with `no suitable plugins found` —
+    "missing parser" for a stream `h264parse` had already parsed.
+  - Measured while packaging a bundle for `parrot-to-klv`: adding one H.264
+    decoder fixes it; adding an unrelated decoder (vorbis, opus) does not, so the
+    caps must match. A bundle would therefore need `openh264` (H.264 patents),
+    `libde265` and `faad2` (GPL) — shipped to sit in a registry and never run.
+  - Not just a packaging problem: needing an H.264 decoder in order to *not*
+    decode H.264 is a latent defect on any minimal image.
+  - **The parser table had to grow**, and this is the part parsebin was quietly
+    covering: it plugged a parser for every stream, so the muxer always got
+    framed data. A bare demuxer does not. MPEG-1/2 in `gst_video_insert_test`
+    caught it within minutes — failing at `finish()`, not at link time. The table
+    now names every codec the muxer needs framed, not only those needing a format
+    conversion.
+  - Containers are an explicit table now (MP4/MOV, MPEG-TS, Matroska) and
+    anything else is refused at open with the container named. That is a real
+    reduction in reach, taken deliberately; ADR 0020's promise — never decode,
+    codec-agnostic — is unchanged.
+  - Suite green: 25/25. `parrot-to-klv` converts H.264, H.265 and MP4-with-audio
+    against eight LGPL plugins with no decoder present, which is what the whole
+    thing was for.
+
 * **A second video pad was counted but never linked.** `on_video_pad_added`
   incremented `ignored_video_pads` and returned, leaving that pad dangling.
   parsebin requires every pad it exposes to be linked, and the resulting

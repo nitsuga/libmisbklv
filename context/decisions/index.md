@@ -37,3 +37,4 @@ diverge — e.g. fork 7 → ADR 0004; one fork can span several ADRs — fork 4 
 | 20 | [0022 — "No output file on failure" spans the insert session](./0022-no-output-on-failure.md) | accepted |
 | 21 | [0023 — ST 0604 SEI generation for video passthrough](./0023-st0604-sei-passthrough.md) | accepted |
 | 22 | [0024 — ST 0604 SEI generation is opt-in (`Sei0604`)](./0024-sei-generation-opt-in.md) | accepted |
+| 23 | [0025 — Build the passthrough chain explicitly instead of with parsebin](./0025-explicit-demuxer-passthrough.md) | accepted |

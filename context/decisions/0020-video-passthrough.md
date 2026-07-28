@@ -187,3 +187,11 @@ is trivially revisited if a consumer needs it (link non-video pads too).
 [4] `planning/video-passthrough-spec.md` — the consumer-side spec written by
     `parrot-to-klv`, which this implements. Kept out of the repo deliberately:
     it is a fulfilled request, and this ADR is where its content now lives.
+
+> **Mechanism superseded (2026-07-28).** The chain is no longer `filesrc !
+> parsebin` — parsebin turned out to require a *decoder* in the registry before
+> it will expose a parsed stream, which this library cannot depend on. It is now
+> `filesrc ! demuxer` with the container sniffed up front. Everything this ADR
+> decided — carry video through, never decode, codec-agnostic — still holds; only
+> how the chain is assembled changed. See
+> [`0025`](./0025-explicit-demuxer-passthrough.md).

@@ -2,7 +2,7 @@
 // gstreamer MediaBackend (ADR 0013). Extraction: {file|udp|srt}src ! tsdemux !
 // appsink; reassemble appsink fragments and frame whole KLV packets (B0 spike).
 // Insertion (B2): appsrc ! mpegtsmux ! {file|udp|srt}sink, optionally joined by
-// a video passthrough branch filesrc ! parsebin (ADR 0020). Live sources/sinks
+// a video passthrough branch filesrc ! demuxer (ADR 0020, ADR 0025). Live sources/sinks
 // (udp/srt) add real-time pacing + idle-timeout termination (B4, ADR 0017).
 #include "misbklv/gst_backend.hpp"
 #include "misbklv/message.hpp"  // for KLV parsing in push()
@@ -22,6 +22,7 @@
 #include <vector>
 
 #include <gst/app/app.h>
+#include <gst/base/gsttypefindhelper.h>
 #include <gst/gst.h>
 #define GST_USE_UNSTABLE_API
 #include <gst/codecparsers/gsth264parser.h>
@@ -216,7 +217,7 @@ GstElement* make_sink(const std::string& spec) {
 }
 
 // --- video passthrough branch (ADR 0020) ------------------------------------
-// State shared with parsebin's dynamic-pad callbacks. parsebin exposes one pad
+// State shared with the demuxer's dynamic-pad callbacks. A demuxer exposes one pad
 // per elementary stream once it has parsed the container; we link the FIRST
 // video/* pad to a mpegtsmux request pad and ignore every other pad (audio,
 // subtitles, and any KLV the source already carries — the caller supplies its
@@ -233,7 +234,7 @@ struct VideoCtx {
   std::mutex mu;
   std::condition_variable cv;
   bool linked = false;         // a video pad reached the muxer
-  bool no_more_pads = false;   // parsebin is done exposing pads
+  bool no_more_pads = false;   // the demuxer is done exposing pads
   int ignored_video_pads = 0;  // 2nd+ video stream: carried? no. recorded? yes.
   bool sei_codec_unsupported = false;  // Generate asked for, video isn't H.264
   bool generate_sei = false;   // generate ST 0604 SEI from frame PTS (fork 21)
@@ -271,16 +272,78 @@ std::string caps_media_type(GstCaps* caps) {
   return name ? std::string(name) : std::string();
 }
 
-// The parser this codec needs between parsebin and mpegtsmux, or nullptr for
+// The demuxer for a container, or nullptr for "we do not carry video out of
+// this".
+//
+// This used to be parsebin's job (ADR 0020), and parsebin did it well until we
+// tried to ship a bundle with only the plugins this library uses. parsebin
+// decides a stream is fully parsed by asking whether any *decoder* in the
+// registry accepts its caps — a decoder it never instantiates. On a normal
+// system one always exists, so the dependency is invisible; on a minimal one
+// there is none, parsebin never reaches "final caps", and it fails with
+// "no suitable plugins found" for a stream it has already parsed correctly.
+//
+// Requiring an H.264 decoder to be installed in order to *not* decode H.264 is
+// not a dependency this library can carry, so the container table is explicit
+// now — the same shape as the parser table below, and honest about what it
+// supports. See ADR 0025.
+const char* demuxer_for_media_type(const std::string& type) {
+  if (type == "video/quicktime") return "qtdemux";      // MP4 / MOV
+  if (type == "video/mpegts") return "tsdemux";
+  if (type == "video/x-matroska") return "matroskademux";
+  return nullptr;
+}
+
+// Sniff a file's container from its opening bytes.
+//
+// Doing this up front beats a have-type callback: the path is known before the
+// pipeline exists, so the container is settled and `filesrc ! demuxer` is built
+// in one piece, with no dynamic element to sequence against preroll.
+//
+// 16 KiB is generous — every container we accept identifies itself in the first
+// few hundred bytes — and a low-confidence guess is treated as no answer, so an
+// unsupported file is refused rather than half-plugged.
+std::string sniff_container(const std::string& path) {
+  FILE* file = std::fopen(path.c_str(), "rb");
+  if (!file) return {};
+  std::vector<guint8> head(16384);
+  const size_t n = std::fread(head.data(), 1, head.size(), file);
+  std::fclose(file);
+  if (n == 0) return {};
+
+  GstTypeFindProbability probability = GST_TYPE_FIND_NONE;
+  GstCaps* caps = gst_type_find_helper_for_data(nullptr, head.data(), n, &probability);
+  if (!caps) return {};
+  std::string type;
+  if (probability >= GST_TYPE_FIND_POSSIBLE) type = caps_media_type(caps);
+  gst_caps_unref(caps);
+  return type;
+}
+
+// The parser this codec needs between the demuxer and mpegtsmux, or nullptr for
 // "link it straight through".
 //
-// parsebin hands H.26x out of an MP4 in its container form (avc/hvc1, with
+// A demuxer hands H.26x out of an MP4 in its container form (avc/hvc1, with
 // codec_data), and mpegtsmux wants byte-stream — so those two need a parser to
-// convert. Anything else (MPEG-2 video, say) is already in a form the muxer
-// takes, and inserting the wrong parser would simply fail to link.
+// convert.
+//
+// MPEG-1/2 is here for a subtler reason, and it is the one thing parsebin did
+// for us that a bare demuxer does not: parsebin plugged a parser for *every*
+// stream, including codecs absent from this table, so what reached the muxer was
+// always parsed. A demuxer alone hands MPEG-2 out of a TS unparsed, mpegtsmux
+// will not take it, and the failure surfaces at finish() rather than at link
+// time. So the table now has to name every codec the muxer needs framed, not
+// just the ones needing a format conversion (ADR 0025).
+//
+// Parsers are idempotent — one in front of an already-parsed stream is a
+// passthrough — so listing a codec here costs nothing when the demuxer happened
+// to parse it already.
 const char* parser_for_media_type(const std::string& type) {
   if (type == "video/x-h264") return "h264parse";
   if (type == "video/x-h265") return "h265parse";
+  if (type == "video/mpeg") return "mpegvideoparse";     // MPEG-1/2 video
+  if (type == "video/x-h263") return "h263parse";
+  if (type == "video/x-vp9") return "vp9parse";
   return nullptr;
 }
 
@@ -551,7 +614,7 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad*, GstPadProbeInfo* info,
   return GST_PAD_PROBE_OK;
 }
 
-// Link a pad we are not carrying to a fakesink. parsebin requires every pad it
+// Link a pad we are not carrying to a fakesink. The demuxer requires every pad it
 // exposes to be linked; an unlinked one errors the whole pipeline as not-linked.
 void drop_pad_to_fakesink(GstPad* pad, VideoCtx* ctx) {
   GstElement* fakesink = gst_element_factory_make("fakesink", nullptr);
@@ -597,7 +660,7 @@ void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
   std::lock_guard<std::mutex> lk(ctx->mu);
   if (ctx->linked) {  // a second video stream: carry the first, note this one
     ++ctx->ignored_video_pads;
-    // ...and still link it, to a fakesink. parsebin requires every pad it
+    // ...and still link it, to a fakesink. The demuxer requires every pad it
     // exposes to be linked; leaving this one dangling posts a "not-linked"
     // error that the wait loop below treats as transient and swallows, so the
     // pipeline stalls with nothing reported. Non-video pads have been dropped
@@ -636,7 +699,7 @@ void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
   gst_bin_add(GST_BIN(ctx->pipeline), parse);
   gst_element_sync_state_with_parent(parse);
 
-  // Link: parsebin pad -> h264parse -> muxer
+  // Link: demuxer pad -> h264parse -> muxer
   GstPad* parse_sink = gst_element_get_static_pad(parse, "sink");
   if (!parse_sink) {
     g_warning("misbklv: failed to get %s sink pad", parser_name);
@@ -648,7 +711,7 @@ void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
   gst_object_unref(parse_sink);
 
   if (ret != GST_PAD_LINK_OK) {
-    g_warning("misbklv: failed to link video pad to %s: %d (parsebin parent: %s, parser parent: %s)",
+    g_warning("misbklv: failed to link video pad to %s: %d (demuxer parent: %s, parser parent: %s)",
               parser_name, ret,
               GST_ELEMENT_NAME(gst_pad_get_parent_element(pad)),
               GST_ELEMENT_NAME(GST_ELEMENT_PARENT(parse)));
@@ -942,16 +1005,28 @@ class GstBackend : public MediaBackend {
     if (!gst_element_link_many(appsrc, mux, sink, nullptr))
       return fail(pipeline, Error::Backend);
 
-    // Video passthrough: filesrc ! parsebin, joining the same muxer. parsebin
-    // auto-plugs demuxer + parser for whatever the container holds and never
-    // decodes, which is what keeps this codec-agnostic (H.264 / H.265 alike).
+    // Video passthrough: filesrc ! demuxer, joining the same muxer. The
+    // demuxer's pads are linked as they appear, through a parser where the
+    // codec needs one, and nothing is ever decoded — which is what keeps this
+    // codec-agnostic (H.264 / H.265 alike).
     std::unique_ptr<VideoCtx> video;
     if (!video_path.empty()) {
+      const std::string container = sniff_container(video_path);
+      const char* demuxer_name = demuxer_for_media_type(container);
+      if (!demuxer_name) {
+        g_warning("misbklv: video source '%s': %s is not a container this "
+                  "library demuxes",
+                  video_path.c_str(),
+                  container.empty() ? "an unrecognised format" : container.c_str());
+        return fail(pipeline, Error::Unsupported);
+      }
       GstElement* vsrc = gst_element_factory_make("filesrc", "vsrc");
-      GstElement* parse = gst_element_factory_make("parsebin", "vparse");
+      GstElement* parse = gst_element_factory_make(demuxer_name, "vparse");
       if (!vsrc || !parse) {
         if (vsrc) gst_object_unref(vsrc);
         if (parse) gst_object_unref(parse);
+        g_warning("misbklv: could not create %s — is the plugin providing it "
+                  "installed?", demuxer_name);
         return fail(pipeline, Error::Backend);
       }
       g_object_set(vsrc, "location", video_path.c_str(), nullptr);
@@ -973,7 +1048,7 @@ class GstBackend : public MediaBackend {
       if (!gst_element_link(vsrc, parse)) return fail(pipeline, Error::Backend);
     }
 
-    // parsebin exposes its pads while prerolling in PAUSED. Wait for the video
+    // The demuxer exposes its pads while prerolling in PAUSED. Wait for the video
     // pad here, before PLAYING, so the muxer's PMT is written with both
     // elementary streams — otherwise a caller pushing KLV immediately could race
     // the video pad and produce a KLV-only PMT. (KLV-only keeps going straight
