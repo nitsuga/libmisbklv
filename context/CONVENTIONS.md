@@ -119,11 +119,20 @@ ever ingested (deferred — see [`../planning/ROADMAP.md`](../planning/ROADMAP.m
 
 # Linking
 
-Prefer bundle-relative links resolved from `context/` — either sibling-relative
-`[ST 0601](./st0601.md)` (what the bundle mostly uses) or absolute
-`[ST 0601](./st0601.md)`. Relationship semantics — references,
-nests-in, depends-on — live in the surrounding prose; the link itself is
-untyped. Broken links are not errors; they may be not-yet-written knowledge.
+Sibling-relative markdown, resolved from `context/`: `[ST 0601](./st0601.md)`,
+and `../planning/…` / `../references/…` for targets outside the bundle. This is
+what the bundle uses throughout, and it resolves for a reader on GitHub, in an
+editor, and for an agent following paths alike.
+
+Never root-absolute (`](/st0601.md)`): it resolves against the *site* root, not
+the bundle, so it works nowhere. A lint on 2026-07-27 fixed ~68 of these.
+
+`[[slug]]` wikilinks appear in a few places and are understood, but are not the
+house style here — they do not render on GitHub.
+
+Relationship semantics — references, nests-in, depends-on — live in the
+surrounding prose; the link itself is untyped. Broken links are not errors; they
+may be not-yet-written knowledge.
 
 # Reserved files
 

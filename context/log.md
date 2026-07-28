@@ -2,6 +2,14 @@
 
 ## 2026-07-28
 
+* **CONVENTIONS § Linking said "either X or X".** The 2026-07-27 root-absolute
+  lint rewrote the bad example in the guidance itself, leaving a sentence
+  offering sibling-relative *or* "absolute" with two byte-identical examples.
+  Rewritten to state the one style the bundle uses (418 sibling-relative links),
+  why root-absolute resolves nowhere, and that the handful of `[[slug]]`
+  wikilinks are understood but not the house style. Found while fixing the same
+  section in parrot-to-klv, whose copy had kept the original bad advice.
+
 * **Lint (drift sweep after forks 21-22).** Six stale claims, all left by this
   session's own work: `CLAUDE.md` still said passthrough generates ST 0604
   (README had been updated for opt-in, CLAUDE.md had not); ADR 0023 still said
