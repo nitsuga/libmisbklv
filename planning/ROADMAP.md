@@ -16,8 +16,9 @@ backend, file or stream (real-time insertion via `appsrc`). See
 
 Deferred from v1 (revisit): most of ST 0604 (ES timestamps —
 [ADR 0009](../context/decisions/0009-st0604-deferred.md); its H.264 *generation*
-side landed early on the video passthrough path,
-[ADR 0023](../context/decisions/0023-st0604-sei-passthrough.md)), an ffmpeg backend,
+side landed early on the video passthrough path, opt-in —
+[ADR 0023](../context/decisions/0023-st0604-sei-passthrough.md),
+[ADR 0024](../context/decisions/0024-sei-generation-opt-in.md)), an ffmpeg backend,
 ST 0102 security, ST 0807 registry as a data product, ST 1607 amend/segment
 beyond MSID passthrough.
 
@@ -40,8 +41,9 @@ beyond MSID passthrough.
 - **Phase 4 — 0604 ES timestamps** (partly landed early, remainder deferred —
   [ADR 0009](../context/decisions/0009-st0604-deferred.md)): H.264 Precision
   Time Stamp SEI *generation* (with emulation-prevention stuffing) came forward
-  into Phase 3 for a consumer
-  ([ADR 0023](../context/decisions/0023-st0604-sei-passthrough.md)). Still here:
+  into Phase 3 for a consumer, opt-in
+  ([ADR 0023](../context/decisions/0023-st0604-sei-passthrough.md),
+  [ADR 0024](../context/decisions/0024-sei-generation-opt-in.md)). Still here:
   reading 0604 back out of an ES, H.265 Nano, Commercial time code, H.262
   `user_data`.
 - **Phase 5 — Hardening** (largely landed, continuing alongside Phase 3): the

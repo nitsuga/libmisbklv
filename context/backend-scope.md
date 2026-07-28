@@ -146,6 +146,12 @@ Opened here during scoping, each resolved by an ADR (see the
   [`0021`](./decisions/0021-read-path-timestamps.md), fork 19), and the
   "no output file on failure" guarantee covers the whole insert session, not just
   the open (ADR [`0022`](./decisions/0022-no-output-on-failure.md), fork 20).
+  A third: the branch can **write ST 0604 SEI into the video** from the KLV's
+  item-2 timestamp, off by default so passthrough stays byte-identical
+  (`Sei0604::Generate`, ADRs [`0023`](./decisions/0023-st0604-sei-passthrough.md)
+  / [`0024`](./decisions/0024-sei-generation-opt-in.md), forks 21-22). Generation
+  is H.264-only and refuses other codecs; passthrough itself carries any codec,
+  picking its parser from the pad's caps.
 
 ## Risks
 

@@ -2,6 +2,16 @@
 
 ## 2026-07-28
 
+* **Lint (drift sweep after forks 21-22).** Six stale claims, all left by this
+  session's own work: `CLAUDE.md` still said passthrough generates ST 0604
+  (README had been updated for opt-in, CLAUDE.md had not); ADR 0023 still said
+  "always enabled" in its Decision list and Consequences, and its wire-format
+  note gave `video_source` alone as the precondition; `backend-scope`'s B5 knew
+  nothing about SEI generation or the caps-driven parser choice; ROADMAP cited
+  only 0023 for the generation side in two places. Superseded claims now point
+  at [ADR 0024](./decisions/0024-sei-generation-opt-in.md) rather than reading as
+  current. Links resolve across every tracked `.md` in both repos.
+
 * **Time Status bits 6/5 derived; `Generate` refuses non-H.264** (fork 22
   follow-ons, [ADR 0024](./decisions/0024-sei-generation-opt-in.md)) — the two
   items ADR 0023 had left open, both closed because both turn on what `Generate`

@@ -54,7 +54,8 @@ Implementation approach:
    - Modified Precision Time Stamp (absolute Unix µs + 0xFF emulation prevention)
 5. **Picture Timing SEI stripping**: Remove type 1 SEI from source to prevent parser warnings
 6. **Injection**: Insert before first slice NAL (types 1-5, 19-21)
-7. Always enabled for video passthrough (no configuration needed)
+7. Always enabled for video passthrough (no configuration needed) — superseded
+   2026-07-28: opt-in via `Sei0604` ([`0024`](./0024-sei-generation-opt-in.md))
 
 Byte layout and injection point follow ST 0604.6 §7, cross-checked against the
 encode/decode behaviour of the downstream consumer's existing SEI implementation
@@ -77,8 +78,9 @@ so the two interoperate without changes on their side.
   parrot-to-klv clip), less whatever Picture Timing SEI was stripped
 - **Test updated** — `gst_video_insert_test` checks ES size >= source instead of
   byte-exact, and decodes the emitted SEI back (see Validation below)
-- **Always enabled** — all video passthrough operations generate ST 0604,
-  whether parrot-to-klv or other consumers
+- **Always enabled** — superseded 2026-07-28 by
+  [`0024`](./0024-sei-generation-opt-in.md): callers opt in with
+  `Sei0604::Generate`, and the default leaves the video alone
 - **Downstream compatible** — the consumer's existing SEI decoder extracts what
   we generate with no changes needed on their side
 - **Timestamps from KLV sensorTimestamp** — absolute Unix microseconds from
@@ -154,8 +156,9 @@ xxxxxx  63 74 69 6d 65 9f XX XX  ff XX XX ff XX XX ff XX  |ctime...........|
 - `9f` - Time Status: Lock Unknown / Normal / Forward (ST 0603.5 Table 3)
 - `XX XX ff XX XX ff XX XX ff XX XX` - timestamp with 0xFF emulation prevention
 
-SEI appears only when `video_source` is set — without it the insert path writes
-KLV alone and there is no video ES to carry a timestamp.
+SEI appears only when `video_source` is set *and* `Sei0604::Generate` is asked
+for ([`0024`](./0024-sei-generation-opt-in.md)) — without a video source the
+insert path writes KLV alone and there is no video ES to carry a timestamp.
 
 # Revision — 2026-07-28
 
