@@ -2,6 +2,21 @@
 
 ## 2026-07-28
 
+* **Fork 22 — ST 0604 SEI generation is opt-in** (accepted,
+  [ADR 0024](./decisions/0024-sei-generation-opt-in.md)): `Sei0604::Preserve`
+  (default) / `::Generate` on `InsertConfig` and `KlvSink`, plus a
+  `KlvSink(InsertConfig)` overload. Preserve restores the ADR 0020 property that
+  fork 21 had cost — the passthrough video ES is **byte-identical** again, and
+  the test asserts that rather than the size comparison 0023 had to settle for.
+  Generate replaces a source's own ST 0604 rather than adding to it, closing the
+  double-SEI question 0023 left open, and takes the Picture Timing stripping with
+  it so a caller who never asked keeps theirs. Under Generate an unmatched frame
+  is still scanned, so the source's SEI is removed even where we have nothing to
+  put back: half-replacing would vary provenance frame to frame with nothing in
+  the stream to signal it. `gst_video_insert_test` runs the whole battery in both
+  modes. Consumer (`parrot-to-klv`) updated to opt in. Full CTest suite green,
+  and green under ASan+UBSan.
+
 * **Time Status now says Lock Unknown (`0x9F`)** — fork 21 revision, decided
   and recorded in [ADR 0023](./decisions/0023-st0604-sei-passthrough.md). The
   `0x1F` we had been emitting was correctly *encoded* but claimed the source

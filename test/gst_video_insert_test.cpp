@@ -215,15 +215,15 @@ bool g_pass = true;
 // then reads the Time Status byte and the 11-byte Modified Precision Time Stamp
 // that follow it — 2-byte groups separated by 0xFF fillers, most significant
 // first (§7.4 Table 2) — and reassembles the 8-byte microsecond value.
-struct Sei0604 {
+struct DecodedSei {
   std::uint64_t timestamp_us = 0;
   unsigned time_status = 0;  // ST 0603.5 §7.4 Table 3
 };
 
-std::vector<Sei0604> decode_0604_seis(std::span<const std::byte> es) {
+std::vector<DecodedSei> decode_0604_seis(std::span<const std::byte> es) {
   static const char kId[] = "MISPmicrosectime";
   constexpr std::size_t kIdLen = 16;
-  std::vector<Sei0604> out;
+  std::vector<DecodedSei> out;
   if (es.size() < kIdLen + 12) return out;
 
   for (std::size_t i = 0; i + kIdLen + 12 <= es.size(); ++i) {
@@ -293,14 +293,15 @@ bool remux_to_mp4(const std::string& ts, const std::string& mp4) {
 std::size_t run_case(MediaBackend& be, const std::string& source,
                      const std::vector<std::byte>& input,
                      const std::string& out_path,
-                     const std::string& reference_ts) {
+                     const std::string& reference_ts,
+                     Sei0604 sei_mode = Sei0604::Preserve) {
   std::span<const std::byte> buf = input;
   // KLV 100 ms apart, on the source's timeline from zero — the contract a video
   // branch imposes on the caller (kNoPts is rejected; checked below).
   constexpr std::int64_t kStepNs = 100'000'000;
   std::vector<std::int64_t> pushed;
   {
-    auto ins = be.open_insert({"file:" + out_path, false, source});
+    auto ins = be.open_insert({"file:" + out_path, false, source, sei_mode});
     if (!ins) {
       std::printf("  open_insert failed: %d\n", static_cast<int>(ins.error()));
       g_pass = false;
@@ -370,9 +371,20 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
                 src_video.payload.size(), src_video.pts_90k.size(),
                 out_video.payload.size(), out_video.pts_90k.size());
     check("video codec unchanged", video_type == src_video_type && video_type);
-    // Fork 21: video passthrough now generates ST 0604 SEI per frame (~35 bytes each),
-    // so output ES is larger. Check that output >= source (not byte-exact).
-    check("video ES preserved (with SEI)", out_video.payload.size() >= src_video.payload.size());
+    if (sei_mode == Sei0604::Preserve) {
+      // ADR 0024: Preserve does not touch the elementary stream, so the ADR 0020
+      // property holds again — byte-identical, not merely the same size.
+      check("video ES byte-exact", out_video.payload == src_video.payload);
+    } else {
+      // Generate rewrites access units, so the ES differs from the source. Its
+      // size can go either way — it adds 35 bytes per frame it can time and
+      // removes whatever ST 0604 / Picture Timing SEI the source carried, which
+      // on a source with per-frame SEI and sparse KLV is a net loss. What must
+      // hold is that video is still there and it is not the source verbatim;
+      // the SEI accounting below is the real check.
+      check("video ES carried (rewritten)",
+            !out_video.payload.empty() && out_video.payload != src_video.payload);
+    }
     check("video frame count kept",
           out_video.pts_90k.size() == src_video.pts_90k.size());
   } else {
@@ -415,29 +427,38 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
     }
 
     const auto seen = decode_0604_seis(out_video.payload);
-    std::size_t ours = 0, foreign = 0, wrong_status = 0;
+    std::size_t ours = 0, kept = 0, foreign = 0, wrong_status = 0;
     for (const auto& s : seen) {
       if (std::find(expected.begin(), expected.end(), s.timestamp_us) != expected.end()) {
         ++ours;
         // ADR 0023: we relay a timestamp whose lock state we do not know, so the
         // Time Status must say Lock Unknown (bit 7 = 1) — not Locked.
         if (s.time_status != 0x9F) ++wrong_status;
-      } else if (std::find(from_source.begin(), from_source.end(), s.timestamp_us) ==
+      } else if (std::find(from_source.begin(), from_source.end(), s.timestamp_us) !=
                  from_source.end()) {
+        ++kept;
+      } else {
         ++foreign;
       }
     }
-    std::printf("  ST 0604 SEI: %zu in output (%zu from our KLV, %zu passed through"
-                " from source, %zu unaccounted); %zu KLV sensorTimestamps\n",
-                seen.size(), ours, from_source.size(), foreign, expected.size());
+    std::printf("  ST 0604 SEI [%s]: %zu in output (%zu ours, %zu from source,"
+                " %zu unaccounted); source had %zu, KLV has %zu timestamps\n",
+                sei_mode == Sei0604::Generate ? "Generate" : "Preserve", seen.size(),
+                ours, kept, foreign, from_source.size(), expected.size());
 
-    if (expected.empty()) {
-      std::printf("  (source KLV has no item 2 — SEI generation check skipped)\n");
+    check("no SEI timestamp from nowhere", foreign == 0);
+
+    if (sei_mode == Sei0604::Preserve) {
+      // ADR 0024: Preserve generates nothing and keeps what the source had.
+      check("Preserve: no SEI generated", ours == 0);
+      check("Preserve: source SEI untouched", kept == from_source.size());
+    } else if (expected.empty()) {
+      std::printf("  (source KLV has no item 2 — generation check skipped)\n");
     } else {
-      // Injection happened at all, and every timestamp we emitted is one the KLV
-      // actually carried — no invented values, no corrupted payloads.
-      check("ST 0604 SEI generated from KLV", ours > 0);
-      check("no SEI timestamp from nowhere", foreign == 0);
+      // Injection happened, every timestamp we emitted came from the KLV, and the
+      // source's own ST 0604 was replaced rather than left to compete with ours.
+      check("Generate: SEI written from KLV", ours > 0);
+      check("Generate: source ST 0604 replaced, not duplicated", kept == 0);
       if (wrong_status)
         std::printf("  %zu generated SEI(s) with a Time Status other than 0x9F\n",
                     wrong_status);
@@ -644,6 +665,15 @@ int main(int argc, char** argv) {
   // --- the full battery, on the TS source and then on an MP4 remuxed from it -
   std::printf("MPEG-TS source (%s)\n", ts_source.c_str());
   const std::size_t ts_frames = run_case(*be, ts_source, input, out_path, ts_source);
+
+  // Same battery with ST 0604 SEI generation requested (ADR 0024) — the mode
+  // parrot-to-klv runs in. The source carries its own ST 0604, so this also
+  // covers replacement rather than duplication.
+  std::printf("TS source, Sei0604::Generate\n");
+  const std::size_t gen_frames = run_case(*be, ts_source, input, out_path + ".sei.ts",
+                                          ts_source, Sei0604::Generate);
+  check("Generate: same frame count as Preserve", gen_frames == ts_frames && ts_frames);
+  std::remove((out_path + ".sei.ts").c_str());
 
   if (have_mp4) {
     std::printf("MP4 source (qtdemux path, remuxed from the TS)\n");

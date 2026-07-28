@@ -76,6 +76,36 @@ out.close();
 The same field exists on the lower level: `open_insert({.sink = "file:out.ts",
 .video_source = "in.mp4"})`. Leave it empty for the KLV-only pipeline.
 
+### ST 0604 timestamps in the video stream
+
+ST 0604 puts a Precision Time Stamp in the *video* elementary stream, so a
+player can time frames without reading the KLV. By default we don't write one —
+your video is carried across exactly as it arrived. Ask for it when a downstream
+reader needs it:
+
+```cpp
+KlvSink out("file:output.ts", /*realtime=*/false, "input.mp4",
+            Sei0604::Generate);
+
+// or, once more than the sink is set, pass the config whole:
+KlvSink out({.sink         = "file:output.ts",
+             .video_source = "input.mp4",
+             .sei_0604     = Sei0604::Generate});
+```
+
+- **`Preserve`** (default) — the video elementary stream is untouched, so it
+  comes out byte-identical. Whatever ST 0604 the source had, it keeps.
+- **`Generate`** — each access unit we can time gets a Precision Time Stamp
+  built from your KLV's item 2, injected before the first slice. Your KLV
+  becomes the stream's one timestamp authority: any ST 0604 the source carried
+  is *replaced*, so a reader never has to choose between two.
+
+A frame with no KLV timestamp within 200 ms gets no ST 0604 rather than a made-up
+one — and under `Generate` the source's is removed there too, so provenance
+doesn't silently vary frame to frame. If your KLV covers the video, as it
+normally does, every frame gets one. H.264 only; other codecs still pass through,
+just without generated SEI.
+
 ## Just a packet (no gstreamer)
 
 `Message` needs no media backend — hand it raw KLV bytes (e.g. from

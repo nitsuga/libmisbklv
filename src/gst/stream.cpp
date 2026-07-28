@@ -78,17 +78,25 @@ void KlvStream::pull() {
 }
 
 // --- KlvSink ----------------------------------------------------------------
-KlvSink::KlvSink(std::unique_ptr<MediaBackend> backend, std::string sink,
-                 bool realtime, std::string video_source)
+KlvSink::KlvSink(std::unique_ptr<MediaBackend> backend, InsertConfig cfg)
     : backend_(std::move(backend)) {
-  auto ins = backend_->open_insert(
-      {std::move(sink), realtime, std::move(video_source)});
+  auto ins = backend_->open_insert(std::move(cfg));
   if (ins) inserter_ = std::move(*ins);  // else inserter_ null -> emit() errors
 }
 
-KlvSink::KlvSink(std::string sink, bool realtime, std::string video_source)
+KlvSink::KlvSink(InsertConfig cfg)
+    : KlvSink(make_gst_backend(), std::move(cfg)) {}
+
+KlvSink::KlvSink(std::unique_ptr<MediaBackend> backend, std::string sink,
+                 bool realtime, std::string video_source, Sei0604 sei_0604)
+    : KlvSink(std::move(backend), InsertConfig{std::move(sink), realtime,
+                                               std::move(video_source),
+                                               sei_0604}) {}
+
+KlvSink::KlvSink(std::string sink, bool realtime, std::string video_source,
+                 Sei0604 sei_0604)
     : KlvSink(make_gst_backend(), std::move(sink), realtime,
-              std::move(video_source)) {}
+              std::move(video_source), sei_0604) {}
 
 Result<std::monostate> KlvSink::emit(const Message& m) {
   if (!inserter_) return Result<std::monostate>::err(Error::Backend);

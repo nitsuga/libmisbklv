@@ -5,9 +5,10 @@
 C++20 library to read and write MISB KLV metadata — ST 0601 (UAS Datalink Local
 Set) + ST 0903 (VMTI) — from/to MPEG-TS containers via
 [GStreamer](https://gstreamer.freedesktop.org/) (file or stream; real-time
-insertion via `appsrc`). Video passthrough generates ST 0604 Precision Time
-Stamp SEI into the H.264 stream
-([ADR 0023](context/decisions/0023-st0604-sei-passthrough.md)); the rest of
+insertion via `appsrc`). Video passthrough can generate ST 0604 Precision Time
+Stamp SEI into the H.264 stream on request
+([ADR 0024](context/decisions/0024-sei-generation-opt-in.md); off by default,
+so passthrough video is byte-identical); the rest of
 ST 0604 (ES-layer timestamp *reading*, H.265 Nano, Commercial time code) and an
 ffmpeg backend are deferred — see
 [ADR 0008](context/decisions/0008-media-backend-gstreamer.md) and

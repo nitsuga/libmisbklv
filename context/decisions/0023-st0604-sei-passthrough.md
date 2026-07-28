@@ -213,16 +213,16 @@ discontinuity from the KLV timestamp sequence is a follow-on, not part of this.
 # Known limitations
 
 - **H.264 only** — H.265 uses different UUID (deferred)
-- **Always enabled** — no way to disable SEI generation for video passthrough
+- **Always enabled** — superseded 2026-07-28: generation is opt-in via
+  `Sei0604` ([`0024`](./0024-sei-generation-opt-in.md)), default `Preserve`
 - **Time Status is fixed at `0x9F`** — Lock Unknown / Normal / Forward, per
   [`st0603`](../st0603.md) §7.4 Table 3 (see the 2026-07-28 Time Status note
   below). Bits 6/5 are asserted rather than derived: we always say the time is
   incrementing linearly, though a discontinuity in the KLV sequence would be
   detectable from the map we keep.
-- **Picture Timing SEI is stripped from every source**, not just ones that warn —
-  this deletes conformant data from the caller's video to quiet one reader. It
-  predates the rewrite and is left as-is, but it is scope creep past "generate
-  0604" and worth revisiting with the two-SEI question above.
+- **Picture Timing SEI stripping** now happens only under `Sei0604::Generate`
+  ([`0024`](./0024-sei-generation-opt-in.md)) — a caller who did not ask us to
+  rewrite the stream keeps theirs.
 
 # Assumptions / open questions
 
@@ -241,15 +241,11 @@ discontinuity from the KLV timestamp sequence is a follow-on, not part of this.
   timestamp. **Closed 2026-07-28** — `gst_video_insert_test` now decodes every
   ST 0604 SEI out of the output ES and requires each one to be a timestamp the
   KLV actually carried.
-- **Two ST 0604 SEIs per access unit on sources that already have one** (open).
-  Writing this test showed `data/klv_metadata_test_sync.ts` carries 418 of its
-  own `MISPmicrosectime` SEIs, which passthrough preserves — so frames we also
-  match now hold *two* Precision Time Stamps, the source's and ours, with
-  different values. A reader taking the first gets the source's; one taking the
-  last gets ours. The premise in Context ("sources don't have 0604") holds for
-  Parrot MP4s but not generally. Needs a decision: strip the source's when we
-  generate, defer to the source's and skip generation, or leave it. Not resolved
-  here because it changes what passthrough promises about the source's own data.
+- **Two ST 0604 SEIs per access unit on sources that already have one** —
+  resolved by [`0024`](./0024-sei-generation-opt-in.md): under `Generate` the
+  source's ST 0604 is replaced, not added to, so exactly one Precision Time
+  Stamp survives per access unit. Writing the round-trip test is what surfaced
+  it — `data/klv_metadata_test_sync.ts` carries 418 of its own.
 
 # Citations
 

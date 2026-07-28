@@ -92,9 +92,16 @@ class KlvStream {
 class KlvSink {
  public:
   explicit KlvSink(std::string sink, bool realtime = false,
-                   std::string video_source = {});
+                   std::string video_source = {},
+                   Sei0604 sei_0604 = Sei0604::Preserve);
   KlvSink(std::unique_ptr<MediaBackend> backend, std::string sink,
-          bool realtime = false, std::string video_source = {});
+          bool realtime = false, std::string video_source = {},
+          Sei0604 sei_0604 = Sei0604::Preserve);
+
+  // Same, taking the config whole — clearer than four positional arguments once
+  // more than the sink is set.
+  explicit KlvSink(InsertConfig cfg);
+  KlvSink(std::unique_ptr<MediaBackend> backend, InsertConfig cfg);
 
   Result<std::monostate> emit(const Message& m);  // m.encode() -> push
   Result<std::monostate> close();                 // drain + finish

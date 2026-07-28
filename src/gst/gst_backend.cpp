@@ -295,22 +295,42 @@ bool nal_is_vcl(guint type) {
          type == GST_H264_NAL_SLICE_DEPTH;
 }
 
-// True if this SEI NAL carries a Picture Timing (type 1) message. Uses the
-// codecparsers SEI parser, which handles the 0xFF-continuation encoding of
-// payload type/size that a naive two-byte read gets wrong.
-bool sei_nal_has_pic_timing(GstH264NalParser* parser, GstH264NalUnit* nalu) {
+// True if `msg` is one Generate mode replaces: Picture Timing (whose absence is
+// what quiets the SPS-association warning), or an ST 0604 Precision Time Stamp
+// the source already carried — we are about to write our own, and two of them in
+// one access unit leaves a reader guessing which is authoritative (ADR 0024).
+//
+// gstreamer 1.20 has no payload type for user_data_unregistered, so a source
+// ST 0604 arrives as an unhandled payload: match type 5 and the ST 0604.6 §7.1
+// identifier at the front of its data.
+bool sei_message_is_replaced(const GstH264SEIMessage& msg) {
+  if (msg.payloadType == GST_H264_SEI_PIC_TIMING) return true;
+  if (msg.payloadType != GST_H264_SEI_UNHANDLED_PAYLOAD) return false;
+
+  const auto& raw = msg.payload.unhandled_payload;
+  static const char kId[] = "MISPmicrosectime";
+  constexpr guint kIdLen = 16;
+  if (raw.payloadType != 5 || !raw.data || raw.size < kIdLen) return false;
+  return std::memcmp(raw.data, kId, kIdLen) == 0;
+}
+
+// True if every SEI message in this NAL is one we replace — only then is
+// dropping the whole NAL lossless. A NAL mixing a replaced message with an
+// unrelated one (buffering period, recovery point) is left alone rather than
+// taking the bystander with it.
+bool sei_nal_is_replaced(GstH264NalParser* parser, GstH264NalUnit* nalu) {
   GArray* messages = nullptr;
   const GstH264ParserResult res = gst_h264_parser_parse_sei(parser, nalu, &messages);
-  bool found = false;
+  bool all = false;
   if (messages) {
-    if (res == GST_H264_PARSER_OK) {
-      for (guint i = 0; i < messages->len && !found; ++i)
-        found = g_array_index(messages, GstH264SEIMessage, i).payloadType ==
-                GST_H264_SEI_PIC_TIMING;
+    if (res == GST_H264_PARSER_OK && messages->len > 0) {
+      all = true;
+      for (guint i = 0; i < messages->len && all; ++i)
+        all = sei_message_is_replaced(g_array_index(messages, GstH264SEIMessage, i));
     }
     g_array_free(messages, TRUE);
   }
-  return found;
+  return all;
 }
 
 // Pad probe: generate an ST 0604 SEI for each H.264 access unit and inject it
@@ -333,9 +353,15 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad*, GstPadProbeInfo* info,
 
   // Absolute sensorTimestamp (µs) for this frame, matched from KLV by PTS.
   // Backward-only: a frame is never given a timestamp from a later KLV packet.
-  // If nothing matches within tolerance we emit no SEI at all — a relative-PTS
+  // If nothing matches within tolerance we write no SEI — a relative-PTS
   // fallback would produce a well-formed ST 0604 timestamp near 1970 that a
   // reader cannot distinguish from a real one.
+  //
+  // An unmatched frame is still *scanned*: under Generate the KLV is the single
+  // timestamp authority for the stream, so a source ST 0604 is removed whether or
+  // not we have something to put in its place. Leaving it would make provenance
+  // vary frame to frame with nothing in the stream to signal which is which
+  // (ADR 0024).
   const uint64_t pts_ns = GST_BUFFER_PTS(buffer);
   uint64_t timestamp_microsec = 0;
   bool matched = false;
@@ -350,8 +376,6 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad*, GstPadProbeInfo* info,
       }
     }
   }
-  if (!matched) return GST_PAD_PROBE_OK;
-
   GstMapInfo map;
   if (!gst_buffer_map(buffer, &map, GST_MAP_READ)) return GST_PAD_PROBE_OK;
 
@@ -369,7 +393,7 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad*, GstPadProbeInfo* info,
     if (res != GST_H264_PARSER_OK && res != GST_H264_PARSER_NO_NAL_END) break;
 
     if (nalu.type == GST_H264_NAL_SEI) {
-      if (sei_nal_has_pic_timing(ctx->h264_parser, &nalu))
+      if (sei_nal_is_replaced(ctx->h264_parser, &nalu))
         strip.emplace_back(nalu.sc_offset, nalu.offset + nalu.size);
     } else if (nal_is_vcl(nalu.type) && !have_insert) {
       insert_at = nalu.sc_offset;
@@ -380,16 +404,23 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad*, GstPadProbeInfo* info,
     offset = nalu.offset + nalu.size;
   }
 
-  // No slice in this buffer: nothing to attach a frame timestamp to.
-  if (!have_insert) {
+  // Inject only with both a timestamp and a slice to put it before. With
+  // neither and nothing to strip, the access unit is already what we want.
+  const bool inject = matched && have_insert;
+  if (!inject && strip.empty()) {
     gst_buffer_unmap(buffer, &map);
     return GST_PAD_PROBE_OK;
   }
 
-  const auto sei_nal = build_0604_sei_nal(timestamp_microsec);
+  const auto sei_nal =
+      inject ? build_0604_sei_nal(timestamp_microsec) : std::vector<std::byte>{};
   gsize stripped = 0;
   for (const auto& [s, e] : strip) stripped += e - s;
   const gsize new_size = map.size - stripped + sei_nal.size();
+  if (new_size == 0) {  // an access unit that was nothing but replaced SEI
+    gst_buffer_unmap(buffer, &map);
+    return GST_PAD_PROBE_OK;
+  }
 
   GstBuffer* new_buffer = gst_buffer_new_allocate(nullptr, new_size, nullptr);
   if (!new_buffer) {
@@ -409,7 +440,7 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad*, GstPadProbeInfo* info,
   guint8* dst = new_map.data;
   gsize pos = 0;
   std::size_t si = 0;
-  bool inserted = false;
+  bool inserted = !inject;  // nothing to insert counts as already done
   while (pos < map.size) {
     if (!inserted && pos == insert_at) {
       std::memcpy(dst, sei_nal.data(), sei_nal.size());
@@ -490,11 +521,11 @@ void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
     return;
   }
 
-  // config-interval=-1: insert SPS/PPS with every IDR frame, which helps maintain
-  // parameter set availability for downstream readers. The video probe strips
-  // Picture Timing SEI (type 1) and generates ST 0604 SEI (type 5) with absolute
-  // timestamps from KLV sensorTimestamp (fork 21, ADR 0023).
-  g_object_set(parse, "config-interval", -1, nullptr);
+  // Under Generate we are rewriting the access unit anyway, so repeat SPS/PPS on
+  // every IDR: it keeps parameter sets available for a reader that joins mid-
+  // stream and parses our SEI. Under Preserve we set nothing — passthrough means
+  // the elementary stream comes out as it went in (ADR 0024).
+  if (ctx->generate_sei) g_object_set(parse, "config-interval", -1, nullptr);
 
   gst_bin_add(GST_BIN(ctx->pipeline), parse);
   gst_element_sync_state_with_parent(parse);
@@ -800,11 +831,11 @@ class GstBackend : public MediaBackend {
       video->mux = mux;
       video->pipeline = pipeline;  // for creating fakesinks in pad callback
 
-      // Enable ST 0604 SEI generation (fork 21, ADR 0023). Always on for video
-      // passthrough; individual frames still emit SEI only once a KLV timestamp
-      // is available to match them against.
-      video->generate_sei = true;
-      video->h264_parser = gst_h264_nal_parser_new();
+      // ST 0604 SEI generation is opt-in (ADR 0024). Preserve — the default —
+      // leaves the video elementary stream alone entirely. Even under Generate,
+      // an individual frame gets SEI only once a KLV timestamp matches it.
+      video->generate_sei = cfg.sei_0604 == Sei0604::Generate;
+      if (video->generate_sei) video->h264_parser = gst_h264_nal_parser_new();
 
       g_signal_connect(parse, "pad-added", G_CALLBACK(on_video_pad_added),
                        video.get());

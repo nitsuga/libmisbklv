@@ -45,6 +45,28 @@ struct KlvPacket {
 
 using PacketHandler = std::function<void(const KlvPacket&)>;
 
+// ST 0604 Precision Time Stamp SEI handling on the video passthrough path
+// (ADR 0024). ST 0604 timestamps live in the video elementary stream, separate
+// from the KLV metadata stream; a consumer whose downstream reader wants
+// frame-accurate time from the video itself needs them present there.
+enum class Sei0604 {
+  // Leave the video elementary stream alone. Whatever ST 0604 SEI the source
+  // carried comes through unchanged, and a source without any stays without
+  // any. This is what video passthrough has always promised (ADR 0020), and
+  // the default: we do not edit a caller's video unless asked.
+  Preserve,
+
+  // Write an ST 0604 Precision Time Stamp into every access unit we can time,
+  // taken from the KLV's ST 0601 item 2 as pushed. Any ST 0604 SEI the source
+  // carried is REPLACED, not added to, so a reader finds exactly one Precision
+  // Time Stamp per access unit and it agrees with the KLV. Frames with no KLV
+  // timestamp within tolerance get no SEI rather than an invented one.
+  //
+  // H.264 only. On other codecs this is accepted and does nothing — the video
+  // still passes through, just without generated SEI.
+  Generate,
+};
+
 struct InsertConfig {
   std::string sink;        // "file:out.ts" | "udp:host:port" | "srt:uri"
   bool realtime = false;   // pace output against the clock (live sinks; B4)
@@ -75,6 +97,10 @@ struct InsertConfig {
   // Not supported with `realtime` (rejected: Error::Unsupported) — the video
   // branch is a file source and clock-paced output with it is unexercised.
   std::string video_source;
+
+  // What to do about ST 0604 Precision Time Stamp SEI in the passthrough video
+  // (ADR 0024). Only meaningful with `video_source` set.
+  Sei0604 sei_0604 = Sei0604::Preserve;
 };
 
 // Real-time push session (ADR 0013). push() blocks on sink backpressure.

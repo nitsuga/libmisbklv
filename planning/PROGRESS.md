@@ -37,22 +37,23 @@ done and extending incrementally** — the state today:
   ([ADR 0022](../context/decisions/0022-no-output-on-failure.md)) — a failing or
   never-called `finish()` removes the file it created, never one that was there
   first.
-- **Passthrough video carries ST 0604 timestamps**
-  ([ADR 0023](../context/decisions/0023-st0604-sei-passthrough.md)): on the H.264
-  path the video ES is rewritten per access unit — source Picture Timing SEI
-  stripped, a Precision Time Stamp SEI generated from the KLV item-2
-  `sensorTimestamp` and injected before the first slice — so a downstream reader
-  gets the same absolute time from the video stream and the metadata stream.
-  Frames are matched to KLV by PTS (backward-only, 200 ms tolerance); a frame
-  with no match gets no SEI rather than an invented timestamp. Always on when
-  `video_source` is set; no transcode, picture data untouched. H.264 only —
-  H.265 and reading 0604 back out stay deferred
+- **Passthrough video can carry ST 0604 timestamps, on request**
+  ([ADR 0024](../context/decisions/0024-sei-generation-opt-in.md) over
+  [ADR 0023](../context/decisions/0023-st0604-sei-passthrough.md)):
+  `InsertConfig::sei_0604` / a `KlvSink` argument selects `Sei0604::Preserve`
+  (**default** — the video ES is not touched and comes out byte-identical) or
+  `Sei0604::Generate`. Under Generate the H.264 access unit is rewritten: a
+  Precision Time Stamp built from the KLV's item-2 `sensorTimestamp` goes in
+  before the first slice, and the KLV becomes the stream's single timestamp
+  authority — any ST 0604 the source carried is replaced, Picture Timing SEI
+  stripped. Frames are matched by PTS (backward-only, 200 ms); a frame with no
+  match gets no SEI rather than an invented one. No transcode either way. H.264
+  only — H.265 and reading 0604 back out stay deferred
   ([ADR 0009](../context/decisions/0009-st0604-deferred.md)). NAL and SEI
-  parsing go through gstreamer's `codecparsers`; the output is checked by
-  decoding the SEI back and requiring every timestamp to be one the KLV carried.
-  The Time Status byte says **Lock Unknown** (`0x9F`, [`st0603`](../context/st0603.md)
-  §7.4 Table 3) — we relay a timestamp whose clock discipline we have no way to
-  know, so we don't claim otherwise.
+  parsing go through gstreamer's `codecparsers`; both modes are checked by
+  decoding SEI back out of the muxed output. The Time Status says **Lock
+  Unknown** (`0x9F`, [`st0603`](../context/st0603.md) §7.4 Table 3) — we relay a
+  timestamp whose clock discipline we cannot know, so we don't claim otherwise.
 - **Read and write share one timeline**
   ([ADR 0021](../context/decisions/0021-read-path-timestamps.md)): both
   extractors report `pts_ns` as nanoseconds from the start of the source — the
@@ -85,11 +86,6 @@ None currently.
 
 ## Next
 
-- **Decide what passthrough owes a source's own ST 0604 SEI** — sources that
-  already carry `MISPmicrosectime` (as `data/klv_metadata_test_sync.ts` does)
-  now come out with two Precision Time Stamps per matched access unit, theirs
-  and ours. Strip theirs, defer to theirs, or leave it: open question on
-  [ADR 0023](../context/decisions/0023-st0604-sei-passthrough.md).
 - **Registry breadth — 0903 side**: the remaining VMTI/VTarget items, as data
   needs them. (0601 is complete.)
 - **An SRT-specific hermetic streaming test** — the udp live path is covered,
