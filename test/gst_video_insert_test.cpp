@@ -215,10 +215,15 @@ bool g_pass = true;
 // then reads the Time Status byte and the 11-byte Modified Precision Time Stamp
 // that follow it — 2-byte groups separated by 0xFF fillers, most significant
 // first (§7.4 Table 2) — and reassembles the 8-byte microsecond value.
-std::vector<std::uint64_t> decode_0604_seis(std::span<const std::byte> es) {
+struct Sei0604 {
+  std::uint64_t timestamp_us = 0;
+  unsigned time_status = 0;  // ST 0603.5 §7.4 Table 3
+};
+
+std::vector<Sei0604> decode_0604_seis(std::span<const std::byte> es) {
   static const char kId[] = "MISPmicrosectime";
   constexpr std::size_t kIdLen = 16;
-  std::vector<std::uint64_t> out;
+  std::vector<Sei0604> out;
   if (es.size() < kIdLen + 12) return out;
 
   for (std::size_t i = 0; i + kIdLen + 12 <= es.size(); ++i) {
@@ -236,7 +241,7 @@ std::vector<std::uint64_t> decode_0604_seis(std::span<const std::byte> es) {
     const std::size_t data_off[8] = {0, 1, 3, 4, 6, 7, 9, 10};  // skip the fillers
     std::uint64_t v = 0;
     for (std::size_t b = 0; b < 8; ++b) v = (v << 8) | u8(es, ts + data_off[b]);
-    out.push_back(v);
+    out.push_back({v, u8(es, i + kIdLen)});
     i += kIdLen + 12 - 1;
   }
   return out;
@@ -405,16 +410,22 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
       unsigned p = 0;
       for (const auto& e : read_pmt(ref))
         if (is_video(e.stream_type) && !p) p = e.pid;
-      from_source = decode_0604_seis(read_pes(ref, p).payload);
+      for (const auto& s : decode_0604_seis(read_pes(ref, p).payload))
+        from_source.push_back(s.timestamp_us);
     }
 
     const auto seen = decode_0604_seis(out_video.payload);
-    std::size_t ours = 0, foreign = 0;
-    for (const auto v : seen) {
-      if (std::find(expected.begin(), expected.end(), v) != expected.end())
+    std::size_t ours = 0, foreign = 0, wrong_status = 0;
+    for (const auto& s : seen) {
+      if (std::find(expected.begin(), expected.end(), s.timestamp_us) != expected.end()) {
         ++ours;
-      else if (std::find(from_source.begin(), from_source.end(), v) == from_source.end())
+        // ADR 0023: we relay a timestamp whose lock state we do not know, so the
+        // Time Status must say Lock Unknown (bit 7 = 1) — not Locked.
+        if (s.time_status != 0x9F) ++wrong_status;
+      } else if (std::find(from_source.begin(), from_source.end(), s.timestamp_us) ==
+                 from_source.end()) {
         ++foreign;
+      }
     }
     std::printf("  ST 0604 SEI: %zu in output (%zu from our KLV, %zu passed through"
                 " from source, %zu unaccounted); %zu KLV sensorTimestamps\n",
@@ -427,6 +438,10 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
       // actually carried — no invented values, no corrupted payloads.
       check("ST 0604 SEI generated from KLV", ours > 0);
       check("no SEI timestamp from nowhere", foreign == 0);
+      if (wrong_status)
+        std::printf("  %zu generated SEI(s) with a Time Status other than 0x9F\n",
+                    wrong_status);
+      check("generated SEI says Lock Unknown (ST 0603.5 Table 3)", wrong_status == 0);
     }
   }
 

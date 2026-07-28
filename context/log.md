@@ -2,6 +2,17 @@
 
 ## 2026-07-28
 
+* **Time Status now says Lock Unknown (`0x9F`)** — fork 21 revision, decided
+  and recorded in [ADR 0023](./decisions/0023-st0604-sei-passthrough.md). The
+  `0x1F` we had been emitting was correctly *encoded* but claimed the source
+  clock was locked to an absolute time reference, which we cannot know: the
+  timestamp is relayed out of ST 0601 item 2, which carries no lock
+  information. Same failure mode as the relative-PTS fallback removed earlier
+  the same day — a well-formed field asserting more than the code can support.
+  `gst_video_insert_test` now asserts `0x9F` on every SEI we generate (the
+  source's own passed-through SEIs keep their own status), so it cannot regress
+  silently. Bits 6/5 (Normal/Forward) stay asserted rather than derived.
+
 * **Ingest — ST 0603.5 (MISP Time System and Timestamps)**
   (`references/ST0603.5.pdf` + `.txt`, new [`st0603`](./st0603.md)): added to
   settle the one byte of our ST 0604 SEI payload that nothing in the bundle

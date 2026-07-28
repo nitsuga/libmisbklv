@@ -42,15 +42,15 @@ Implementation approach:
 1. **Parse KLV in `push()`**: Extract ST 0601 `sensorTimestamp` (tag 2, absolute Unix µs)
 2. **PTS → timestamp map**: Thread-safe `std::map<uint64_t, uint64_t>` in `VideoCtx`
    - Populated in push(), queried in video pad probe
-   - No pruning — all entries persist for session lifetime (~16 bytes/entry)
+   - No pruning — all entries persist for session lifetime
 3. **Fuzzy PTS matching**: Backward-only lookup with 200ms tolerance
    - Video pipeline can run ahead of KLV push() by a few frames
    - `upper_bound()` + step back ensures we never match future frames
-   - Falls back to relative PTS if no match within tolerance
+   - No match within tolerance means no SEI for that frame (revised 2026-07-28)
    - Observed lag typically submillisecond; 200ms = 6 frames @ 30fps headroom
 4. **SEI generation** per ST 0604.6 §7:
    - UUID `MISPmicrosectime` (16 bytes)
-   - Status byte (GPS locked, normal time)
+   - Time Status byte: Lock Unknown / Normal / Forward (`0x9F`, ST 0603.5 Table 3)
    - Modified Precision Time Stamp (absolute Unix µs + 0xFF emulation prevention)
 5. **Picture Timing SEI stripping**: Remove type 1 SEI from source to prevent parser warnings
 6. **Injection**: Insert before first slice NAL (types 1-5, 19-21)
@@ -145,13 +145,13 @@ hexdump -C output.ts | grep -A2 "4d 49 53 50"  # Look for "MISP" UUID
 Expected pattern:
 ```
 xxxxxx  00 01 06 05 1c 4d 49 53  50 6d 69 63 72 6f 73 65  |.....MISPmicrose|
-xxxxxx  63 74 69 6d 65 1f XX XX  ff XX XX ff XX XX ff XX  |ctime...........|
+xxxxxx  63 74 69 6d 65 9f XX XX  ff XX XX ff XX XX ff XX  |ctime...........|
 ```
 - `00 00 01` - start code
 - `06` - SEI NAL type
 - `05 1c` - User Unregistered (type 5), length 28
 - `4d 49 53 50...` - "MISPmicrosectime" UUID
-- `1f` - status byte
+- `9f` - Time Status: Lock Unknown / Normal / Forward (ST 0603.5 Table 3)
 - `XX XX ff XX XX ff XX XX ff XX XX` - timestamp with 0xFF emulation prevention
 
 SEI appears only when `video_source` is set — without it the insert path writes
@@ -185,15 +185,40 @@ it had already added as a dependency but never called. Fixed:
 Verified against ST 0604.6 §7.1 Table 1 and §7.4 Table 2, requirements
 ST 0604.4-10 / -12. Full CTest suite green, including under ASan+UBSan.
 
+# Time Status — resolved 2026-07-28
+
+Once ST 0603.5 was in `references/`, §7.4 Table 3 confirmed the original `0x1F`
+was *encoded* correctly — bit 7 = 0 Locked, bit 6 = 0 Normal, bit 5 = 0 Forward,
+bits 4-0 reserved `11111`. It was not *truthful*: bit 7 asserts that an internal
+clock was locked to an absolute time reference, and we are relaying a timestamp
+out of ST 0601 item 2, which carries no lock information at all. Claiming Locked
+was the same failure as the relative-PTS fallback removed in the rewrite — a
+well-formed field making a confident claim the code cannot support.
+
+**Decision: emit `0x9F` (bit 7 = Lock Unknown).** Honesty about provenance beats
+a more reassuring default; a reader that needs to know the clock was disciplined
+now gets told we don't know, rather than being told yes on no evidence. `0x1F`
+would only be right if the caller asserted the source was locked, which the API
+has no way to express — if that's ever wanted, it belongs in `InsertConfig`, not
+in a hardcoded constant.
+
+Costs, accepted: the emitted byte changes for every existing consumer, and a
+reader keying on `0x1F` will see a difference. Nothing in ST 0604.6 or ST 0603.5
+requires a particular value, and `gst_video_insert_test` now asserts `0x9F` on
+every SEI we generate, so the choice cannot regress silently.
+
+Bits 6/5 (Normal/Forward) remain asserted rather than computed — deriving
+discontinuity from the KLV timestamp sequence is a follow-on, not part of this.
+
 # Known limitations
 
 - **H.264 only** — H.265 uses different UUID (deferred)
 - **Always enabled** — no way to disable SEI generation for video passthrough
-- **Time Status is fixed at `0x1F`** — verified 2026-07-28 against
-  [`st0603`](../st0603.md) §7.4 Table 3, now that ST 0603.5 is in `references/`:
-  the encoding is correct (bit 7 = 0 Locked, bit 6 = 0 Normal, bit 5 = 0
-  Forward, bits 4-0 reserved `11111`). What is *not* settled is whether it is
-  truthful — see the open question below.
+- **Time Status is fixed at `0x9F`** — Lock Unknown / Normal / Forward, per
+  [`st0603`](../st0603.md) §7.4 Table 3 (see the 2026-07-28 Time Status note
+  below). Bits 6/5 are asserted rather than derived: we always say the time is
+  incrementing linearly, though a discontinuity in the KLV sequence would be
+  detectable from the map we keep.
 - **Picture Timing SEI is stripped from every source**, not just ones that warn —
   this deletes conformant data from the caller's video to quiet one reader. It
   predates the rewrite and is left as-is, but it is scope creep past "generate
@@ -216,17 +241,6 @@ ST 0604.4-10 / -12. Full CTest suite green, including under ASan+UBSan.
   timestamp. **Closed 2026-07-28** — `gst_video_insert_test` now decodes every
   ST 0604 SEI out of the output ES and requires each one to be a timestamp the
   KLV actually carried.
-- **We assert "clock Locked" on every frame without knowing it** (open). ST 0603.5
-  Table 3 bit 7 distinguishes *Locked* (internal clock locked to an absolute
-  time reference) from *Lock Unknown*. We emit `0x1F` — Locked — but we are
-  relaying a timestamp out of ST 0601 item 2, which carries no lock information,
-  so we have no basis for the claim. `0x9F` (Lock Unknown) is the honest default
-  when relaying someone else's timestamp; `0x1F` is only right if the caller
-  tells us the source was locked, which the API has no way to express today.
-  Bits 6/5 are a related opportunity rather than a defect: a discontinuity in
-  the KLV timestamp sequence *is* detectable from the map we already keep, so
-  Normal/Forward could be computed instead of assumed. Changing any of this
-  changes bytes every downstream reader sees, so it needs a decision.
 - **Two ST 0604 SEIs per access unit on sources that already have one** (open).
   Writing this test showed `data/klv_metadata_test_sync.ts` carries 418 of its
   own `MISPmicrosectime` SEIs, which passthrough preserves — so frames we also

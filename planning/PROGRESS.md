@@ -50,6 +50,9 @@ done and extending incrementally** — the state today:
   ([ADR 0009](../context/decisions/0009-st0604-deferred.md)). NAL and SEI
   parsing go through gstreamer's `codecparsers`; the output is checked by
   decoding the SEI back and requiring every timestamp to be one the KLV carried.
+  The Time Status byte says **Lock Unknown** (`0x9F`, [`st0603`](../context/st0603.md)
+  §7.4 Table 3) — we relay a timestamp whose clock discipline we have no way to
+  know, so we don't claim otherwise.
 - **Read and write share one timeline**
   ([ADR 0021](../context/decisions/0021-read-path-timestamps.md)): both
   extractors report `pts_ns` as nanoseconds from the start of the source — the
