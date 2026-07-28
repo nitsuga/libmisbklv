@@ -2,6 +2,16 @@
 
 ## 2026-07-28
 
+* **Video passthrough insertion now orders video before KLV in the output
+  PMT** (`gst_backend.cpp`): stream 0:0 is video, 0:1 is KLV, verified with
+  `ffprobe`. `mpegtsmux` assigns PID/stream order by the order sink pads are
+  *requested*, not by `gst_bin_add_many` order — the KLV `appsrc` was being
+  linked to the muxer up front, before the video demuxer's pad-added signal
+  had fired, so it always claimed `sink_0`. Linking `appsrc` to the muxer is
+  now deferred until after the video-pad wait loop, so the video pad (if any)
+  requests its muxer sink pad first. No behavior change when there is no
+  video source. Suite green (25/25).
+
 * **`tools/gst-container/run.sh` verified end to end.** The docker daemon came
   back after the earlier hang; ran `run.sh` unmodified with no cached state
   assumptions beyond the already-built image — 25/25 under gstreamer 1.24.2.
