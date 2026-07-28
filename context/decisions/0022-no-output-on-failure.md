@@ -47,6 +47,12 @@ a `file:` sink, an output file exists only if `finish()` returned ok.
 - A **failing `finish()`** unlinks that file, after the pipeline is in `NULL` so
   the sink has closed it. A **successful `finish()`** clears the path: that file
   is the output now and nothing may remove it.
+- A **drain that never completes counts as failing** (added 2026-07-28).
+  `finish()` waited for EOS or ERROR forever, so a stalled pipeline hung the
+  caller instead of reaching any of the outcomes above; it is now bounded, and a
+  timeout takes the failure path here. Only a clean EOS is success — the old test
+  read "not an ERROR", which quietly counted the timeout as success once one
+  became possible.
 - **Destruction without a successful `finish()`** unlinks it too. An abandoned
   session has not produced output, only an unfinalized file — a `.ts` whose
   muxer never wrote its final state. Treating "the caller gave up" as success

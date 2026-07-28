@@ -30,8 +30,10 @@ optional field, `video_source`; empty means today's pipeline byte-for-byte, so
 the change is source- and ABI-compatible for existing callers. `KlvSink` gains
 the matching defaulted constructor argument.
 
-- **Passthrough only, never decode.** `filesrc ! parsebin` joins the existing
-  `mpegtsmux`. `parsebin` auto-plugs the demuxer and parser for the container and
+- **Passthrough only, never decode.** (*The chain is now `filesrc ! demuxer` —
+  see "Mechanism superseded" at the end. What this bullet decides still holds;
+  read `parsebin` below as "the thing that auto-plugged the chain".*)
+  `filesrc ! parsebin` joins the existing `mpegtsmux`. `parsebin` auto-plugs the demuxer and parser for the container and
   codec and stops there, so the elementary stream reaches the muxer unchanged and
   our code branches on **no** codec at all. Verified end-to-end on H.264-in-TS,
   H.264-in-MP4 (`avc` → byte-stream conversion handled inside `h264parse`), and
@@ -49,12 +51,21 @@ the matching defaulted constructor argument.
   ([`0024`](./0024-sei-generation-opt-in.md)). The seam is a *parser* choice, not
   a codec or encoder option — the elementary stream still reaches the muxer
   without being decoded.
-- **First video pad wins; everything else is dropped.** `parsebin`'s `pad-added`
-  links the first `video/*` pad to a `mpegtsmux` request pad. Audio, subtitles,
-  and any KLV the source already carries are ignored — the caller is supplying
-  its own converted KLV, and forwarding the source's would put two metadata
-  streams in the output. A second video pad is ignored and logged (`g_warning`),
-  not an error.
+- **First video pad wins; everything else is dropped.** `pad-added` links the
+  first `video/*` pad to a `mpegtsmux` request pad. Audio, subtitles, and any KLV
+  the source already carries are dropped — the caller is supplying its own
+  converted KLV, and forwarding the source's would put two metadata streams in
+  the output. A second video pad is dropped too, and logged (`g_warning`), not an
+  error.
+
+  *Dropped does not mean unlinked* (amended 2026-07-28). Every pad the demuxer
+  exposes must be linked or it errors the pipeline as not-linked, so each dropped
+  stream goes to its own `queue ! fakesink`, `leaky=downstream`. The queue is
+  load-bearing, not tidiness: a demuxer pushes all of its streams from one
+  thread, and a sink in `PAUSED` prerolls one buffer then blocks that thread
+  until `PLAYING` — so a bare `fakesink` on a dropped stream blocks the video
+  behind it, the muxer never prerolls, `PLAYING` never arrives, and nothing
+  unblocks. That deadlock hung CI on every run under gstreamer 1.24.
 - **`open_insert` waits for that pad before `PLAYING`.** The pipeline goes to
   `PAUSED`, where `parsebin` prerolls and exposes pads, and returns only once the
   video pad is linked. Without the wait, a caller pushing KLV immediately races

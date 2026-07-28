@@ -133,6 +133,14 @@ from item 2.
 
 # Assumptions / open questions
 
+- **Recognising the source's ST 0604 depends on the gstreamer version**, and
+  getting it wrong is silent — the message is simply not matched, so the source's
+  timestamp survives next to ours and the "one authority" property above is lost
+  with nothing to signal it. 1.22 added a parsed payload type for
+  `user_data_unregistered`; before that it arrived as an *unhandled* payload
+  matched by raw type 5 plus the §7.1 identifier. Both are handled, guarded by
+  `GST_CHECK_VERSION` — and the round-trip test counts the source's SEIs in the
+  output, which is what caught it.
 - **A NAL mixing replaced and unrelated SEI messages is left alone.** Stripping
   is whole-NAL, so it only happens when *every* message in that NAL is one we
   replace — a Picture Timing sharing a NAL with a buffering period survives, and
