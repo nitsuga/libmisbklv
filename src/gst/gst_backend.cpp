@@ -238,8 +238,15 @@ std::vector<std::byte> generate_0604_sei_payload(uint64_t timestamp_microsec) {
     payload.push_back(std::byte{uuid[i]});
   }
 
-  // Status byte (1 byte): GPS locked, normal time, forward time
-  // Bit 7: 0=GPS locked, bit 6: 0=normal, bit 5: 0=forward, bits 4-0: reserved (1s)
+  // Time Status (1 byte) per ST 0603.5 §7.4 Table 3: bit 7 = 0 Locked (internal
+  // clock locked to an absolute time reference — not GPS-specific), bit 6 = 0
+  // Normal (time incrementing forward linearly), bit 5 = 0 Forward (only
+  // meaningful when bit 6 signals a discontinuity), bits 4-0 reserved '11111'.
+  //
+  // NOTE: this asserts Locked/Normal unconditionally. We relay a timestamp from
+  // ST 0601 item 2 and have no knowledge of the source clock's lock state, so
+  // 0x9F (bit 7 = Lock Unknown) would be the truthful encoding. Left as-is
+  // pending a decision — see ADR 0023.
   payload.push_back(std::byte{0b00011111});
 
   // Modified Precision Time Stamp (11 bytes): the 8-byte big-endian timestamp in

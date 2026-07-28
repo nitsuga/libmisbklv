@@ -1,0 +1,573 @@
+MISB ST 0603.5
+STANDARD
+MISP Time System and Timestamps
+
+5 October 2017
+
+1 Scope
+An absolute, reliable time system is essential to precisely mark temporal events with timestamps
+for collected Motion Imagery and metadata. Such timestamps facilitate photogrammetric
+analysis, interoperability and exploitation of Motion Imagery products.
+This standard specifies the MISP Time System, which is an absolute time scale from which
+timestamps are derived. Three types of timestamps are defined: 1) a Precision Time Stamp,
+which represents Absolute Time specified to microsecond resolution; 2) a Nano Precision Time
+Stamp, which represents Absolute Time specified to nanosecond resolution; and, 3) a
+Commercial Time Stamp, which represents a relative time consistent with time code used in the
+commercial broadcast industry, specified to video frame resolution. The Precision Time Stamp
+and the Nano Precision Time Stamp aide in correlating Motion Imagery with metadata.
+This standard also specifies a Time Status byte, which is intended to provide additional
+information regarding the source used for timestamps.
+
+2 References
+[1] ISO 8601:2004 Data Elements and Interchange Formats – Information interchange –
+Representation of Dates and Times, 2004.
+[2] MISB MISP-2018.1: Motion Imagery Handbook, Oct 2017.
+[3] SMPTE RP 210v13:2012 Metadata Element Dictionary.
+[4] MISB ST 0807.20 MISB KLV Metadata Registry, Oct 2017.
+[5] SMPTE 12-1:2014 Television, Time and Control Data, 2014.
+[6] SMPTE EG 40:2012 Conversion of Time Values between SMPTE 12-1 Time Code, MPEG2 PCR Time Base and Absolute Time, 2012.
+
+3 Terms and Definitions
+All dates and times within ST 0603 use the ISO 8601 [1] standard formatting of:
+CCYY-MM-DDThh:mm:ss.sZ,
+
+5 October 2017
+
+Motion Imagery Standards Board
+
+1
+
+ST 0603.5 MISP Time System and Timestamps
+Where CCYY is a four-digit year; MM is the month number; DD is the day within the given
+month; T is a placeholder to signify a separation between the Date and Time; hh is the hour
+number ranging from 0 to 23; mm is the number of minutes in an hour; ss.s is the number of
+seconds along with fractions of a second which can be more than one digit; Z is a single letter
+that signifies the time zone of the time. In this document, all times are in the Zulu, or Z, time
+zone. Zulu refers to the time at the prime meridian.
+Epoch
+
+An instant in time chosen as the origin of an era. For example, the MISP Time
+System Epoch is 1970-01-01T00:00:00.0Z (i.e. midnight January 1, 1970). The
+Epoch serves as a reference point from which time is measured. Time is counted
+from the Epoch so that the date and time of events can be specified
+unambiguously.
+
+Resolution
+
+Smallest change in a quantity being measured that causes a perceptible change in
+the corresponding indication.
+
+Timestamp
+
+The current time an event is recorded. A timestamp is a value representing an
+instant in time.
+
+4 Acronyms
+GPS
+KLV
+MISP
+SI
+TAI
+UL
+UTC
+Z
+
+Global Positioning System
+Key Length Value
+Motion Imagery Standards Profile
+International System (of units)
+International Atomic Time
+Universal Label
+Coordinated Universal Time
+Zulu
+
+5 Revision History
+Revision
+0603.5
+
+Date
+10/05/2017
+
+
+
+
+
+
+
+
+
+5 October 2017
+
+Summary of Changes
+Added Section 7 that discusses two representations for MISP
+Time System: Precision Time Stamp & Nano Precision Time
+Stamp
+Editorial changes to Section 7.1 for Precision Time Stamp
+Added Section 7.2, 7.2.1 & 7.2.2 for Nano Precision Time
+Stamp
+Added requirement -09
+Editorial changes to Section 7.2.3 to implement a
+nomenclature change for Precision Time Stamp Status to
+Time Status; aligns with generic usage of timestamps for
+Absolute Time defined in ST 0603
+Corrected conversion algorithm in Section 7.3 Step 1 from
+500 milliseconds to 500 nanoseconds
+
+Motion Imagery Standards Board
+
+2
+
+ST 0603.5 MISP Time System and Timestamps
+
+
+
+
+Removed floating point from conversion algorithm in
+Section 7.3; conversion now with integer arithmetic
+Updated Table 1 to remove floating point arithmetic
+Added reference MISB ST 0807
+
+6 MISP Time System
+The MISP Time System is a “Level 31” time system exemplifying the following characteristics:
+
+
+Total Order of data
+
+
+
+Relative Differencing
+
+
+
+Absolute Time reference
+
+The MISP Time System enables scientific and human analysis of Motion Imagery data in tasks
+such as exploitation, where knowing the timing relationships amongst related data is essential.
+The MISP Time System is defined as follows:
+
+
+Epoch of 1970-01-01T00:00:00.0Z (starting point for time scale)
+
+
+
+Based on the SI Second (constant counting increment of time)
+
+
+
+Strictly monotonically increasing (no skips, no repeats in count)
+
+The MISP Time System is locked (i.e. same clock-period and zero delay, see Motion Imagery
+Handbook [2]) with International Atomic Time (TAI); however, there is a fixed offset of
+8.0000822 seconds between the MISP Time System and TAI (i.e. MISP Time = TAI – 8.000082
+seconds). The Global Positioning Satellite (GPS) system produces TAI with a fixed offset of 19
+seconds (i.e. GPS Time = TAI - 19 seconds). GPS systems supply leap second corrections to
+compute UTC, or may supply UTC directly. UTC can be derived from the MISP Time System
+using its correct offset and inclusion of leap seconds.
+Appendix A offers the rationale for introducing the MISP Time System as clarification to
+previous versions of this standard. The Motion Imagery Handbook [2] provides algorithms for
+converting between the MISP Time System and other time standards.
+
+7 Representations of the MISP Time System
+To be useful in Motion Imagery Systems, a representation of time as a discrete number is
+necessary. In Figure 1, two representations defined here are the Precision Time Stamp, which is
+specified to a resolution representing microseconds, and the Nano Precision Time Stamp, which
+is specified to a resolution representing nanoseconds. Both representations use the Epoch
+indicated above as their reference.
+
+1
+
+See the Motion Imagery Handbook [2] for in-depth discussion and terminology
+
+2
+
+Many systems may not need to account for the 82 microseconds; those with sensitive timing requirements may.
+
+5 October 2017
+
+Motion Imagery Standards Board
+
+3
+
+ST 0603.5 MISP Time System and Timestamps
+The decision to choose one representation over another depends on the application needs. It is
+mandatory that either a Precision Time Stamp or a Nano Precision Time Stamp be present in
+Motion Imagery and metadata. MISB standards indicate which representation is appropriate.
+
+MISP Time System
+
+Microsecond Resolution
+
+Nanosecond Resolution
+
+Precision Time Stamp
+
+Nano Precision Time Stamp
+
+Figure 1: Representations of MISP Time System
+
+7.1 Precision Time Stamp
+The Precision Time Stamp represents a sampled and quantized time value of the MISP Time
+System specified to microsecond resolution. The Precision Time Stamp is defined to have the
+following properties:
+1. Represented as a 64-bit unsigned integer (UINT64).
+2. Specified to a resolution of 1 microsecond. Sub-microsecond measurements are
+truncated to the nearest microsecond.
+3. Assigned the following KLV Universal Label (UL) in SMPTE RP210 [3]3:
+06.0E.2B.34.01.01.01.03.07.02.01.01.01.05.00.00 (CRC 64827)
+Requirement
+ST 0603.4-08
+
+The Precision Time Stamp shall represent a value of the MISP Time System
+truncated to the nearest microsecond.
+
+Notes: (1) Accuracy of the Precision Time Stamp is beyond the purview of the MISB. (2)
+Timing requirements of mission components may be more stringent than that required by the
+MISP. When such requirements exist, MISP-conformant data should take advantage of them.
+
+3
+
+The UL data element name is defined in SMPTE RP 210 as “User defined Time stamp - microseconds since 1970”
+
+5 October 2017
+
+Motion Imagery Standards Board
+
+4
+
+ST 0603.5 MISP Time System and Timestamps
+
+7.2 Nano Precision Time Stamp
+The Nano Precision Time Stamp represents a sampled and quantized time value of the MISP
+Time System specified to nanosecond resolution. The Nano Precision Time Stamp is defined to
+have the following properties:
+1. Represented as a 64-bit unsigned integer (uint64).
+2. Specified to a resolution of 1 nanosecond. Sub-nanosecond measurements are
+truncated to the nearest nanosecond.
+3. Assigned the following KLV Universal Label (UL) in MISB ST 0807 [4]:
+06.0E.2B.34.01.01.01.01.0E.01.01.02.0A.08.00.00 (CRC 2123)
+Requirement
+ST 0603.5-09
+
+The Nano Precision Time Stamp shall represent a value of the MISP Time System
+truncated to the nearest nanosecond.
+
+Notes: (1) Accuracy of the Nano Precision Time Stamp is beyond the purview of the MISB. (2)
+Timing requirements of mission components may be more stringent than that required by the
+MISP. When such requirements exist, MISP-conformant data should take advantage of them.
+
+7.3 Conversions between Nano Precision Time Stamp and Precision
+Time Stamp
+The Precision Time Stamp is a uint64 value specified to microsecond resolution. The Nano
+Precision Time Stamp is a uint64 value specified to nanosecond resolution. To convert a Nano
+Precision Time Stamp to a Precision Time Stamp, the following steps are performed (although
+conversion can be done in base 2, for illustration the operations are performed in base 10):
+1) Add 500 nanoseconds to the Nano Precision Time Stamp (for rounding).
+2) Divide the result by 1000 creating a microsecond value.
+Precision Time Stamp = (Nano Precision Time Stamp + 500)/1000
+Table 1 provides some examples. Note that this process can possibly result in two identical
+timestamps in microseconds when given two different timestamps in nanoseconds as shown in
+the last two entries of the table.
+Table 1: Examples of Time Stamp Mapping
+Nano Precision Time Stamp (nanoseconds)
+
+Precision Time Stamp (microseconds)
+
+binary (64 bits)
+
+base 10
+
++500
+
+÷ 1000
+
+binary (64 bits)
+
+0x00007A2C
+
+31276
+
+31776
+
+31
+
+0x0000001F
+
+0x009211DF
+
+9572831
+
+9573331
+
+9573
+
+0x00002565
+
+0x00921118
+
+9572632
+
+9573132
+
+9573
+
+0x00002565
+
+5 October 2017
+
+Motion Imagery Standards Board
+
+5
+
+ST 0603.5 MISP Time System and Timestamps
+To convert a Precision Time Stamp to a Nano Precision Time Stamp, the Precision Time Stamp
+is multiplied by 1000 (base 10). This produces a value with three trailing zeros, which represents
+the fractional nanosecond portion.
+Nano Precision Time Stamp = 1000 * Precision Time Stamp
+Table 2 provides some examples. Note that converting from a Nano Precision Time Stamp to a
+Precision Time Stamp then back will occur a data loss. Converting from a Precision Time Stamp
+to a Nano Precision Time Stamp and back will not occur a data loss.
+Table 2: Examples of Time Stamp Mapping
+Precision Time Stamp (microseconds)
+
+Nano Precision Time Stamp (nanoseconds)
+
+binary (64 bits)
+
+base 10
+
+x 1000
+
+binary (64 bits)
+
+0x0000001F
+
+31
+
+31000
+
+0x00007918
+
+0x00002565
+
+9573
+
+9573000
+
+0x00921288
+
+7.4 Time Status
+Systems producing a timestamp representing Absolute Time for Motion Imagery and metadata
+will have differing requirements for the accuracy and precision of the timestamp. System
+designers need to specify both the precision and the accuracy of the timestamp, so that users of
+the data understand what can be expected in data analysis.
+The purpose of the Time Status is twofold:
+1. Provide information on the reference clock used to produce a timestamp, and
+2. Provide a bit-efficient timestamp qualifier for use within Motion Imagery.
+There are cases where a suitable reference for a timestamp is not available, or the
+synchronization to a reference may be temporarily lost. The Time Status provides end-user
+information regarding the reference for the timestamp in these instances.
+The Time Status is a one-byte value with a UL assigned in MISB ST 0807 [4] and shown in
+Table 3. A timestamp representing Absolute Time is often derived from a local time clock,
+which is either synchronized (i.e. locked with zero offset) to a time reference, or a systemsinternal clock. Bit 7 signals this condition.
+
+5 October 2017
+
+Motion Imagery Standards Board
+
+6
+
+ST 0603.5 MISP Time System and Timestamps
+Table 3: Time Status Byte
+Time Status
+UL: 06.0E.2B.34.01.01.01.01.0E.01.01.03.10.00.00.00 (CRC 30903)
+bit 7
+bit 6
+bit 5
+bits 4-0
+
+0 = Locked (internal clock locked to absolute time reference)
+1 = Lock Unknown (internal clock not locked to absolute time reference)
+0 = Normal (time incrementing forward in a linear fashion)
+1 = Discontinuity (time has not incremented forward in a linear fashion)
+0 = Forward (when bit 6 = 1, indicates time jumped forward)
+1 = Reverse (when bit 6 = 1, indicates time jumped backwards)
+Reserved (‘11111’)
+
+Bit 6 signals time is incrementing forward in a linear fashion, or there is a discontinuity in the
+count, such as either a forward non-linear or reverse jump as a by-product of relocking the clock
+to a reference, or other correction. Bit 5 signals a forward non-linear increment or decrement in
+time; this information allows for handling such a discontinuity.
+The Time Status is coded in Motion Imagery in conjunction with either the Precision Time
+Stamp, or the Nano Precision Time Stamp.
+
+7.5 Commercial Time Stamp
+The Commercial Time Stamp is equivalent to time code, developed by SMPTE (i.e. SMPTE
+ST 12-1 [5]), composed of numerical codes expressed as hours, minutes, seconds and frames.
+Time code is widely used in commercial products, specifically broadcast, to support content
+processing. The Commercial Time Stamp has the following attributes:
+
+
+Represented as HH.MM.SS.FF (hours, minutes, seconds and frames)
+
+
+
+Resolution is one video (Motion Imagery) frame. The Commercial Time Stamp has a
+finite, cyclical count; thus, its values over time may be non-unique.
+Requirement
+
+ST 0603.2-07
+
+When a Commercial Time Stamp is used, it shall be represented in accordance
+with SMPTE ST 12-1 [5].
+
+A Commercial Time Stamp is optional in MISP Motion Imagery Systems. Because of its
+commercial heritage, the format and location for the Commercial Time Stamp within Motion
+Imagery are governed by commercial standards.
+If included in the Motion Imagery, the Commercial Time Stamp is recommended to be derived
+from the MISP Time System. SMTPE EG 40 [6] provides guidance for converting between
+“absolute time” and time code. However, since the Commercial Time Stamp may be changed
+during editing/processing, there is no guarantee its initial value(s) will persist.
+
+5 October 2017
+
+Motion Imagery Standards Board
+
+7
+
+ST 0603.5 MISP Time System and Timestamps
+
+8 Deprecated Requirements
+Requirement(s)
+ST 0603.2-01
+(Deprecated)
+ST 0603.2-02
+(Deprecated)
+ST 0603.2-03
+(Deprecated)
+ST 0603.2-04
+(Deprecated)
+ST 0603.2-05
+(Deprecated)
+ST 0603.2-06
+(Deprecated)
+
+5 October 2017
+
+Coordinated Universal Time (UTC) shall be the time reference source for deriving
+the time stamps defined in this Standard.
+The US Global Positioning System (GPS) shall be the authoritative time reference
+source for UTC.
+The Precision Time Stamp shall be derived from Universal Coordinated Time
+(UTC) without leap seconds.
+The Precision Time Stamp shall be a 64-bit unsigned integer representing
+“Microseconds since 1970” (1970-01-01T00:00:00Z).
+The Commercial Time Stamp shall be derived from Universal Coordinated Time
+(UTC) without leap seconds.
+The Commercial Time Stamp shall represent the identical time of the Precision
+Time Stamp within the resolution of the Commercial Time Stamp.
+
+Motion Imagery Standards Board
+
+8
+
+ST 0603.5 MISP Time System and Timestamps
+
+9 Appendix A – Revision in MISB Guidance: Rationale – Informative
+Prior to MISB ST 0603.3, MISB guidance for deriving a Precision Time Stamp was predicated
+on: Coordinated Universal Time (UTC) as a time standard “reference”; an Epoch of midnight
+January 1, 1970; and, a count of the number of microseconds since 1970 (the Epoch) consistent
+with the POSIX standard. This guidance had the following issues:
+
+
+Issue: Leap seconds in UTC and “microseconds since 1970” are inconsistent.
+Rationale: Practically, this introduced some confusion and inaccuracies in the guidance.
+The Precision Time Stamp is defined as a continuous count of microseconds since the
+Epoch; however, some implementations have used UTC as the time reference, which
+introduces leap seconds into the Precision Time Stamp. UTC is only used to define the
+MISP Time System Epoch, not continuous time for implementations. Using UTC
+introduces the maintenance of leap seconds, which requires correcting for a current
+date/time accumulation of leap seconds to the time of interest. Leap second corrections
+are listed within a table maintained by the National Institute of Standards and Technology
+(NIST). Thus, deriving a timestamp from a count of seconds since an Epoch is made
+more complicated than desired.
+
+
+
+Issue: Two methods are used for computing the offset between atomic time (International
+Atomic Time or TAI) and UTC depending on whether the offset is computed before or
+after 1972-01-01T00:00:00.0.
+Rationale: Before the Epoch for UTC (1972-01-01), fractional offsets were computed and
+the UTC second was not equivalent to an SI Second. After 1972-01-01T00:00:00, UTC
+accounts for whole second offsets (leap seconds) only, and the UTC second is the SI
+Second. This means that basing time on UTC, yet computing time from the earlier Epoch
+of 1970, has a fractional component. To date, the offset used by MISB is 8 seconds
+(typical in common use), but the offset is more accurately 8.000082. The difference
+between the two time values is 82 microseconds; not a significant difference in systems
+fielded to date, but may become more relevant with increasingly stringent timing
+requirements.
+
+
+
+Issue: POSIX time does not include leap seconds; however, POSIX is not a linear scale of
+time. At leap second boundaries POSIX time may add (or subtract) one second of time.
+This produces a “double” (or “missing”) count in time values.
+Rationale: In the POSIX standard, leap seconds are not included, thereby deviating from
+UTC. Keeping POSIX in synchronization with UTC – or not – is implementation
+dependent; different methods for performing synchronization are used. For example, by
+either counting an extra second and then jumping back to delete that extra count (i.e.
+count 0-60 instead of 0-59), or holding the count for one second at the leap second
+update. This results in a non-linear, non-uniform counts of time, which impacts
+applications when computing time differences.
+
+5 October 2017
+
+Motion Imagery Standards Board
+
+9
+
+ST 0603.5 MISP Time System and Timestamps
+
+
+Issue: POSIX does not define the second to be based on the International System of Units
+(SI) second. Effectively, a second in POSIX time is different from the SI Second.
+Rationale: POSIX does not define the duration of a second. Thus, there is no guarantee
+from system-to-system the duration of a second is the same. Over periods of time these
+differences impact calculations. Considering the goal is to define a measurement of time
+(i.e. the Precision Time Stamp) to mark temporal events, so that calculations on collected
+data can be facilitated accurately, the pre-advised use of POSIX time does not serve this
+intent, where computing differences in timestamps may be in error by as much as one
+second. With technology progressing in higher image densities and frame rates, and the
+associated maturation of data-processing algorithms, accurate timestamps are
+increasingly becoming more important.
+
+Changes to the guidance creates the following issue regarding the Universal Label (UL) for the
+Precision Time Stamp:
+
+
+Issue: Within the SMPTE RP210v13 dictionary, the assigned key for the Precision Time
+Stamp carries the name “POSIX Microseconds.”
+Resolution: In RP210v10 the name was “User defined Time Stamp – microseconds since
+1970.” This definition is consistent with the new guidance; the later definition in
+RP210v13 introduces confusion. Assuming this key name remains, the recommendation
+is to interpret this key name to mean “microseconds as referenced to the POSIX Epoch”.
+The POSIX Epoch is the same as the UNIX Epoch, which is the same Epoch in the MISP
+Time System. Nothing has changed across all ST 0603 versions regarding the Epoch.
+With this interpretation POSIX Microseconds is a count of microseconds since the
+POSIX Epoch – which is effectively the guidance found in ST 0603.4.
+
+Other changes:
+Earlier versions of MISB documents, such as ST 0601, refer to UTC, POSIX and UNIX
+timestamp almost interchangeably; these documents were authored prior to the introduction of
+the Precision Time Stamp. Most, if not all, of these documents have been updated to use
+terminology consistent with ST 0603.4. Be aware when referring to these earlier documents of
+these differences.
+Please consult the Motion Imagery Handbook [2] for a more thorough discussion on time
+systems and the recommendations made in this document.
+
+5 October 2017
+
+Motion Imagery Standards Board
+
+10
+
+

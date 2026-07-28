@@ -24,6 +24,7 @@ _(`type: Standard Reference` — per-MISB-standard synthesis, citing the immutab
 * [ST 1201.5](./st1201.md) — IMAPA/IMAPB float↔int mapping + special values.
 * [ST 0601.19](./st0601.md) — UAS Datalink Local Set (~143 items); the core FMV metadata.
 * [ST 0903.6](./st0903.md) — VMTI metadata; nests under 0601.
+* [ST 0603.5](./st0603.md) — the MISP time system: epoch, Precision/Nano/Commercial time stamps, Time Status byte.
 * [ST 0604.6](./st0604.md) — Precision/Nano/commercial timestamps in the video ES (SEI/user_data).
 
 ## Encoding Rules

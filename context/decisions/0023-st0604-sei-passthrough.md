@@ -189,9 +189,11 @@ ST 0604.4-10 / -12. Full CTest suite green, including under ASan+UBSan.
 
 - **H.264 only** — H.265 uses different UUID (deferred)
 - **Always enabled** — no way to disable SEI generation for video passthrough
-- **Status byte fixed** — no support for flywheel/discontinuous time flags, and
-  its bit semantics come from ST 0603, which is not in `references/`, so the
-  0x1F we emit is unverified against the standard that defines it
+- **Time Status is fixed at `0x1F`** — verified 2026-07-28 against
+  [`st0603`](../st0603.md) §7.4 Table 3, now that ST 0603.5 is in `references/`:
+  the encoding is correct (bit 7 = 0 Locked, bit 6 = 0 Normal, bit 5 = 0
+  Forward, bits 4-0 reserved `11111`). What is *not* settled is whether it is
+  truthful — see the open question below.
 - **Picture Timing SEI is stripped from every source**, not just ones that warn —
   this deletes conformant data from the caller's video to quiet one reader. It
   predates the rewrite and is left as-is, but it is scope creep past "generate
@@ -214,6 +216,17 @@ ST 0604.4-10 / -12. Full CTest suite green, including under ASan+UBSan.
   timestamp. **Closed 2026-07-28** — `gst_video_insert_test` now decodes every
   ST 0604 SEI out of the output ES and requires each one to be a timestamp the
   KLV actually carried.
+- **We assert "clock Locked" on every frame without knowing it** (open). ST 0603.5
+  Table 3 bit 7 distinguishes *Locked* (internal clock locked to an absolute
+  time reference) from *Lock Unknown*. We emit `0x1F` — Locked — but we are
+  relaying a timestamp out of ST 0601 item 2, which carries no lock information,
+  so we have no basis for the claim. `0x9F` (Lock Unknown) is the honest default
+  when relaying someone else's timestamp; `0x1F` is only right if the caller
+  tells us the source was locked, which the API has no way to express today.
+  Bits 6/5 are a related opportunity rather than a defect: a discontinuity in
+  the KLV timestamp sequence *is* detectable from the map we already keep, so
+  Normal/Forward could be computed instead of assumed. Changing any of this
+  changes bytes every downstream reader sees, so it needs a decision.
 - **Two ST 0604 SEIs per access unit on sources that already have one** (open).
   Writing this test showed `data/klv_metadata_test_sync.ts` carries 418 of its
   own `MISPmicrosectime` SEIs, which passthrough preserves — so frames we also

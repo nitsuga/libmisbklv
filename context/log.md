@@ -2,6 +2,26 @@
 
 ## 2026-07-28
 
+* **Ingest — ST 0603.5 (MISP Time System and Timestamps)**
+  (`references/ST0603.5.pdf` + `.txt`, new [`st0603`](./st0603.md)): added to
+  settle the one byte of our ST 0604 SEI payload that nothing in the bundle
+  could check — the Time Status. §7.4 Table 3 confirms **`0x1F` is encoded
+  correctly** (bit 7 = 0 Locked, bit 6 = 0 Normal, bit 5 = 0 Forward, bits 4-0
+  reserved `11111`), and shows the code comment calling bit 7 "GPS locked" was
+  wrong: it is an internal clock's lock to an absolute reference, not GPS.
+  Comment corrected. Raised a follow-on question rather than a fix: we assert
+  Locked unconditionally while relaying an ST 0601 item-2 timestamp that carries
+  no lock information, so `0x9F` (Lock Unknown) may be the truthful value —
+  recorded as open on [ADR 0023](./decisions/0023-st0604-sei-passthrough.md),
+  since it changes bytes downstream readers see.
+
+  Also makes first-hand what the bundle asserted secondhand: epoch
+  1970-01-01T00:00:00Z, Precision Time Stamp = uint64 µs since epoch derived
+  from UTC **without leap seconds** (§8), `Nano = 1000 × Precision` (§7.3),
+  Commercial Time Stamp = SMPTE ST 12-1 time code (§7.5). Cross-linked from
+  [`st0601`](./st0601.md), [`st0903`](./st0903.md), [`st0604`](./st0604.md),
+  [`st0107`](./st0107.md); `index.md` entry added.
+
 * **ST 0604 SEI probe rewritten against `codecparsers`** (fork 21 unchanged;
   revision recorded in [ADR 0023](./decisions/0023-st0604-sei-passthrough.md),
   `src/gst/gst_backend.cpp`, `test/gst_video_insert_test.cpp`): review of the
