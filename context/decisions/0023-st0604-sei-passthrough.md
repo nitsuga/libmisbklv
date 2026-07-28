@@ -75,53 +75,65 @@ so the two interoperate without changes on their side.
 
 - **Video ES is larger** — ~35 bytes of SEI per frame (~24 KB over the 699-frame
   parrot-to-klv clip), less whatever Picture Timing SEI was stripped
-- **Test updated** — `gst_video_insert_test` now checks ES size >= source
-  instead of byte-exact
+- **Test updated** — `gst_video_insert_test` checks ES size >= source instead of
+  byte-exact, and decodes the emitted SEI back (see Validation below)
 - **Always enabled** — all video passthrough operations generate ST 0604,
   whether parrot-to-klv or other consumers
 - **Downstream compatible** — the consumer's existing SEI decoder extracts what
   we generate with no changes needed on their side
 - **Timestamps from KLV sensorTimestamp** — absolute Unix microseconds from
   ST 0601 tag 2, matched to video frames by PTS via fuzzy lookup
-- **H.264 only** — H.265 uses different UUID (Nano, ST 0604.6 §8), deferred
+- **H.264 only** — H.265 Precision uses the §7.2 UUID `a8687dd4-…` rather than
+  the ASCII identifier; that and Nano (§8) stay deferred
+- **A frame with no matching KLV gets no SEI** (revised 2026-07-28, see below) —
+  rather than a timestamp derived from relative PTS
 
 # Implementation Notes
 
-**Files modified:**
-- `src/gst/gst_backend.cpp` (~240 lines added):
-  - `kPtsMatchToleranceNs` — 200ms tolerance constant for fuzzy matching
-  - `VideoCtx::pts_to_sensor_timestamp` — thread-safe map (PTS ns → sensorTimestamp µs), no pruning
-  - `GstInserter::push()` — parses KLV tag 2, populates map (all entries persist for session)
-  - `generate_0604_sei_payload(uint64_t timestamp_microsec)` — creates SEI payload
-  - `on_h264_buffer_inject_sei()` — pad probe with fuzzy PTS lookup, Picture Timing SEI stripping
-  - `VideoCtx::generate_sei` flag — always true when video_source set
-- `CMakeLists.txt` — added `gstreamer-codecparsers-1.0` dependency
-- `test/gst_video_insert_test.cpp` — updated byte-exact check
+Revised 2026-07-28 (see Revision below); this describes the current shape.
+
+**Files:**
+- `src/gst/gst_backend.cpp`:
+  - `kPtsMatchToleranceNs` — 200 ms tolerance for the PTS match
+  - `VideoCtx::pts_to_sensor_timestamp` — mutex-guarded map (PTS ns → sensorTimestamp µs), no pruning
+  - `VideoCtx::h264_parser` — `GstH264NalParser` owned for the session, freed in `~VideoCtx`
+  - `GstInserter::push()` — parses KLV item 2, populates the map
+  - `generate_0604_sei_payload()` / `build_0604_sei_nal()` — the §7 payload and its NAL wrapper
+  - `nal_is_vcl()` / `sei_nal_has_pic_timing()` — NAL classification via codecparsers
+  - `on_h264_buffer_inject_sei()` — the pad probe
+- `CMakeLists.txt` — `gstreamer-codecparsers-1.0`
+- `test/gst_video_insert_test.cpp` — `decode_0604_seis()` plus the round-trip checks
 
 **How it works:**
-1. `open_insert()` sets `video->generate_sei = true` when video_source present
-2. **KLV parsing in push()**: extracts tag 2 (sensorTimestamp), stores `map[pts_ns] = ts_µs`
-3. `on_video_pad_added()` attaches pad probe to h264parse output if `generate_sei`
-4. **Video probe fires**: performs backward-only fuzzy PTS lookup with 200ms tolerance
-   - `upper_bound(pts_ns)` then step back to find closest entry ≤ pts_ns
-   - Falls back to relative PTS if no match found
-5. **Picture Timing SEI stripping**: scans for type 1 SEI, marks ranges for removal
-6. `generate_0604_sei_payload()` encodes absolute Unix µs per ST 0604.6 §7
-7. Probe finds first slice NAL (scan for 0x000001 start code, check type)
-8. Creates new buffer: [original - Picture Timing ranges] + [ST 0604 SEI] injected before slice
-9. SEI NAL structure: start code (3) + NAL header (1) + payload (30) + RBSP stop (1)
+1. `open_insert()` sets `generate_sei` and creates the H.264 parser when `video_source` is present
+2. `push()` extracts ST 0601 item 2 and stores `map[pts_ns] = ts_µs`
+3. `on_video_pad_added()` attaches the probe to `h264parse`'s src pad
+4. The probe matches the frame's PTS backward-only within tolerance; **no match means no SEI**
+5. One pass with `gst_h264_parser_identify_nalu()` collects Picture Timing SEI NALs to drop
+   (classified by `gst_h264_parser_parse_sei()`) and the first VCL NAL's offset
+6. The access unit is rebuilt once: original bytes minus the dropped ranges, with the
+   ST 0604 SEI spliced in before the first slice
+7. SEI NAL: start code (3) + NAL header (1) + payload (30) + RBSP stop (1) = 35 bytes
 
 **Why it works:**
-- **Absolute timestamps**: Reads actual sensorTimestamp from KLV, not derived from PTS
-- **Backward-only matching**: Never matches video to future KLV (prevents wrong-frame mismatches)
-- **200ms tolerance**: Handles gstreamer buffering (6 frames @ 30fps). Observed lag is typically submillisecond; 200ms provides ample headroom without obscuring timing expectations.
-- **Thread-safe**: Map protected by mutex, accessed from push() (app thread) and probe (streaming thread)
-- **No pruning**: Map persists all entries for session lifetime (memory cost minimal: ~16 bytes/entry, ~1KB/minute @ 30fps). Video pipeline can run behind KLV push() requiring lookups to old entries. Initial 300-entry prune limit caused failures after 10s when probe needed already-removed entries.
-- **Picture Timing removal**: Eliminates parser warnings from source SEI without proper VUI
-- Injection before slice (not before SPS/PPS) — where the downstream decoder
-  looks for it
-- Emulation prevention matches ST 0604.6 Table 2 exactly
-- Always creates new buffer (doesn't mutate) — safe for gstreamer refcounting
+- **Absolute timestamps** — the sensorTimestamp the KLV actually carried, not derived from PTS
+- **Backward-only matching** — a frame is never given a timestamp from a later KLV packet
+- **200 ms tolerance** — covers gstreamer buffering (~6 frames @ 30 fps); observed lag is
+  typically submillisecond
+- **Parsing is delegated** — start-code length, NAL boundaries and the SEI 0xFF-continuation
+  syntax come from codecparsers rather than a hand-rolled scan
+- **Offsets, not pointers** — all positions are offsets into a single mapping; pointers from
+  one `gst_buffer_map()` are not valid across an unmap/remap, because mapping a multi-memory
+  buffer can return a fresh merged allocation
+- **Fails closed** — if the rebuilt size and the bytes written disagree, the original buffer
+  passes through untouched
+- **Thread-safe** — the map is mutex-guarded (`push()` on the app thread, probe on the
+  streaming thread); the parser is touched only by the probe
+- **No pruning** — the map persists for the session. The stated per-entry cost is a
+  `std::map` node (tens of bytes, not the ~16 originally claimed), so a long session is a
+  slow unbounded grower. An earlier 300-entry cap failed once the probe needed evicted
+  entries; a time-based bound is the sane version if this ever matters.
+- Always builds a new buffer rather than mutating — safe for gstreamer refcounting
 
 # Wire format produced
 
@@ -145,12 +157,45 @@ xxxxxx  63 74 69 6d 65 1f XX XX  ff XX XX ff XX XX ff XX  |ctime...........|
 SEI appears only when `video_source` is set — without it the insert path writes
 KLV alone and there is no video ES to carry a timestamp.
 
+# Revision — 2026-07-28
+
+The decision is unchanged; the implementation was rewritten after review. The
+original hand-rolled the H.264 byte scanning next to the `codecparsers` library
+it had already added as a dependency but never called. Fixed:
+
+- **Pointers reused across an unmap/remap.** The injection point and the
+  Picture-Timing ranges were raw pointers into one mapping, compared against a
+  second mapping's addresses; the correct `insertion_offset` was computed and
+  never used. When the two mappings differ (multi-memory buffers) nothing
+  matched, so a buffer sized for the edit was left partly unwritten — appending
+  uninitialised heap to every frame, or overflowing when stripped ranges
+  exceeded 35 bytes. Now offsets in a single mapping, with a size check that
+  passes the original through if the arithmetic and the copy disagree.
+- **SEI scanning was unbounded and mis-parsed the syntax.** It walked past the
+  SEI NAL into slice data and read payload type/size as single bytes, which the
+  0xFF-continuation encoding breaks. Now `gst_h264_parser_parse_sei()`.
+- **The relative-PTS fallback invented timestamps.** On a lookup miss it emitted
+  a well-formed ST 0604 timestamp near 1970 that a reader cannot tell from a
+  real one. Now it emits nothing.
+- **Endianness.** The timestamp was extracted by aliasing the `uint64_t`; now by
+  shifting, so the wire format no longer depends on the host being little-endian.
+- Minor: NAL walking is bounds-correct via `gst_h264_parser_identify_nalu()`,
+  and the replacement buffer no longer leaks if its write mapping fails.
+
+Verified against ST 0604.6 §7.1 Table 1 and §7.4 Table 2, requirements
+ST 0604.4-10 / -12. Full CTest suite green, including under ASan+UBSan.
+
 # Known limitations
 
 - **H.264 only** — H.265 uses different UUID (deferred)
 - **Always enabled** — no way to disable SEI generation for video passthrough
-- **Byte ordering** — implementation assumes little-endian host (x86_64)
-- **Status byte fixed** — no support for flywheel/discontinuous time flags
+- **Status byte fixed** — no support for flywheel/discontinuous time flags, and
+  its bit semantics come from ST 0603, which is not in `references/`, so the
+  0x1F we emit is unverified against the standard that defines it
+- **Picture Timing SEI is stripped from every source**, not just ones that warn —
+  this deletes conformant data from the caller's video to quiet one reader. It
+  predates the rewrite and is left as-is, but it is scope creep past "generate
+  0604" and worth revisiting with the two-SEI question above.
 
 # Assumptions / open questions
 
@@ -166,7 +211,18 @@ KLV alone and there is no video ES to carry a timestamp.
   the `MISPmicrosectime` UUID, decode a timestamp, or check it against the KLV
   it came from. A regression that emitted malformed or misaligned SEI would
   still pass. Worth an assertion on the UUID and a round-trip of one frame's
-  timestamp.
+  timestamp. **Closed 2026-07-28** — `gst_video_insert_test` now decodes every
+  ST 0604 SEI out of the output ES and requires each one to be a timestamp the
+  KLV actually carried.
+- **Two ST 0604 SEIs per access unit on sources that already have one** (open).
+  Writing this test showed `data/klv_metadata_test_sync.ts` carries 418 of its
+  own `MISPmicrosectime` SEIs, which passthrough preserves — so frames we also
+  match now hold *two* Precision Time Stamps, the source's and ours, with
+  different values. A reader taking the first gets the source's; one taking the
+  last gets ours. The premise in Context ("sources don't have 0604") holds for
+  Parrot MP4s but not generally. Needs a decision: strip the source's when we
+  generate, defer to the source's and skip generation, or leave it. Not resolved
+  here because it changes what passthrough promises about the source's own data.
 
 # Citations
 

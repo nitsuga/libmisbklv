@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <algorithm>
 #include <fstream>
 #include <span>
 #include <string>
@@ -209,6 +210,38 @@ bool pts_series_ok(const char* who, const std::vector<std::int64_t>& got,
 }
 
 bool g_pass = true;
+// Decode every ST 0604 Precision Time Stamp SEI in an H.264 byte stream.
+// Finds the 16-byte ASCII identifier "MISPmicrosectime" (ST 0604.6 §7.1 Table 1),
+// then reads the Time Status byte and the 11-byte Modified Precision Time Stamp
+// that follow it — 2-byte groups separated by 0xFF fillers, most significant
+// first (§7.4 Table 2) — and reassembles the 8-byte microsecond value.
+std::vector<std::uint64_t> decode_0604_seis(std::span<const std::byte> es) {
+  static const char kId[] = "MISPmicrosectime";
+  constexpr std::size_t kIdLen = 16;
+  std::vector<std::uint64_t> out;
+  if (es.size() < kIdLen + 12) return out;
+
+  for (std::size_t i = 0; i + kIdLen + 12 <= es.size(); ++i) {
+    bool hit = true;
+    for (std::size_t k = 0; k < kIdLen && hit; ++k)
+      hit = u8(es, i + k) == static_cast<unsigned>(kId[k]);
+    if (!hit) continue;
+
+    const std::size_t ts = i + kIdLen + 1;  // skip identifier + Time Status byte
+    // The three 0xFF emulation-prevention fillers must be where §7.4 puts them;
+    // if they are not, this is not a well-formed Modified Precision Time Stamp.
+    if (u8(es, ts + 2) != 0xFF || u8(es, ts + 5) != 0xFF || u8(es, ts + 8) != 0xFF)
+      continue;
+
+    const std::size_t data_off[8] = {0, 1, 3, 4, 6, 7, 9, 10};  // skip the fillers
+    std::uint64_t v = 0;
+    for (std::size_t b = 0; b < 8; ++b) v = (v << 8) | u8(es, ts + data_off[b]);
+    out.push_back(v);
+    i += kIdLen + 12 - 1;
+  }
+  return out;
+}
+
 void check(const char* what, bool ok) {
   std::printf("  %-28s %s\n", what, ok ? "PASS" : "FAIL");
   g_pass = g_pass && ok;
@@ -248,9 +281,14 @@ bool remux_to_mp4(const std::string& ts, const std::string& mp4) {
 // Mux `source`'s video + `input`'s KLV into `out_path` and check the result.
 // Returns the number of video PES in the output (0 on a hard failure), so a
 // later case can be compared against an earlier one.
+// `reference_ts` is the MPEG-TS the video ultimately came from — the source
+// itself in the TS case, and the TS an MP4 source was remuxed from. It is only
+// used to identify ST 0604 SEI the source already carried, which this reader
+// cannot pull out of an MP4 directly.
 std::size_t run_case(MediaBackend& be, const std::string& source,
                      const std::vector<std::byte>& input,
-                     const std::string& out_path) {
+                     const std::string& out_path,
+                     const std::string& reference_ts) {
   std::span<const std::byte> buf = input;
   // KLV 100 ms apart, on the source's timeline from zero — the contract a video
   // branch imposes on the caller (kNoPts is rejected; checked below).
@@ -341,6 +379,55 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
                 " (source is not MPEG-TS — comparison skipped)\n",
                 out_video.payload.size(), out_video.pts_90k.size());
     check("video carried", !out_video.payload.empty());
+  }
+
+  // --- 3b. ST 0604 SEI carries the KLV's own timestamps (fork 21, ADR 0023) --
+  // The size check above passes just as well when no SEI is emitted at all, so
+  // decode them: every timestamp in the video ES must be one the KLV actually
+  // carried. Catches a missing injection, a corrupted payload, and the
+  // relative-PTS fallback that used to invent ~1970 timestamps on a miss.
+  {
+    std::vector<std::uint64_t> expected;  // sensorTimestamps we pushed
+    std::span<const std::byte> in = input;
+    for (std::size_t off = 0; off < input.size();) {
+      const std::size_t n = packet_frame_length(in.subspan(off));
+      if (n == 0) break;
+      if (auto m = Message::parse(in.subspan(off, n)); m && m->has(2))
+        if (auto ts = m->get<std::uint64_t>(2)) expected.push_back(*ts);
+      off += n;
+    }
+
+    // Some sources carry their own ST 0604 SEI, which passthrough preserves —
+    // `klv_metadata_test_sync.ts` has one per frame. So the output legitimately
+    // holds two populations: the source's, and the ones we generated from KLV.
+    std::vector<std::uint64_t> from_source;
+    if (const auto ref = read_file(reference_ts.c_str()); is_mpegts(ref)) {
+      unsigned p = 0;
+      for (const auto& e : read_pmt(ref))
+        if (is_video(e.stream_type) && !p) p = e.pid;
+      from_source = decode_0604_seis(read_pes(ref, p).payload);
+    }
+
+    const auto seen = decode_0604_seis(out_video.payload);
+    std::size_t ours = 0, foreign = 0;
+    for (const auto v : seen) {
+      if (std::find(expected.begin(), expected.end(), v) != expected.end())
+        ++ours;
+      else if (std::find(from_source.begin(), from_source.end(), v) == from_source.end())
+        ++foreign;
+    }
+    std::printf("  ST 0604 SEI: %zu in output (%zu from our KLV, %zu passed through"
+                " from source, %zu unaccounted); %zu KLV sensorTimestamps\n",
+                seen.size(), ours, from_source.size(), foreign, expected.size());
+
+    if (expected.empty()) {
+      std::printf("  (source KLV has no item 2 — SEI generation check skipped)\n");
+    } else {
+      // Injection happened at all, and every timestamp we emitted is one the KLV
+      // actually carried — no invented values, no corrupted payloads.
+      check("ST 0604 SEI generated from KLV", ours > 0);
+      check("no SEI timestamp from nowhere", foreign == 0);
+    }
   }
 
   // --- 4. KLV PTS survive the mux, on the video's timeline ------------------
@@ -541,11 +628,11 @@ int main(int argc, char** argv) {
 
   // --- the full battery, on the TS source and then on an MP4 remuxed from it -
   std::printf("MPEG-TS source (%s)\n", ts_source.c_str());
-  const std::size_t ts_frames = run_case(*be, ts_source, input, out_path);
+  const std::size_t ts_frames = run_case(*be, ts_source, input, out_path, ts_source);
 
   if (have_mp4) {
     std::printf("MP4 source (qtdemux path, remuxed from the TS)\n");
-    const std::size_t mp4_frames = run_case(*be, mp4, input, out_path + ".mp4.ts");
+    const std::size_t mp4_frames = run_case(*be, mp4, input, out_path + ".mp4.ts", ts_source);
     check("MP4 path: same frame count", mp4_frames == ts_frames && ts_frames);
     std::remove(mp4.c_str());
     std::remove((out_path + ".mp4.ts").c_str());

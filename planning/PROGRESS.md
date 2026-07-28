@@ -43,10 +43,13 @@ done and extending incrementally** — the state today:
   stripped, a Precision Time Stamp SEI generated from the KLV item-2
   `sensorTimestamp` and injected before the first slice — so a downstream reader
   gets the same absolute time from the video stream and the metadata stream.
-  Frames are matched to KLV by PTS (backward-only, 200 ms tolerance), falling
-  back to relative PTS when nothing matches. Always on when `video_source` is
-  set; no transcode, picture data untouched. H.264 only — H.265 Nano and reading
-  0604 back out stay deferred ([ADR 0009](../context/decisions/0009-st0604-deferred.md)).
+  Frames are matched to KLV by PTS (backward-only, 200 ms tolerance); a frame
+  with no match gets no SEI rather than an invented timestamp. Always on when
+  `video_source` is set; no transcode, picture data untouched. H.264 only —
+  H.265 and reading 0604 back out stay deferred
+  ([ADR 0009](../context/decisions/0009-st0604-deferred.md)). NAL and SEI
+  parsing go through gstreamer's `codecparsers`; the output is checked by
+  decoding the SEI back and requiring every timestamp to be one the KLV carried.
 - **Read and write share one timeline**
   ([ADR 0021](../context/decisions/0021-read-path-timestamps.md)): both
   extractors report `pts_ns` as nanoseconds from the start of the source — the
@@ -79,6 +82,11 @@ None currently.
 
 ## Next
 
+- **Decide what passthrough owes a source's own ST 0604 SEI** — sources that
+  already carry `MISPmicrosectime` (as `data/klv_metadata_test_sync.ts` does)
+  now come out with two Precision Time Stamps per matched access unit, theirs
+  and ours. Strip theirs, defer to theirs, or leave it: open question on
+  [ADR 0023](../context/decisions/0023-st0604-sei-passthrough.md).
 - **Registry breadth — 0903 side**: the remaining VMTI/VTarget items, as data
   needs them. (0601 is complete.)
 - **An SRT-specific hermetic streaming test** — the udp live path is covered,

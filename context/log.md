@@ -1,5 +1,28 @@
 # Knowledge Bundle Log
 
+## 2026-07-28
+
+* **ST 0604 SEI probe rewritten against `codecparsers`** (fork 21 unchanged;
+  revision recorded in [ADR 0023](./decisions/0023-st0604-sei-passthrough.md),
+  `src/gst/gst_backend.cpp`, `test/gst_video_insert_test.cpp`): review of the
+  fork 21 implementation found it hand-rolling H.264 byte scanning beside the
+  `gstreamer-codecparsers-1.0` dependency it had added and never called. Four
+  real defects — pointers reused across an unmap/remap (which could append
+  uninitialised heap to every frame), an unbounded SEI scan that mis-parsed the
+  0xFF-continuation syntax, a relative-PTS fallback that emitted well-formed
+  ~1970 timestamps on a lookup miss, and an endianness assumption — plus a leak
+  on a failed write mapping. The decision itself did not change. Wire format
+  re-verified against ST 0604.6 §7.1 Table 1 / §7.4 Table 2 and requirements
+  ST 0604.4-10/-12. Full CTest suite green, and green under ASan+UBSan.
+
+  `gst_video_insert_test` now decodes ST 0604 SEI back out of the muxed output
+  and requires every timestamp to be one the KLV carried — the coverage gap ADR
+  0023 had flagged as open. Writing it surfaced a new one: **`data/klv_metadata_test_sync.ts`
+  carries 418 of its own `MISPmicrosectime` SEIs**, so on such sources the
+  output now holds two Precision Time Stamps per matched access unit — the
+  source's and ours. Recorded as an open question on ADR 0023; it needs a
+  decision about what passthrough owes the source's own data.
+
 ## 2026-07-27
 
 * **Fork 21 resolved — ST 0604 SEI generation on the video passthrough path**
