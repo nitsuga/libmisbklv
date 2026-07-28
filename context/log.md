@@ -2,6 +2,11 @@
 
 ## 2026-07-28
 
+* **`tools/gst-container/run.sh` verified end to end.** The docker daemon came
+  back after the earlier hang; ran `run.sh` unmodified with no cached state
+  assumptions beyond the already-built image — 25/25 under gstreamer 1.24.2.
+  README's "not yet verified" caveat removed.
+
 * **Video passthrough no longer needs a decoder installed to avoid decoding.**
   Fork 23, [ADR 0025](./decisions/0025-explicit-demuxer-passthrough.md): the
   chain is built explicitly — `filesrc ! demuxer`, container sniffed up front —

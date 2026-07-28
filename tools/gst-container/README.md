@@ -14,29 +14,12 @@ The image is built on first use and cached. The repo is mounted **read-only**;
 the build lands in `build-container-<version>/` on the host, so rebuilds are
 incremental and `.gitignore` already covers it.
 
-## Status — `run.sh` is not yet verified end to end
+## Status — verified end to end
 
-**Proven:** the image, and building + running the suite inside it. That path was
-used repeatedly on 2026-07-28 and is what found the two bugs below — 25/25 under
-gstreamer 1.24.2, twice.
-
-**Not proven:** `run.sh` itself. Two bugs in the wrapper were found and fixed
-while writing it (a `-t` flag that fails without a terminal, and `[ -t 1 ] && …`
-ending the script under `set -e`), and then the host's docker daemon became
-unresponsive before a clean run completed. So the script is committed as a
-starting point, not as something known to work. **Run it once and confirm before
-trusting it.** If it misbehaves, this is the invocation that was actually used —
-the script is only a wrapper around it:
-
-```sh
-docker build --network=host -t misbklv-dev:24.04 tools/gst-container
-docker run --rm \
-  -v "$PWD:/src:ro" -v "$PWD/build-container-24.04:/b" -e HOME=/tmp \
-  misbklv-dev:24.04 bash -c '
-    cmake -S /src -B /b -DCMAKE_BUILD_TYPE=Release >/dev/null &&
-    cmake --build /b -j"$(nproc)" >/dev/null &&
-    ctest --test-dir /b --output-on-failure --timeout 180'
-```
+`run.sh` itself has now run clean, unattended, on 2026-07-28: 25/25 under
+gstreamer 1.24.2. The two wrapper bugs found while writing it (a `-t` flag that
+fails without a terminal, and `[ -t 1 ] && …` ending the script under `set -e`)
+are fixed and this run went through both code paths.
 
 ## Why bother
 
