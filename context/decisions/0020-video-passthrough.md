@@ -152,18 +152,13 @@ is trivially revisited if a consumer needs it (link non-video pads too).
   `realtime` with video) is out of scope and currently rejected.
 - **Only the first video stream is carried.** Multi-video sources are rare here;
   if one matters, the choice of *which* stream would need to enter the API.
-- **ST 0604 SEI passthrough limitation (2026-07-27):** Sources with ST 0604
-  Precision Time Stamps embedded as H.264 SEI Picture Timing messages (e.g.,
-  Parrot MP4s) will have those SEI messages preserved in the output, but the
-  AVC→byte-stream remux path (parsebin→h264parse→mpegtsmux) doesn't fully
-  maintain VUI/SPS/SEI association context. Some downstream readers may warn
-  "didn't get the associated sequence parameter set" when parsing these SEI
-  messages. This is a known consequence of ST 0604 deferral
-  ([`0009`](./0009-st0604-deferred.md)) — proper SEI handling requires NAL/VUI
-  work this design explicitly avoided. The KLV stream (ST 0601 item 2) carries
-  timestamps independently. Mitigation: `h264parse config-interval=-1` ensures
-  SPS/PPS are inserted with every IDR frame, which helps but doesn't fully
-  resolve the VUI association issue.
+- **The video ES is no longer byte-identical (2026-07-27,
+  [`0023`](./0023-st0604-sei-passthrough.md)):** this design's "parsed, never
+  decoded" property still holds — no transcode — but H.264 passthrough now
+  rewrites each access unit's NAL stream to strip Picture Timing SEI and inject
+  a generated ST 0604 Precision Time Stamp SEI. Callers comparing output ES
+  bytes against the source will see a difference; the picture data itself is
+  untouched.
 - A source that is a valid file but has no video stream fails as
   `Error::Unsupported`, which is also what an unparseable file returns — the
   distinction isn't visible to callers. The pipeline's own error text (e.g.

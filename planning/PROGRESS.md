@@ -37,6 +37,16 @@ done and extending incrementally** — the state today:
   ([ADR 0022](../context/decisions/0022-no-output-on-failure.md)) — a failing or
   never-called `finish()` removes the file it created, never one that was there
   first.
+- **Passthrough video carries ST 0604 timestamps**
+  ([ADR 0023](../context/decisions/0023-st0604-sei-passthrough.md)): on the H.264
+  path the video ES is rewritten per access unit — source Picture Timing SEI
+  stripped, a Precision Time Stamp SEI generated from the KLV item-2
+  `sensorTimestamp` and injected before the first slice — so a downstream reader
+  gets the same absolute time from the video stream and the metadata stream.
+  Frames are matched to KLV by PTS (backward-only, 200 ms tolerance), falling
+  back to relative PTS when nothing matches. Always on when `video_source` is
+  set; no transcode, picture data untouched. H.264 only — H.265 Nano and reading
+  0604 back out stay deferred ([ADR 0009](../context/decisions/0009-st0604-deferred.md)).
 - **Read and write share one timeline**
   ([ADR 0021](../context/decisions/0021-read-path-timestamps.md)): both
   extractors report `pts_ns` as nanoseconds from the start of the source — the

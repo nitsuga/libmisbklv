@@ -30,6 +30,22 @@
   the downstream consumer's SEI decoder. Full CTest suite green (25/25).
   Status: accepted, implementation complete and validated.
 
+* **Fork 21 opened — ST 0604 SEI, framed as *preservation***
+  ([ADR 0023](./decisions/0023-st0604-sei-passthrough.md), `status: proposed` at
+  this point): opened from a `parrot-to-klv` finding that its downstream client
+  extracts ST 0604 timestamps from the video ES and wasn't getting them.
+  Superseded within the day by the accepted entry above, which corrects the
+  framing: Parrot MP4s have no SEI to preserve (timestamps live in an `mett`
+  metadata track), so the task is *generation*, not preservation.
+
+* **H.264 SEI/SPS association mitigation** (`src/gst/gst_backend.cpp`): set
+  `h264parse config-interval=-1` (SPS/PPS with every IDR) to quiet downstream
+  "didn't get the associated sequence parameter set" warnings when remuxing
+  Parrot sources, and noted the residue as a known limitation on ADRs 0009/0020.
+  The `config-interval` setting survives; the limitation notes do **not** — ADR
+  0023 strips the offending Picture Timing SEI outright, so both notes were
+  removed on 2026-07-28. Retained here as the chronology of how 0023 was reached.
+
 ## 2026-07-26
 
 * **Fix MP4 video source pipeline failures** (`src/gst/gst_backend.cpp`):

@@ -14,8 +14,10 @@ Datalink LS) + ST 0903 (VMTI) — from/to MPEG-TS containers via a gstreamer
 backend, file or stream (real-time insertion via `appsrc`). See
 [ADR 0008](../context/decisions/0008-media-backend-gstreamer.md).
 
-Deferred from v1 (revisit): ST 0604 (ES timestamps —
-[ADR 0009](../context/decisions/0009-st0604-deferred.md)), an ffmpeg backend,
+Deferred from v1 (revisit): most of ST 0604 (ES timestamps —
+[ADR 0009](../context/decisions/0009-st0604-deferred.md); its H.264 *generation*
+side landed early on the video passthrough path,
+[ADR 0023](../context/decisions/0023-st0604-sei-passthrough.md)), an ffmpeg backend,
 ST 0102 security, ST 0807 registry as a data product, ST 1607 amend/segment
 beyond MSID passthrough.
 
@@ -35,8 +37,13 @@ beyond MSID passthrough.
   both on stock gstreamer, no custom element. The in-library PMT-rewrite element that ADR 0008 planned
   was proven unnecessary ([ADR 0015](../context/decisions/0015-no-pmt-rewrite.md)).
   Ongoing within this phase: registry breadth (below).
-- **Phase 4 — 0604 ES timestamps** (deferred — [ADR 0009](../context/decisions/0009-st0604-deferred.md)):
-  SEI / `user_data` injection/extraction, emulation-prevention stuff/de-stuff.
+- **Phase 4 — 0604 ES timestamps** (partly landed early, remainder deferred —
+  [ADR 0009](../context/decisions/0009-st0604-deferred.md)): H.264 Precision
+  Time Stamp SEI *generation* (with emulation-prevention stuffing) came forward
+  into Phase 3 for a consumer
+  ([ADR 0023](../context/decisions/0023-st0604-sei-passthrough.md)). Still here:
+  reading 0604 back out of an ES, H.265 Nano, Commercial time code, H.262
+  `user_data`.
 - **Phase 5 — Hardening** (largely landed, continuing alongside Phase 3): the
   adversarial/real-world test pass (`hardening_test`, ASan+UBSan in CI),
   conformance against the standards' own worked examples

@@ -27,6 +27,15 @@ metadata↔video correlation for the common case.
 ([`0008`](./0008-media-backend-gstreamer.md)); the 0604 ES-timestamp layer is
 revisited after v1. The core KLV value proposition does not depend on it.
 
+**Partially resolved (2026-07-27) — see [`0023`](./0023-st0604-sei-passthrough.md).**
+A consumer need pulled the *generation* half forward ahead of v1: on the video
+passthrough path ([`0020`](./0020-video-passthrough.md)) we now write H.264
+Precision Time Stamp SEI from the KLV item-2 timestamp. This ADR stays
+`deferred` because what it defers is broader than what 0023 delivered. Still
+deferred: **reading** 0604 back out of a source ES, H.265 Nano
+(ST 0604.6 §8), Commercial time code, H.262 `user_data`, and any 0604 handling
+off the video-passthrough path.
+
 # Alternatives considered
 
 - **0604 in v1** — rejected for v1: a second custom gstreamer element
@@ -39,7 +48,9 @@ revisited after v1. The core KLV value proposition does not depend on it.
 # Consequences
 
 - v1 standards coverage: **0601 / 0903** (KLV); ST 0604 deferred —
-  `CLAUDE.md` / `README` reconciled on accept.
+  `CLAUDE.md` / `README` reconciled on accept. (Both restated on
+  2026-07-27 to scope the deferral to what [`0023`](./0023-st0604-sei-passthrough.md)
+  left open.)
 - The [`0604`](../st0604.md) concept doc stays in the KB as reference for when
   it's revisited.
 - When started, 0604 will need: an in-library SEI-injector gstreamer element
@@ -56,14 +67,10 @@ revisited after v1. The core KLV value proposition does not depend on it.
   together is natural.
 - Scope when revisited: Precision Time Stamp first; Nano (H.265-only) and
   Commercial time-code as follow-ons.
-- **Passthrough limitation (2026-07-27):** Video passthrough
-  ([`0020`](./0020-video-passthrough.md)) preserves existing ST 0604 SEI
-  messages from the source but doesn't fully maintain their VUI/SPS association
-  context through the remux. Some downstream readers warn "didn't get the
-  associated sequence parameter set" when parsing Picture Timing SEI. This is a
-  known consequence of deferring 0604 — proper SEI handling requires the
-  NAL/SEI/VUI work this deferral explicitly postponed. The KLV stream (ST 0601
-  item 2) carries timestamps independently.
+- **Revisit trigger fired (2026-07-27):** the "a consumer needs 0604
+  specifically" condition above is what opened fork 21 — see
+  [`0023`](./0023-st0604-sei-passthrough.md) for the generation side. The
+  remaining deferred scope is listed under Decision.
 - **Prior-art scan (2026-07-18):** [`jmisb`](../prior-art-jmisb.md) (broad KLV
   lib, 20+ standards) implements **no 0604** — no SEI/NAL/H.26x anywhere —
   independently confirming 0604 is a *video-ES* subsystem, not KLV, and won't
