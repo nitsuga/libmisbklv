@@ -2,6 +2,40 @@
 
 ## 2026-07-28
 
+* **Reverted the stream-order change below — it caused two regressions, one of
+  them silent data loss.** `gst_backend.cpp` is back to its pre-`4ced331` form:
+  KLV is `0:0`, video is `0:1`. Full reasoning, both failed approaches and the
+  measurements are now in
+  [ADR 0020 § Stream order](./decisions/0020-video-passthrough.md).
+  - **Dropped the KLV stream entirely, intermittently.** Deferring the `appsrc`
+    link gets the PMT order right but leaves the pad *set* racy: the wait returns
+    when the demuxer pad is linked while preroll carries on, so a muxer reaching
+    its first output first wrote a **video-only PMT**. A playable file, exit 0,
+    no telemetry — worse than the KLV-only PMT the wait was originally added to
+    prevent, because that one fails loudly. 4/60 under load downstream; 0/52 on
+    the pre-change build.
+  - **Destabilised ST 0604 SEI timing, separately.** `linear time: SEI emitted`,
+    `forward jump: Discontinuity reported`, `round trip: re-emitted`, `MP4 path:
+    same frame count` all began flaking — 6/25 on an *idle* box against 0/25
+    before. Linking the KLV branch after the video branch prerolls changes when
+    its segment is established, and SEI matches PTS within a tolerance.
+  - **A block probe on the muxer's src pad fixed the first and not the second**
+    (0/60 on the PMT race, still 6/25 overall), which is what settled the revert:
+    the deferral itself is the problem, not just what the muxer emitted.
+  - **Reserving the video pad up front — the approach that should work — does
+    not.** `mpegtsmux` refuses the later link onto an activated request pad with
+    `GST_PAD_LINK_NOFORMAT`: it is checked against the parser's *current* caps
+    (`avc` from the demuxer) against the muxer's `byte-stream`, though the
+    *template* caps intersect fine. Explicit `gst_element_link_pads_filtered`
+    onto the named pad fails identically. Measured, not reasoned.
+  - **`gst_video_insert_test` now pins the order** (`PMT: KLV announced first
+    (known, ADR 0020)`), so the next attempt is a visible change rather than
+    something that slides in beside a regression.
+  - **The lesson is about evidence, not `mpegtsmux`.** The original change was
+    green on its first suite run. Both regressions were timing-dependent and one
+    only surfaced in a downstream consumer. Pipeline-construction changes need
+    repeated runs under load before they are believed.
+
 * **Video passthrough insertion now orders video before KLV in the output
   PMT** (`gst_backend.cpp`): stream 0:0 is video, 0:1 is KLV, verified with
   `ffprobe`. `mpegtsmux` assigns PID/stream order by the order sink pads are

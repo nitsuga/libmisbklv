@@ -73,6 +73,16 @@ the matching defaulted constructor argument.
   yields no video pad (unparseable, or audio-only) fails with
   `Error::Unsupported`; the wait is bounded (10 s) and also breaks on a bus
   error.
+- **The PMT announces KLV first, video second — and that stands** (added
+  2026-07-28, after an attempt to change it was reverted). `mpegtsmux` numbers
+  the PMT by the order sink pads are *requested*, and the KLV `appsrc` is linked
+  while the pipeline is still NULL, so it takes `sink_0`. The video pad can only
+  be requested once the demuxer exposes its pad, which is necessarily later.
+
+  Cosmetically this is wrong way round — a consumer doing `ffmpeg -map 0:0`
+  expects video — but every way of reversing it that we have tried costs
+  correctness, and correctness is not a trade we make for stream numbering. See
+  *Stream order* below for what was tried and measured.
 - **One timeline, enforced.** Both branches must share the source's timeline or
   the KLV does not line up with the frames it describes. The video branch is
   timestamped from the file, running from zero; the caller must therefore push
@@ -179,6 +189,65 @@ is trivially revisited if a consumer needs it (link non-video pads too).
   a generated ST 0604 Precision Time Stamp SEI. Callers comparing output ES
   bytes against the source will see a difference; the picture data itself is
   untouched.
+
+## Stream order: why KLV is `0:0` and why it stays there (2026-07-28)
+
+Attempted, shipped, and reverted the same day. Recorded here because the cost
+was real and the next person to notice `0:0` is the metadata stream will want to
+fix it too.
+
+**The constraint.** `mpegtsmux` assigns PMT position by the order sink pads are
+*requested*. To put video first, its pad must be requested first — but the video
+pad's caps are only known once the demuxer exposes it, which requires `PAUSED`.
+The KLV `appsrc` has no such dependency and is linked while the pipeline is
+still NULL. That asymmetry is the whole problem.
+
+**Attempt 1 — defer the `appsrc` link until after the video-pad wait.** Gets the
+order right and is the version that shipped. It is racy twice over:
+
+- The wait returns as soon as the demuxer pad is *linked*, while preroll
+  continues on the streaming threads. A muxer that reaches its first output
+  before the app thread gets back to linking the `appsrc` writes a **video-only
+  PMT and drops the KLV entirely** — a playable file, exit 0, no telemetry.
+  Measured 4 failures in 60 runs of a downstream consumer's mux test under CPU
+  load; 0 in 52 on the pre-change build.
+- Independently, it destabilised **ST 0604 SEI timing**. Linking the KLV branch
+  after the video branch has prerolled changes when its segment is established,
+  and SEI generation matches KLV PTS to frame PTS within a tolerance. `linear
+  time: SEI emitted`, `forward jump: Discontinuity reported`, `round trip:
+  re-emitted` and `MP4 path: same frame count` began failing intermittently — 6
+  runs in 25 on an *idle* box, versus 0 in 25 before the change.
+
+  A block probe on the muxer's src pad, released once both sink pads exist,
+  fixes the first problem completely and the second not at all: 0/60 on the PMT
+  race, still 6/25 overall. Ordering and completeness are separate mechanisms,
+  and the SEI damage is caused by the deferral itself, not by what the muxer
+  emitted.
+
+**Attempt 2 — reserve the video sink pad up front, before linking the `appsrc`.**
+This is the shape that *should* work: both pads requested on one thread while the
+pipeline is still NULL, no deferral, no timing change at all. It does not work,
+and the reason is worth knowing. `mpegtsmux` refuses the later link onto that
+reserved pad with `GST_PAD_LINK_NOFORMAT`, because once the pad has been
+activated through the state change the link is checked against the parser's
+*current* caps — still `avc`, straight from the demuxer — while the muxer accepts
+only `byte-stream`. The **template** caps intersect perfectly; the current ones
+do not. A freshly requested pad renegotiates on link, an activated reserved one
+will not. Inserting the capsfilter explicitly, via
+`gst_element_link_pads_filtered` onto the pad by name, fails the same way.
+
+**Decision: leave the order alone.** Stream numbering is cosmetic; dropped
+telemetry and wrong timestamps are not. A consumer that needs the video can
+select it by stream type or codec rather than by index, which is what a PMT is
+for. `gst_video_insert_test` now pins the current order so a future attempt is a
+visible, deliberate change.
+
+**The transferable lesson** is not about `mpegtsmux`. The shipped change was
+green on its first suite run and had been reasoned about carefully; both
+regressions were load- and timing-dependent, and one of them only showed up in a
+*downstream* consumer. Any change to pipeline construction order needs repeated
+runs under load before it is believed — a single green suite is close to no
+evidence at all.
 - A source that is a valid file but has no video stream fails as
   `Error::Unsupported`, which is also what an unparseable file returns — the
   distinction isn't visible to callers. The pipeline's own error text (e.g.

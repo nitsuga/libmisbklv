@@ -386,6 +386,13 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
     if (e.stream_type == 0x06 && e.klva) { ++nklv; klv_pid = e.pid; }
   }
   check("PMT: video + KLV, only", es.size() == 2 && nvideo == 1 && nklv == 1);
+  // KLV is announced *first*, video second — a known limitation, not a choice:
+  // mpegtsmux orders the PMT by pad-request order, and every way of requesting
+  // the video pad first costs correctness (ADR 0020 § stream order). Pinned so
+  // that a future attempt to flip it shows up here as a deliberate change rather
+  // than sliding in beside a regression, which is exactly how it went wrong once.
+  check("PMT: KLV announced first (known, ADR 0020)",
+        es.size() == 2 && es[0].stream_type == 0x06 && es[0].klva);
 
   // --- 2. KLV byte-exact through the mux ------------------------------------
   std::vector<std::byte> klv_back;

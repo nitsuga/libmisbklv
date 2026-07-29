@@ -109,6 +109,13 @@ None currently.
 
 ## Known gaps
 
+- **The output PMT announces KLV as stream 0 and video as stream 1**, which is
+  the wrong way round for tooling that selects by index (`ffmpeg -map 0:0`).
+  `mpegtsmux` orders by pad-request order and the video pad cannot be requested
+  until the demuxer exposes it; every reversal tried cost either the KLV stream
+  or ST 0604 timing, so the order stands
+  ([ADR 0020](../context/decisions/0020-video-passthrough.md) § Stream order).
+  Select by stream type or codec, not by index.
 - Report-on-Change, multi-byte BER-OID tags, and malformed-input robustness are
   now **covered synthetically** by `hardening_test`; still worth a *real*
   RoC-trimmed or multi-byte-tag capture if one turns up (current coverage is

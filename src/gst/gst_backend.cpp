@@ -1036,10 +1036,8 @@ class GstBackend : public MediaBackend {
     gst_caps_unref(caps);
     if (cfg.realtime) g_object_set(sink, "sync", TRUE, nullptr);
     gst_bin_add_many(GST_BIN(pipeline), appsrc, mux, sink, nullptr);
-    if (!gst_element_link(mux, sink)) return fail(pipeline, Error::Backend);
-    // appsrc's link to mux is deferred past the video-pad wait below: mpegtsmux
-    // assigns PMT stream order (and so ffprobe's 0:N index) by the order sink
-    // pads are requested, so linking KLV first would put it ahead of video.
+    if (!gst_element_link_many(appsrc, mux, sink, nullptr))
+      return fail(pipeline, Error::Backend);
 
     // Video passthrough: filesrc ! demuxer, joining the same muxer. The
     // demuxer's pads are linked as they appear, through a parser where the
@@ -1141,10 +1139,6 @@ class GstBackend : public MediaBackend {
         g_warning("misbklv: %d extra video stream(s) in '%s' not carried",
                   ignored, video_path.c_str());
     }
-
-    // Now that the video pad (if any) has already claimed its mux sink pad,
-    // request the KLV one: video ends up stream 0, KLV stream 1.
-    if (!gst_element_link(appsrc, mux)) return fail(pipeline, Error::Backend);
 
     if (gst_element_set_state(pipeline, GST_STATE_PLAYING) ==
         GST_STATE_CHANGE_FAILURE)
