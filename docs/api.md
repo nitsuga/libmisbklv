@@ -46,6 +46,12 @@ generated — give the sink a `video_source`. Its video elementary stream is
 re-muxed **unchanged** (parsed, never decoded, so H.264 and H.265 both just
 work); the source's audio and any KLV it already carries are dropped.
 
+**Select streams by type, not by index.** The muxer announces the KLV first, so
+`0:0` is the metadata and `0:1` the video (`ffmpeg -map 0:v`). It orders the PMT
+by internal pad order and reversing that costs more than it is worth — see
+[ADR 0020](../context/decisions/0020-video-passthrough.md) § Stream order. PIDs
+and stream types are correct either way.
+
 ```cpp
 KlvSink out("file:output.ts", /*realtime=*/false, "input.mp4");
 

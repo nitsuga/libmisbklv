@@ -31,6 +31,8 @@
   - **`gst_video_insert_test` now pins the order** (`PMT: KLV announced first
     (known, ADR 0020)`), so the next attempt is a visible change rather than
     something that slides in beside a regression.
+  - The user guide and PROGRESS now warn that `0:0` is the metadata stream, so
+    a consumer meets the limitation in the docs rather than in their output.
   - **The lesson is about evidence, not `mpegtsmux`.** The original change was
     green on its first suite run. Both regressions were timing-dependent and one
     only surfaced in a downstream consumer. Pipeline-construction changes need
