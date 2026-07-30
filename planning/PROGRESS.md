@@ -109,6 +109,11 @@ None currently.
 
 ## Known gaps
 
+- **"Now" above is still a feature inventory**, which the rule added on
+  2026-07-30 says it shouldn't be: most of its bullets describe what the library
+  *does* — durable knowledge owned by a `context/` concept or an ADR — rather
+  than where the work is. Migrating them (move each capability into the concept
+  that owns it, leave a pointer) is pending.
 - **The output PMT announces KLV as stream 0 and video as stream 1**, which is
   the wrong way round for tooling that selects by index (`ffmpeg -map 0:0`).
   `mpegtsmux` orders by pad-request order and the video pad cannot be requested

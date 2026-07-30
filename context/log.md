@@ -1,5 +1,19 @@
 # Knowledge Bundle Log
 
+## 2026-07-30
+
+* **Backported the planning-hygiene hardening from `okf-project-template`.** New
+  rule: "Now" is where the *work* is, not a feature inventory — if a sentence
+  would still be true after a month of no work it is durable knowledge and
+  belongs in a `context/` concept or an ADR. The rule is in `CLAUDE.md`, its
+  reasoning in [`workflow-rationale.md`](./workflow-rationale.md), which now also
+  marks a rule *observed* where a real incident produced it and asks future
+  sessions to append their own. This repo's own "Now" does not yet comply —
+  recorded under PROGRESS § Known gaps.
+* **Adopted an explicit prose-style rule**: American English everywhere prose
+  appears, matching the American-spelled MISB item names we quote, with
+  `references/` and vendored code exempt (`CLAUDE.md` § Prose style).
+
 ## 2026-07-28
 
 * **Reverted the stream-order change below — it caused two regressions, one of

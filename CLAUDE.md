@@ -53,7 +53,10 @@ inconvenient.**
 - [`planning/PROGRESS.md`](planning/PROGRESS.md) — **present state only**
   (Now / In-progress / Next). Volatile; rewrite each session. No "Done" history
   (that's `log.md`); "Next" is the 1–3 *immediate* actions and **points to ROADMAP
-  for the candidate backlog** — it doesn't re-list it.
+  for the candidate backlog** — it doesn't re-list it. "Now" is where the *work*
+  is, **not a feature inventory**: if a sentence would still be true after a month
+  of no work, it's durable knowledge — it belongs in a `context/` concept or an
+  ADR, with only a pointer here.
 - [`planning/ROADMAP.md`](planning/ROADMAP.md) — scope, phases, and the **single
   backlog** of open + candidate *forks* (a **fork** = a decision point that needs
   a choice — a fork in the road, not a git fork; see CONVENTIONS § Decisions).
@@ -87,6 +90,20 @@ So:
   only in a dated `log.md` snapshot (history, frozen at write time). Same for any
   state that moves — describe the state, don't tally it.
 
+## Prose style
+
+**American English**, everywhere prose appears — code comments, doc strings, CLI
+help and error text, test messages, Markdown, commit messages. `behavior` not
+`behaviour`, `center` not `centre`, `-ize`/`-ization` not `-ise`/`-isation`,
+`meters` not `metres`, `license` (noun and verb), `judgment`, `analyze`. This is
+consistency, not correctness: the standards this library implements (MISB ST
+0601, "Frame **Center**") are American-spelled, so matching them keeps our prose
+and the item names we quote from disagreeing on the same page.
+
+**`references/` is exempt and must not be touched** — it is immutable
+source-of-truth input. So is any vendored third-party code: read it, never
+restyle it.
+
 ## Commit messages
 
 No `Co-Authored-By` trailer — keep history clean. When committing on the user's
@@ -95,6 +112,7 @@ behalf, write the message without the Claude co-authorship line.
 ## Repo layout
 
 - `references/` — MISB standards (PDF + `.txt` extract). Source of truth.
+  **Read, never modify.**
 - `context/` — agent knowledge bundle (maintain this).
 - `docs/` — human-facing guides (terse).
 - `data/` — sample MPEG-TS test vectors (Day Flight, Night Flight IR).

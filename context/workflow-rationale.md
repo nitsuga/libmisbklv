@@ -10,7 +10,8 @@ timestamp: 2026-07-25T00:00:00Z
 
 The hygiene rules in [`../CLAUDE.md`](../CLAUDE.md) § Planning hygiene look fussy
 until you've watched docs rot. **Read this before relaxing one** — each earned its
-place by a failure mode, most of them observed in this repo:
+place by a failure mode — the ones marked *observed* were paid for in this repo
+or its sibling, not imagined:
 
 - **One job per doc.** When two docs narrate the same thing, one copy drifts and
   you can't tell which is right. So: history lives only in [`log.md`](./log.md),
@@ -30,20 +31,37 @@ place by a failure mode, most of them observed in this repo:
   only ever a frozen snapshot in a dated `log.md` line.
 - **Closing scrubs the future / one home for open work.** Forward-looking content
   drifts exactly like history: resolve an item but leave it listed under "Next" /
-  "candidate" elsewhere, and the docs now lie. This one has a concrete origin —
-  ROADMAP and PROGRESS both carried candidate lists, so resolved forks (the
-  stop-token, multi-byte BER-OID tags) survived in the copy nobody was editing.
-  So a candidate lives in *one* place (ROADMAP's backlog), and resolving it means
-  deleting its forward-looking mentions too — not just updating the present-state
-  bullet.
+  "candidate" elsewhere, and the docs now lie. *Observed*: ROADMAP and PROGRESS
+  both carried candidate lists, so resolved forks (the stop-token, multi-byte
+  BER-OID tags) survived in the copy nobody was editing. So a candidate lives in
+  *one* place (ROADMAP's backlog), and resolving it means deleting its
+  forward-looking mentions too — not just updating the present-state bullet.
+- **"Now" is where the *work* is, not what the library *does*.** Present state
+  attracts capability description — "the registry covers every §8 item", "the gst
+  backend does insertion" — because it is true right now. But it is durable
+  knowledge, owned by a `context/` concept or an ADR, and PROGRESS re-narrating it
+  is the same duplication in a costume. *Observed*: "Now" here grew past 80 lines
+  of feature inventory, most blocks restating an ADR they also linked. It grows
+  without bound because nothing prompts you to *delete* a capability — unlike a
+  task, which closing removes. The test: if a sentence would still be true after a
+  month of no work, it is knowledge, not status.
 - **Lint is the backstop.** Nothing fires it automatically, so run it periodically
   (closing a fork, before a release) — see [`CONVENTIONS.md`](./CONVENTIONS.md)
   § Operations. But the real lever is reducing what *can* drift (the rules above),
   so the lint has little to catch.
 
-The meta-lesson: **duplication rots — in both tenses.** Most of these rules are
+The meta-lesson: **duplication rots — in every tense.** Most of these rules are
 one idea (don't say the same thing in two places) applied to the past (history,
-decisions) and the future (open/candidate work).
+decisions), the future (open/candidate work), and the timeless (what the library
+does — knowledge, not status).
+
+**Add your own scars.** When one of these rules fails here — you find the stale
+claim, the orphaned "Next", the tally nobody updated — append a one-line
+*observed* origin to the matching bullet, naming what actually drifted. A rule
+carrying a concrete incident survives the first time it is inconvenient; a rule
+that reads as general principle gets deleted. This is the one place in the
+workflow where accumulating history is correct: these are the reasons, not the
+chronology, so they belong here rather than in [`log.md`](./log.md).
 
 This file is the single home for that rationale. It lives in `context/` — not the
 top-level `README.md` — so the project's README stays human-facing: what
