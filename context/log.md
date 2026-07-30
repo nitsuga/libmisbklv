@@ -10,6 +10,10 @@
   marks a rule *observed* where a real incident produced it and asks future
   sessions to append their own. This repo's own "Now" does not yet comply —
   recorded under PROGRESS § Known gaps.
+* **Fixed the link-check CI's blind spot.** It silently remapped root-absolute
+  links onto `context/` before checking existence, so the one form CONVENTIONS
+  bans was the one form it repaired — which is how ~68 of them accumulated here
+  under green CI before the 2026-07-27 lint. It now flags them instead.
 * **Adopted an explicit prose-style rule**: American English everywhere prose
   appears, matching the American-spelled MISB item names we quote, with
   `references/` and vendored code exempt (`CLAUDE.md` § Prose style).

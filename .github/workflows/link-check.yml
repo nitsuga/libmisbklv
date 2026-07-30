@@ -30,11 +30,15 @@ jobs:
                   t = m.split('#')[0].strip()
                   if not t or t.startswith(('http://', 'https://', 'mailto:')):
                       continue
-                  # bundle-relative absolute links ("/st0601.md") resolve from context/
-                  p = (os.path.join('context', t.lstrip('/')) if t.startswith('/')
-                       else os.path.normpath(os.path.join(base, t)))
-                  if not os.path.exists(p):
+                  # Root-absolute links resolve against the site root, not the
+                  # bundle root, so they work nowhere. CONVENTIONS bans them —
+                  # flag them, never silently remap them onto context/.
+                  if t.startswith('/'):
+                      print(f'ROOT-ABSOLUTE  {f}  ->  {m}   (use a ./relative path)')
+                      bad += 1
+                      continue
+                  if not os.path.exists(os.path.normpath(os.path.join(base, t))):
                       print(f'BROKEN  {f}  ->  {m}'); bad += 1
-          print('all internal links resolve' if not bad else f'{bad} broken link(s)')
+          print('all internal links resolve' if not bad else f'{bad} bad link(s)')
           sys.exit(1 if bad else 0)
           PY
