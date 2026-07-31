@@ -14,6 +14,22 @@ void wr_uint(Bytes& out, std::uint64_t v, int len) {
     out.push_back(static_cast<std::byte>((v >> (8 * i)) & 0xFF));
 }
 
+bool valid_numeric_width(std::size_t len) {
+  return len >= 1 && len <= 8;
+}
+
+bool fits_uint(std::uint64_t v, std::size_t len) {
+  return len == 8 || v <= ((std::uint64_t{1} << (8 * len)) - 1);
+}
+
+bool fits_int(std::int64_t v, std::size_t len) {
+  if (len == 8) return true;
+  const int bits = 8 * static_cast<int>(len);
+  const std::int64_t max = (std::int64_t{1} << (bits - 1)) - 1;
+  const std::int64_t min = -max - 1;
+  return v >= min && v <= max;
+}
+
 std::int64_t rd_int(std::span<const std::byte> b) {
   std::uint64_t u = rd_uint(b);
   const int bits = 8 * static_cast<int>(b.size());
@@ -36,15 +52,41 @@ double linear_decode(const ItemDescriptor& d, std::span<const std::byte> raw) {
 }
 void linear_encode(const ItemDescriptor& d, double x, Bytes& out, int len) {
   if (d.is_signed) {
-    const double imax = static_cast<double>((1ull << (8 * len - 1)) - 1);
-    const auto v = static_cast<std::int64_t>(std::llround(x * imax / d.map.max));
-    wr_uint(out, static_cast<std::uint64_t>(v), len);
+    const int bits = 8 * len;
+    const std::uint64_t positive_max = (1ull << (bits - 1)) - 1;
+    const std::uint64_t negative_max =
+        static_cast<std::uint64_t>(-static_cast<std::int64_t>(positive_max));
+    // LinearLDS reserves the most-negative integer. Encode the descriptor
+    // endpoints explicitly: a double cannot distinguish INT64_MAX from 2^63.
+    if (x == d.map.min) {
+      wr_uint(out, negative_max, len);
+      return;
+    }
+    if (x == d.map.max) {
+      wr_uint(out, positive_max, len);
+      return;
+    }
+    const double imax = static_cast<double>(positive_max);
+    const double rounded = std::round(x * imax / d.map.max);
+    // Clamp before conversion. For widths 7 and 8, `positive_max` may round
+    // up in double precision; the bounds keep every float-to-int conversion
+    // within the signed 64-bit range and avoid emitting the reserved code.
+    const std::uint64_t encoded =
+        !std::isfinite(rounded) || rounded <= -imax ? negative_max
+        : rounded >= imax                          ? positive_max
+                                                   : static_cast<std::uint64_t>(
+                                                         static_cast<std::int64_t>(rounded));
+    wr_uint(out, encoded, len);
   } else {
     const double denom =
         (len >= 8) ? 18446744073709551615.0 : static_cast<double>((1ull << (8 * len)) - 1);
-    const auto v = static_cast<std::uint64_t>(
-        std::llround((x - d.map.min) * denom / (d.map.max - d.map.min)));
-    wr_uint(out, v, len);
+    const double rounded = std::round((x - d.map.min) * denom / (d.map.max - d.map.min));
+    // As above, the all-ones 64-bit value rounds to 2^64 as a double.
+    const std::uint64_t encoded =
+        !std::isfinite(rounded) || rounded <= 0.0 ? 0
+        : rounded >= 0x1p64                       ? std::numeric_limits<std::uint64_t>::max()
+                                                  : static_cast<std::uint64_t>(rounded);
+    wr_uint(out, encoded, len);
   }
 }
 
@@ -164,30 +206,61 @@ Result<Value> decode(const ItemDescriptor& d, std::span<const std::byte> raw) {
 Result<Bytes> encode(const ItemDescriptor& d, const Value& v, std::size_t len) {
   Bytes out;
   switch (d.kind) {
-    case ValueKind::UInt:
-      wr_uint(out, std::get<std::uint64_t>(v), static_cast<int>(len));
+    case ValueKind::UInt: {
+      if (!std::holds_alternative<std::uint64_t>(v))
+        return Result<Bytes>::err(Error::TypeMismatch);
+      if (!valid_numeric_width(len)) return Result<Bytes>::err(Error::BadLength);
+      const auto value = std::get<std::uint64_t>(v);
+      if (!fits_uint(value, len)) return Result<Bytes>::err(Error::RangeError);
+      wr_uint(out, value, static_cast<int>(len));
       return Result<Bytes>::ok(std::move(out));
-    case ValueKind::Int:
-      wr_uint(out, static_cast<std::uint64_t>(std::get<std::int64_t>(v)),
-              static_cast<int>(len));
+    }
+    case ValueKind::Int: {
+      if (!std::holds_alternative<std::int64_t>(v))
+        return Result<Bytes>::err(Error::TypeMismatch);
+      if (!valid_numeric_width(len)) return Result<Bytes>::err(Error::BadLength);
+      const auto value = std::get<std::int64_t>(v);
+      if (!fits_int(value, len)) return Result<Bytes>::err(Error::RangeError);
+      wr_uint(out, static_cast<std::uint64_t>(value), static_cast<int>(len));
       return Result<Bytes>::ok(std::move(out));
-    case ValueKind::LinearLDS:
-      linear_encode(d, std::get<double>(v), out, static_cast<int>(len));
+    }
+    case ValueKind::LinearLDS: {
+      if (!std::holds_alternative<double>(v))
+        return Result<Bytes>::err(Error::TypeMismatch);
+      if (!valid_numeric_width(len)) return Result<Bytes>::err(Error::BadLength);
+      const double value = std::get<double>(v);
+      if (!std::isfinite(value) || value < d.map.min || value > d.map.max)
+        return Result<Bytes>::err(Error::RangeError);
+      linear_encode(d, value, out, static_cast<int>(len));
       return Result<Bytes>::ok(std::move(out));
-    case ValueKind::IMAPB:
+    }
+    case ValueKind::IMAPB: {
+      if (!std::holds_alternative<double>(v))
+        return Result<Bytes>::err(Error::TypeMismatch);
+      if (!valid_numeric_width(len)) return Result<Bytes>::err(Error::BadLength);
+      // ST 1201 represents NaN, infinity, and values outside [min,max] as
+      // structural special values rather than returning RangeError.
       imapb_encode(d, std::get<double>(v), out, static_cast<int>(len));
       return Result<Bytes>::ok(std::move(out));
+    }
     case ValueKind::Utf8: {
+      if (!std::holds_alternative<std::string_view>(v))
+        return Result<Bytes>::err(Error::TypeMismatch);
       auto sv = std::get<std::string_view>(v);
       for (char c : sv) out.push_back(static_cast<std::byte>(c));
       return Result<Bytes>::ok(std::move(out));
     }
-    default: {
+    case ValueKind::Bytes:
+    case ValueKind::NestedLS:
+    case ValueKind::Pack: {
+      if (!std::holds_alternative<std::span<const std::byte>>(v))
+        return Result<Bytes>::err(Error::TypeMismatch);
       auto sp = std::get<std::span<const std::byte>>(v);
       out.assign(sp.begin(), sp.end());
       return Result<Bytes>::ok(std::move(out));
     }
   }
+  return Result<Bytes>::err(Error::TypeMismatch);
 }
 
 std::uint16_t bcc16(std::span<const std::byte> data) {

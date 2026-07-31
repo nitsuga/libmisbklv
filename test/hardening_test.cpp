@@ -5,9 +5,11 @@
 //  (3) malformed / adversarial bytes must return a Result error, never crash
 //      or invoke UB (run under -fsanitize=address,undefined via MISBKLV_SANITIZE).
 // argv: <dayflight_first_packet.klv>
+#include <cmath>
 #include <cstddef>
 #include <cstdio>
 #include <fstream>
+#include <limits>
 #include <span>
 #include <vector>
 
@@ -36,6 +38,162 @@ static std::vector<std::byte> read_file(const char* path) {
   return out;
 }
 static std::byte B(int v) { return static_cast<std::byte>(v & 0xFF); }
+
+static ItemDescriptor numeric_descriptor(ValueKind kind, bool is_signed = false,
+                                         MappingParams map = {0.0, 100.0}) {
+  ItemDescriptor d{};
+  d.kind = kind;
+  d.is_signed = is_signed;
+  d.map = map;
+  return d;
+}
+
+template <class F>
+static void check_type_mismatch_no_throw(F&& f, const char* what) {
+  bool threw = false;
+  bool type_mismatch = false;
+  try {
+    auto r = f();
+    type_mismatch = !r && r.error() == Error::TypeMismatch;
+  } catch (...) {
+    threw = true;
+  }
+  check(!threw && type_mismatch, what);
+}
+
+static void check_bad_numeric_lengths(const ItemDescriptor& d, const Value& v,
+                                      const char* what) {
+  auto zero = codec::encode(d, v, 0);
+  auto nine = codec::encode(d, v, 9);
+  check(!zero && zero.error() == Error::BadLength, what);
+  check(!nine && nine.error() == Error::BadLength, what);
+}
+
+static void check_encoded_bytes(const Result<ber::Bytes>& got,
+                                std::initializer_list<std::byte> want,
+                                const char* what) {
+  check(got && *got == ber::Bytes(want), what);
+}
+
+// --- (0) typed encode input validation -------------------------------------
+static void test_typed_encode_validation() {
+  std::printf("(0) typed encode input validation\n");
+
+  const ItemDescriptor uint_d = numeric_descriptor(ValueKind::UInt);
+  const ItemDescriptor int_d = numeric_descriptor(ValueKind::Int, true);
+  const ItemDescriptor linear_d = numeric_descriptor(ValueKind::LinearLDS);
+  const ItemDescriptor imapb_d = numeric_descriptor(ValueKind::IMAPB);
+  const ItemDescriptor utf8_d = numeric_descriptor(ValueKind::Utf8);
+  const ItemDescriptor bytes_d = numeric_descriptor(ValueKind::Bytes);
+  const ItemDescriptor nested_d = numeric_descriptor(ValueKind::NestedLS);
+  const ItemDescriptor pack_d = numeric_descriptor(ValueKind::Pack);
+
+  // Every descriptor kind rejects a mismatched variant as an ordinary Result
+  // error, rather than letting std::get throw.
+  check_type_mismatch_no_throw(
+      [&] { return codec::encode(uint_d, Value{std::int64_t{1}}, 1); },
+      "UInt wrong Value alternative -> TypeMismatch (no throw)");
+  check_type_mismatch_no_throw(
+      [&] { return codec::encode(int_d, Value{std::uint64_t{1}}, 1); },
+      "Int wrong Value alternative -> TypeMismatch (no throw)");
+  check_type_mismatch_no_throw(
+      [&] { return codec::encode(linear_d, Value{std::uint64_t{1}}, 1); },
+      "LinearLDS wrong Value alternative -> TypeMismatch (no throw)");
+  check_type_mismatch_no_throw(
+      [&] { return codec::encode(imapb_d, Value{std::uint64_t{1}}, 1); },
+      "IMAPB wrong Value alternative -> TypeMismatch (no throw)");
+  check_type_mismatch_no_throw(
+      [&] { return codec::encode(utf8_d, Value{std::uint64_t{1}}, 0); },
+      "Utf8 wrong Value alternative -> TypeMismatch (no throw)");
+  check_type_mismatch_no_throw(
+      [&] { return codec::encode(bytes_d, Value{std::uint64_t{1}}, 0); },
+      "Bytes wrong Value alternative -> TypeMismatch (no throw)");
+  check_type_mismatch_no_throw(
+      [&] { return codec::encode(nested_d, Value{std::uint64_t{1}}, 0); },
+      "NestedLS wrong Value alternative -> TypeMismatch (no throw)");
+  check_type_mismatch_no_throw(
+      [&] { return codec::encode(pack_d, Value{std::uint64_t{1}}, 0); },
+      "Pack wrong Value alternative -> TypeMismatch (no throw)");
+  check_type_mismatch_no_throw(
+      [&] {
+        LocalSetBuilder b(gen::uas_0601);
+        return b.set(2, Value{1.0});  // Precision Time Stamp is UInt
+      },
+      "LocalSetBuilder wrong Value alternative -> TypeMismatch (no throw)");
+
+  // All numeric encoders reject the invalid widths before any shifting or
+  // mapping arithmetic can occur.
+  check_bad_numeric_lengths(uint_d, Value{std::uint64_t{0}},
+                            "UInt widths 0 and 9 -> BadLength");
+  check_bad_numeric_lengths(int_d, Value{std::int64_t{0}},
+                            "Int widths 0 and 9 -> BadLength");
+  check_bad_numeric_lengths(linear_d, Value{0.0},
+                            "LinearLDS widths 0 and 9 -> BadLength");
+  check_bad_numeric_lengths(imapb_d, Value{0.0},
+                            "IMAPB widths 0 and 9 -> BadLength");
+
+  // Width one makes the precise signed/unsigned representable limits obvious.
+  check(static_cast<bool>(codec::encode(uint_d, Value{std::uint64_t{0}}, 1)) &&
+            codec::encode(uint_d, Value{std::uint64_t{255}}, 1),
+        "UInt width-1 boundaries succeed");
+  auto uint_over = codec::encode(uint_d, Value{std::uint64_t{256}}, 1);
+  check(!uint_over && uint_over.error() == Error::RangeError,
+        "UInt width-1 overflow -> RangeError");
+  check(static_cast<bool>(codec::encode(int_d, Value{std::int64_t{-128}}, 1)) &&
+            codec::encode(int_d, Value{std::int64_t{127}}, 1),
+        "Int width-1 boundaries succeed");
+  auto int_low = codec::encode(int_d, Value{std::int64_t{-129}}, 1);
+  auto int_high = codec::encode(int_d, Value{std::int64_t{128}}, 1);
+  check(!int_low && int_low.error() == Error::RangeError &&
+            !int_high && int_high.error() == Error::RangeError,
+        "Int width-1 overflow -> RangeError");
+
+  // At eight bytes, both LinearLDS endpoints must avoid floating-point
+  // conversion overflow. The most-negative signed pattern is reserved, so the
+  // minimum real endpoint is represented by INT64_MIN + 1.
+  const ItemDescriptor signed_linear =
+      numeric_descriptor(ValueKind::LinearLDS, true, {-100.0, 100.0});
+  const ItemDescriptor unsigned_linear =
+      numeric_descriptor(ValueKind::LinearLDS, false, {0.0, 100.0});
+  const auto signed_min = codec::encode(signed_linear, Value{-100.0}, 8);
+  const auto signed_max = codec::encode(signed_linear, Value{100.0}, 8);
+  const auto unsigned_min = codec::encode(unsigned_linear, Value{0.0}, 8);
+  const auto unsigned_max = codec::encode(unsigned_linear, Value{100.0}, 8);
+  check_encoded_bytes(signed_min,
+                      {B(0x80), B(0x00), B(0x00), B(0x00), B(0x00), B(0x00),
+                       B(0x00), B(0x01)},
+                      "signed LinearLDS width-8 minimum avoids reserved INT64_MIN");
+  check_encoded_bytes(signed_max,
+                      {B(0x7F), B(0xFF), B(0xFF), B(0xFF), B(0xFF), B(0xFF),
+                       B(0xFF), B(0xFF)},
+                      "signed LinearLDS width-8 maximum is INT64_MAX");
+  check_encoded_bytes(unsigned_min,
+                      {B(0x00), B(0x00), B(0x00), B(0x00), B(0x00), B(0x00),
+                       B(0x00), B(0x00)},
+                      "unsigned LinearLDS width-8 minimum is all zeroes");
+  check_encoded_bytes(unsigned_max,
+                      {B(0xFF), B(0xFF), B(0xFF), B(0xFF), B(0xFF), B(0xFF),
+                       B(0xFF), B(0xFF)},
+                      "unsigned LinearLDS width-8 maximum is all ones");
+
+  for (double x : {-0.1, 100.1, std::numeric_limits<double>::quiet_NaN(),
+                   std::numeric_limits<double>::infinity(),
+                   -std::numeric_limits<double>::infinity()}) {
+    auto r = codec::encode(linear_d, Value{x}, 2);
+    check(!r && r.error() == Error::RangeError,
+          "LinearLDS out-of-range/nonfinite -> RangeError");
+  }
+
+  // IMAPB preserves its ST 1201 structural-special behavior for the same input
+  // classes, rather than turning them into RangeError.
+  for (double x : {-0.1, 100.1, std::numeric_limits<double>::quiet_NaN(),
+                   std::numeric_limits<double>::infinity(),
+                   -std::numeric_limits<double>::infinity()}) {
+    auto r = codec::encode(imapb_d, Value{x}, 2);
+    check(r && codec::is_imap_special(*r),
+          "IMAPB out-of-range/nonfinite -> structural special");
+  }
+}
 
 // --- (1) multi-byte BER-OID tag (>=128) -------------------------------------
 static void test_multibyte_tag() {
@@ -146,6 +304,7 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "could not read fixture: %s\n", path);
     return 2;
   }
+  test_typed_encode_validation();
   test_multibyte_tag();
   test_roc_trimmed(full);
   test_malformed();

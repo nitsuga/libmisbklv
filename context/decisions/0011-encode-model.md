@@ -82,6 +82,14 @@ the descriptor's `[min,max]` and the item defines an out-of-range special value
 that special; otherwise it is a `RangeError`. The caller may also set an item
 *to* a special explicitly.
 
+## Implementation refinement (2026-07-31)
+
+The typed encode boundary reports a value of the wrong variant alternative as
+`Error::TypeMismatch`; an invalid requested numeric width as `BadLength`; and
+an unrepresentable raw integer or invalid/out-of-domain LinearLDS value as
+`RangeError`. IMAPB retains ST 1201's structural special encodings for
+NaN, infinity, and out-of-range values.
+
 # Alternatives considered
 
 - **Bottom-up assembly (chosen)** — lengths always known before emission; no

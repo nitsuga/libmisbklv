@@ -8,19 +8,7 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-Phases 0–2 (foundation + all design forks) done. **Phase 3 implementation is done
-and extending incrementally**: the library reads and writes ST 0601 + ST 0903
-over MPEG-TS, file and live, with video passthrough and optional ST 0604 SEI
-generation. It is packaged, installable, and consumed by `parrot-to-klv`.
-
-What it does and why is owned elsewhere, not restated here — the backend design
-in [`backend-scope.md`](../context/backend-scope.md), the per-standard synthesis
-in the [bundle index](../context/index.md), the choices in the
-[decisions register](../context/decisions/index.md), and the user-facing API in
-[`docs/api.md`](../docs/api.md). How to build and what each test suite guards is
-in `CLAUDE.md` § Build / test / run.
-
-Work continues incrementally on registry breadth and streaming coverage — see
+Between review-driven changes; the immediate parser-hardening follow-up is in
 **Next** below.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
@@ -33,6 +21,8 @@ None currently.
 
 ## Next
 
+- **Malformed-input parser hardening**: review VTarget length-overflow handling
+  and BER-OID overflow/truncation paths.
 - **Registry breadth — 0903 side**: the remaining VMTI/VTarget items, as data
   needs them. (0601 is complete.)
 - **An SRT-specific hermetic streaming test** — the udp live path is covered,

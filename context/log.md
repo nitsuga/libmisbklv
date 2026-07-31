@@ -1,5 +1,12 @@
 # Knowledge Bundle Log
 
+## 2026-07-31
+
+* **Hardened typed encode validation and its adversarial tests.** Wrong typed
+  alternatives, invalid numeric widths, raw-integer representability, and
+  LinearLDS domain failures now follow the established encode error policy;
+  IMAPB retains its ST 1201 structural-special behavior.
+
 ## 2026-07-30
 
 * **Normalized spelling to the new American-English rule** across ADRs 0020,

@@ -23,6 +23,9 @@ Result<Value> decode(const ItemDescriptor& d, std::span<const std::byte> raw);
 
 // Encode a typed Value -> raw bytes. `len` is the target width — the descriptor's
 // canonical length when authoring, or the source length when reserializing.
+// Numeric widths must be 1..8 bytes. A Value whose variant does not match
+// `d.kind` returns TypeMismatch; an invalid width returns BadLength; a value
+// that the requested representation cannot hold returns RangeError.
 Result<Bytes> encode(const ItemDescriptor& d, const Value& v, std::size_t len);
 
 // ST 1201 IMAPB float<->int mapping, including structural special values (§7.2.3).

@@ -23,6 +23,8 @@ enum class Error : std::uint8_t {
   // media backend (ADR 0013)
   Backend,      // pipeline / I/O failure
   Unsupported,  // not implemented in this backend / config
+  // Typed encode validation; appended to preserve the existing numeric codes.
+  TypeMismatch,  // Value variant does not match the ItemDescriptor::kind
 };
 
 // Minimal Result<T> — the full map/and_then API is deferred (ADR 0007).
