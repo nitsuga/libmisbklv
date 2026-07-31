@@ -8,27 +8,30 @@
 namespace misbklv {
 
 // --- KlvStream --------------------------------------------------------------
-KlvStream::KlvStream(std::unique_ptr<MediaBackend> backend, std::string source)
-    : backend_(std::move(backend)), source_(std::move(source)) {
+KlvStream::KlvStream(std::unique_ptr<MediaBackend> backend, std::string source,
+                     ExtractOptions options)
+    : backend_(std::move(backend)), source_(std::move(source)), options_(options) {
   producer_ = std::thread([this] {
-    backend_->extract(
+    auto result = backend_->extract(
         source_,
         [this](const KlvPacket& kp) {
           push_frame(Frame{
               std::vector<std::byte>(kp.bytes.begin(), kp.bytes.end()),
               kp.pts_ns});
         },
-        stop_source_.get_token());
+        stop_source_.get_token(), options_);
     {  // extract returned -> no more frames
       std::lock_guard<std::mutex> lk(mu_);
+      if (!stop_ && !stop_source_.stop_requested() && !result)
+        backend_error_ = result.error();
       done_ = true;
     }
     not_empty_.notify_all();
   });
 }
 
-KlvStream::KlvStream(std::string source)
-    : KlvStream(make_gst_backend(), std::move(source)) {}
+KlvStream::KlvStream(std::string source, ExtractOptions options)
+    : KlvStream(make_gst_backend(), std::move(source), options) {}
 
 KlvStream::~KlvStream() {
   {  // unblock a push_frame waiting on a full queue, so extract's teardown
@@ -54,7 +57,11 @@ void KlvStream::push_frame(Frame f) {
 bool KlvStream::pop_frame(Frame& out) {
   std::unique_lock<std::mutex> lk(mu_);
   not_empty_.wait(lk, [this] { return !queue_.empty() || done_ || stop_; });
-  if (queue_.empty()) return false;  // done/stop and drained
+  if (queue_.empty()) {
+    if (done_ && !stop_ && !error_ && backend_error_)
+      error_ = backend_error_;
+    return false;  // done/stop and drained
+  }
   out = std::move(queue_.front());
   queue_.pop_front();
   not_full_.notify_one();
@@ -69,19 +76,38 @@ void KlvStream::pull() {
       return;
     }
     auto m = Message::parse(f.bytes);
-    if (m) {  // skip a packet whose UL key resolves to no known registry
+    if (m) {
       m->set_pts(f.pts);
       current_.emplace(std::move(*m));
       return;
     }
+    {  // A malformed/unrecognized packet is terminal at this stream position.
+      std::lock_guard<std::mutex> lk(mu_);
+      error_ = m.error();
+      queue_.clear();
+      stop_ = true;
+    }
+    stop_source_.request_stop();
+    not_full_.notify_all();
+    not_empty_.notify_all();
+    current_.reset();
+    return;
   }
+}
+
+std::optional<Error> KlvStream::error() const {
+  std::lock_guard<std::mutex> lk(mu_);
+  return error_;
 }
 
 // --- KlvSink ----------------------------------------------------------------
 KlvSink::KlvSink(std::unique_ptr<MediaBackend> backend, InsertConfig cfg)
     : backend_(std::move(backend)) {
   auto ins = backend_->open_insert(std::move(cfg));
-  if (ins) inserter_ = std::move(*ins);  // else inserter_ null -> emit() errors
+  if (ins)
+    inserter_ = std::move(*ins);
+  else
+    open_error_ = ins.error();
 }
 
 KlvSink::KlvSink(InsertConfig cfg)
@@ -99,14 +125,16 @@ KlvSink::KlvSink(std::string sink, bool realtime, std::string video_source,
               std::move(video_source), sei_0604) {}
 
 Result<std::monostate> KlvSink::emit(const Message& m) {
-  if (!inserter_) return Result<std::monostate>::err(Error::Backend);
+  if (!inserter_)
+    return Result<std::monostate>::err(open_error_.value_or(Error::Backend));
   auto bytes = m.encode();
   if (!bytes) return Result<std::monostate>::err(bytes.error());
   return inserter_->push(*bytes, m.pts());
 }
 
 Result<std::monostate> KlvSink::close() {
-  if (!inserter_) return Result<std::monostate>::err(Error::Backend);
+  if (!inserter_)
+    return Result<std::monostate>::err(open_error_.value_or(Error::Backend));
   return inserter_->finish();
 }
 

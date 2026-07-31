@@ -20,8 +20,8 @@ None currently.
 
 ## Next
 
-- **Observable high-level streaming errors**: make live extraction failures
-  visible through the streaming facade.
+- **Behavior-neutral `gst_backend.cpp` split**: separate implementation
+  responsibilities without changing behavior.
 - **Registry breadth — 0903 side**: the remaining VMTI/VTarget items, as data
   needs them. (0601 is complete.)
 - **An SRT-specific hermetic streaming test** — the udp live path is covered,

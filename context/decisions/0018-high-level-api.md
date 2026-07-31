@@ -47,7 +47,8 @@ target, not the core.
   adapts it to pull via a **background thread + a bounded blocking queue** (the
   callback copies each packet in; the iterator pops). The bound gives
   backpressure — for a file it caps memory; for a live source it composes with
-  the B4 `is-live` pacing. End of iteration = extract returned (EOS / idle).
+  the B4 `is-live` pacing. End of iteration follows queue drain; callers then
+  check the terminal status.
 - `KlvSink(sink)` wraps an `Inserter`; `emit(Message&)` pushes `m.encode()`;
   `close()` drains. Read and write are **separate endpoints** (a source you read
   and a sink you write are different things) — the canonical loop is
@@ -94,7 +95,10 @@ follow-on (the alternative not taken this pass).
 source membership to distinguish those cases: an unedited parsed `Message`
 returns exactly its original packet extent, preserving noncanonical BER and
 checksum placement while excluding trailing input bytes. `Message::create`
-continues to build packets from staged items.
+continues to build packets from staged items. `KlvStream` now accepts
+`ExtractOptions` and retains range-for iteration with a post-loop `error()`
+check; `KlvSink` preserves an opening failure for the caller. See
+[`0027`](./0027-high-level-streaming-errors.md).
 
 # Assumptions / open questions
 

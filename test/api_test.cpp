@@ -27,6 +27,7 @@ int main(int argc, char** argv) {
   {
     KlvStream in(argv[1]);
     KlvSink out(std::string("file:") + argv[2]);
+    check(!out.error(), "open sink");
     for (Message& m : in) {
       auto lat = m.get<double>(kSensorLatitude);
       if (lat) {
@@ -35,6 +36,7 @@ int main(int argc, char** argv) {
       }
       check(static_cast<bool>(out.emit(m)), "emit");
     }
+    check(!in.error(), "read source to clean EOS");
     check(static_cast<bool>(out.close()), "close sink");
   }
   check(!orig.empty(), "read SensorLatitude from some frames");
@@ -45,6 +47,7 @@ int main(int argc, char** argv) {
     KlvStream re(argv[2]);
     for (Message& m : re)
       if (auto lat = m.get<double>(kSensorLatitude)) got.push_back(*lat);
+    check(!re.error(), "re-read output to clean EOS");
   }
   check(got.size() == orig.size(), "same frame count after round-trip");
   bool all_edited = got.size() == orig.size();

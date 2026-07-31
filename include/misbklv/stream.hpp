@@ -34,8 +34,9 @@ namespace misbklv {
 // (no wait for the idle timeout / EOS).
 class KlvStream {
  public:
-  explicit KlvStream(std::string source);  // default gstreamer backend
-  KlvStream(std::unique_ptr<MediaBackend> backend, std::string source);
+  explicit KlvStream(std::string source, ExtractOptions options = {});
+  KlvStream(std::unique_ptr<MediaBackend> backend, std::string source,
+            ExtractOptions options = {});
   ~KlvStream();
 
   KlvStream(const KlvStream&) = delete;
@@ -55,21 +56,28 @@ class KlvStream {
   Iterator begin() { pull(); return Iterator(this); }
   Sentinel end() { return {}; }
 
+  // Terminal extraction or Message parse error, for inspection after iteration.
+  // EOS and cooperative cancellation leave this empty.
+  std::optional<Error> error() const;
+
  private:
   struct Frame { std::vector<std::byte> bytes; std::int64_t pts; };
   void pull();  // pop next frame -> parse into current_, or reset at end
 
   std::unique_ptr<MediaBackend> backend_;
   std::string source_;
+  ExtractOptions options_;
   std::optional<Message> current_;
 
   // Bounded producer/consumer queue between the extract thread and the iterator.
-  std::mutex mu_;
+  mutable std::mutex mu_;
   std::condition_variable not_full_, not_empty_;
   std::deque<Frame> queue_;
   static constexpr std::size_t kCap = 32;
   bool done_ = false;   // extract returned
-  bool stop_ = false;   // destructor asked the producer to quit
+  bool stop_ = false;   // destructor or a terminal parse error stopped the producer
+  std::optional<Error> error_;          // terminal error exposed after iteration
+  std::optional<Error> backend_error_;  // pending until queued frames drain
   std::stop_source stop_source_;  // cancels the backend extract (ADR 0019)
   std::thread producer_;
 
@@ -106,9 +114,14 @@ class KlvSink {
   Result<std::monostate> emit(const Message& m);  // m.encode() -> push
   Result<std::monostate> close();                 // drain + finish
 
+  // Failure from open_insert(), if any. Runtime emit()/close() failures remain
+  // reported by their Result values and do not change this accessor.
+  std::optional<Error> error() const { return open_error_; }
+
  private:
   std::unique_ptr<MediaBackend> backend_;
   std::unique_ptr<Inserter> inserter_;
+  std::optional<Error> open_error_;
 };
 
 }  // namespace misbklv

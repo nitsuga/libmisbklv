@@ -16,12 +16,15 @@ using namespace misbklv;
 KlvStream in("input.ts");                 // file, or "udp:127.0.0.1:5004", "srt:..."
 KlvSink   out("file:output.ts");          // realtime pacing: KlvSink(sink, true)
 
+if (out.error()) return;                // exact open_insert error
+
 for (Message& m : in) {
   if (auto lat = m.get<double>(tags::Uas0601::SensorLatitude))
     m.set(tags::Uas0601::SensorLatitude, Value{*lat + 0.001});   // nudge ~100 m north
-  out.emit(m);
+  if (auto sent = out.emit(m); !sent) return;
 }
-out.close();
+if (in.error()) return;                           // terminal extraction/parse error
+if (auto closed = out.close(); !closed) return;
 ```
 
 `for (Message& m : in)` pulls each packet until the source ends (EOS for a file;
@@ -30,9 +33,16 @@ until cancellation (for example, destroying the stream) or external source
 termination/error. `emit` re-encodes and muxes; `close` drains. See
 [`examples/klv_edit.cpp`](../examples/klv_edit.cpp).
 
-Low-level `MediaBackend::extract` callers can pass `ExtractOptions` to change the
-16 MiB default cap on a complete incrementally reassembled KLV frame. A declared
-frame above that cap returns `Error::ResourceLimit` before it is delivered.
+`KlvStream` accepts `ExtractOptions` to change the 16 MiB default cap on a
+complete incrementally reassembled KLV frame. A declared frame above that cap
+ends iteration with `Error::ResourceLimit`; already queued valid Messages still
+arrive before the terminal `in.error()` check. A Message that cannot be parsed
+ends the stream at that packet rather than being skipped. Normal EOS and
+cooperative cancellation leave `error()` empty.
+
+`KlvSink` construction stores its exact `open_insert` error for `error()`, and
+the same error is returned by `emit()` and `close()`. Check it before sending,
+then check every returned `Result` as in the example.
 
 - **Timing carries through.** `m.pts()` is where the packet sat in the source —
   nanoseconds from the start of it — and `emit` writes it back at that time, so

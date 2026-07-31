@@ -39,3 +39,4 @@ diverge — e.g. fork 7 → ADR 0004; one fork can span several ADRs — fork 4 
 | 22 | [0024 — ST 0604 SEI generation is opt-in (`Sei0604`)](./0024-sei-generation-opt-in.md) | accepted |
 | 23 | [0025 — Build the passthrough chain explicitly instead of with parsebin](./0025-explicit-demuxer-passthrough.md) | accepted |
 | 24 | [0026 — Bounded live KLV frame reassembly](./0026-bounded-live-klv-reassembly.md) | accepted |
+| 25 | [0027 — High-level streaming errors](./0027-high-level-streaming-errors.md) | accepted |

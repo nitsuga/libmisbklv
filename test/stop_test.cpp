@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "misbklv/backend.hpp"
+#include "misbklv/mock_backend.hpp"
 #include "misbklv/stream.hpp"
 
 using namespace misbklv;
@@ -58,6 +59,40 @@ class StreamingMock : public MediaBackend {
   std::vector<std::byte> pkt_;
 };
 
+// Delivers its canned frames, then returns one chosen terminal extraction error.
+class FailingBackend : public MediaBackend {
+ public:
+  FailingBackend(std::vector<ber::Bytes> packets, Error error)
+      : packets_(std::move(packets)), error_(error) {}
+
+  Result<std::monostate> extract(std::string_view, const PacketHandler& on_packet,
+                                 std::stop_token stop = {}, ExtractOptions = {}) override {
+    for (const auto& packet : packets_) {
+      if (stop.stop_requested()) return Result<std::monostate>::ok({});
+      on_packet(KlvPacket{packet, kNoPts});
+    }
+    return Result<std::monostate>::err(error_);
+  }
+  Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig&) override {
+    return Result<std::unique_ptr<Inserter>>::err(Error::Unsupported);
+  }
+
+ private:
+  std::vector<ber::Bytes> packets_;
+  Error error_;
+};
+
+class UnsupportedInsertBackend : public MediaBackend {
+ public:
+  Result<std::monostate> extract(std::string_view, const PacketHandler&,
+                                 std::stop_token = {}, ExtractOptions = {}) override {
+    return Result<std::monostate>::ok({});
+  }
+  Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig&) override {
+    return Result<std::unique_ptr<Inserter>>::err(Error::Unsupported);
+  }
+};
+
 int main(int argc, char** argv) {
   const char* path =
       argc > 1 ? argv[1] : "test/fixtures/dayflight_first_packet.klv";
@@ -74,6 +109,7 @@ int main(int argc, char** argv) {
       (void)m;
       if (++read >= 3) break;  // leaving the loop destroys `stream`
     }
+    check(!stream.error(), "early break has no spurious stream error while alive");
   }  // ~KlvStream must cancel the extract and return promptly (not hang)
   const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                       clock_t_::now() - t0).count();
@@ -93,6 +129,92 @@ int main(int argc, char** argv) {
   const int after = mock.emitted.load();
   std::this_thread::sleep_for(std::chrono::milliseconds(20));
   check(mock.emitted.load() == after, "no emissions after stop");
+
+  // --- (3) facade observes normal EOS and exact terminal errors -------------
+  std::printf("(3) KlvStream terminal errors\n");
+  {
+    KlvStream stream(std::make_unique<MockBackend>(std::vector<ber::Bytes>{pkt}), "mock");
+    int messages = 0;
+    for (Message& m : stream) {
+      (void)m;
+      ++messages;
+    }
+    check(messages == 1 && !stream.error(), "normal MockBackend EOS yields message and no error");
+  }
+  {
+    KlvStream stream(std::make_unique<FailingBackend>(std::vector<ber::Bytes>{pkt},
+                                                       Error::ResourceLimit),
+                     "failing");
+    int messages = 0;
+    for (Message& m : stream) {
+      (void)m;
+      ++messages;
+    }
+    check(messages == 1 && stream.error() == Error::ResourceLimit,
+          "queued valid message precedes exact backend ResourceLimit");
+  }
+  {
+    KlvStream stream(std::make_unique<MockBackend>(std::vector<ber::Bytes>{{}}), "malformed");
+    int messages = 0;
+    for (Message& m : stream) {
+      (void)m;
+      ++messages;
+    }
+    check(messages == 0 && stream.error() == Error::Truncated,
+          "malformed MockBackend packet terminates with Message parse error");
+  }
+  {
+    ber::Bytes unknown;
+    for (std::uint8_t b : kUas0601Key) unknown.push_back(static_cast<std::byte>(b));
+    unknown[4] = std::byte{0xFF};  // structurally packet-like, but unregistered UL
+    unknown.push_back(std::byte{0x00});
+    KlvStream stream(std::make_unique<MockBackend>(std::vector<ber::Bytes>{unknown}), "unknown");
+    int messages = 0;
+    for (Message& m : stream) {
+      (void)m;
+      ++messages;
+    }
+    check(messages == 0 && stream.error() == Error::UnknownTag,
+          "unknown MockBackend UL is not silently skipped");
+  }
+  {
+    KlvStream stream(std::make_unique<MockBackend>(std::vector<ber::Bytes>{pkt}), "limited",
+                     ExtractOptions{.max_packet_bytes = pkt.size() - 1});
+    int messages = 0;
+    for (Message& m : stream) {
+      (void)m;
+      ++messages;
+    }
+    check(messages == 0 && stream.error() == Error::ResourceLimit,
+          "KlvStream forwards ExtractOptions to backend");
+  }
+
+  // The default GStreamer facade reports an unreadable source as Backend rather
+  // than producing an empty, apparently-clean stream.
+  {
+    KlvStream stream("file:/tmp/misbklv-definitely-missing-input.ts");
+    int messages = 0;
+    for (Message& m : stream) {
+      (void)m;
+      ++messages;
+    }
+    check(messages == 0 && stream.error() == Error::Backend,
+          "missing GStreamer source yields Backend with zero messages");
+  }
+
+  // An open_insert failure stays observable on the facade and is returned by
+  // both later operations, instead of degrading to the generic Backend error.
+  {
+    auto fresh = Message::create(RegistryId::Uas0601);
+    KlvSink sink(std::make_unique<UnsupportedInsertBackend>(), "unsupported");
+    const auto emitted = fresh ? sink.emit(*fresh)
+                               : Result<std::monostate>::err(Error::Backend);
+    const auto closed = sink.close();
+    check(sink.error() == Error::Unsupported && !emitted &&
+              emitted.error() == Error::Unsupported && !closed &&
+              closed.error() == Error::Unsupported,
+          "KlvSink exposes open_insert Unsupported through error/emit/close");
+  }
 
   std::printf("%s\n", failures == 0 ? "STOP: all PASS" : "STOP: FAIL");
   return failures == 0 ? 0 : 1;

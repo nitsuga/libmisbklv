@@ -2,6 +2,15 @@
 
 ## 2026-07-31
 
+* **Made high-level streaming failures observable.** `KlvStream` drains queued
+  valid Messages before exposing a terminal backend failure, makes a Message
+  parse failure terminal, and reports normal EOS/cancellation as success.
+  `KlvSink` preserves its exact opening error through `emit()` and `close()`.
+
+* **Fork 25 — high-level streaming errors accepted:** terminal range status and
+  sink-error propagation in
+  [ADR 0027](./decisions/0027-high-level-streaming-errors.md).
+
 * **Bounded incremental GStreamer KLV reassembly.** Extraction now distinguishes
   incomplete input from malformed BER, refuses declared frames above its
   configurable cap, resynchronizes only before a valid UL, and reports natural

@@ -31,7 +31,8 @@ ffmpeg backend are deferred — see
   needed for live sources.
 - **High-level API**: an owned, editable `Message` (typed `get<T>`/`set`,
   byte-exact `encode`) plus a `KlvStream` / `KlvSink` read-edit-write facade —
-  read and write share one timeline, so editing a stream doesn't re-time it.
+  read and write share one timeline, so editing a stream doesn't re-time it;
+  terminal streaming errors are checked explicitly after iteration.
 
 ## Quick start
 
@@ -41,12 +42,14 @@ using namespace misbklv;
 
 KlvStream in("input.ts");            // a file, or "udp:127.0.0.1:5004" / "srt:..."
 KlvSink   out("file:output.ts");
+if (out.error()) return;               // open_insert failed
 for (Message& m : in) {
   if (auto lat = m.get<double>(tags::Uas0601::SensorLatitude))
     m.set(tags::Uas0601::SensorLatitude, Value{*lat + 0.001});   // nudge ~100 m north
-  out.emit(m);
+  if (!out.emit(m)) return;
 }
-out.close();
+if (in.error()) return;                // extraction or Message parse failed
+if (!out.close()) return;
 ```
 
 Full walkthrough (including the gstreamer-free path) in [`docs/api.md`](docs/api.md).
