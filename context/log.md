@@ -2,6 +2,14 @@
 
 ## 2026-07-30
 
+* **Normalized spelling to the new American-English rule** across ADRs 0020,
+  0021, 0023, 0024, this log, `tools/gst-container/`, and three spots in
+  `src/gst/gst_backend.cpp` — two comments and one `g_warning` string
+  ("an unrecognised format" → "unrecognized"). Full suite green afterwards.
+  **Deliberately untouched**: `OutOfRangeBehaviour` is jmisb's Java class name,
+  so respelling it in [`prior-art-jmisb`](./prior-art-jmisb.md) or in this log
+  would misquote the API it names. `references/` is exempt by the rule itself.
+
 * **Backported the planning-hygiene hardening from `okf-project-template`.** New
   rule: "Now" is where the *work* is, not a feature inventory — if a sentence
   would still be true after a month of no work it is durable knowledge and
@@ -148,7 +156,7 @@
   2. **`Generate` stopped replacing the source's ST 0604.** 1.22 added a parsed
      payload type for `user_data_unregistered`; before that it arrived as an
      *unhandled* payload, which is all our detection knew about. On 1.24 the
-     source's 418 SEIs were therefore not recognised and survived alongside ours
+     source's 418 SEIs were therefore not recognized and survived alongside ours
      — the exact duplication [ADR 0024](./decisions/0024-sei-generation-opt-in.md)
      exists to prevent, failing silently. Now handled both ways, guarded by
      `GST_CHECK_VERSION`.
@@ -290,7 +298,7 @@
   fork 21 implementation found it hand-rolling H.264 byte scanning beside the
   `gstreamer-codecparsers-1.0` dependency it had added and never called. Four
   real defects — pointers reused across an unmap/remap (which could append
-  uninitialised heap to every frame), an unbounded SEI scan that mis-parsed the
+  uninitialized heap to every frame), an unbounded SEI scan that mis-parsed the
   0xFF-continuation syntax, a relative-PTS fallback that emitted well-formed
   ~1970 timestamps on a lookup miss, and an endianness assumption — plus a leak
   on a failed write mapping. The decision itself did not change. Wire format
@@ -417,7 +425,7 @@
 
 * **Video passthrough — consumer review fixes** (`parrot-to-klv` reviewed the
   branch and filed four findings; [ADR 0020](./decisions/0020-video-passthrough.md)
-  amended for the behaviour change).
+  amended for the behavior change).
   **The defect**: a failed `open_insert` could leave a zero-byte `.ts`. The
   pre-flight `fopen` check only catches a *missing* source; a readable one with
   no video stream fails later, in `PAUSED`, by which point the file sink has

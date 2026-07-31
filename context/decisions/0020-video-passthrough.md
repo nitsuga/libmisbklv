@@ -169,7 +169,7 @@ is trivially revisited if a consumer needs it (link non-video pads too).
   an hour in so early timestamps can't go negative), so absolute 90 kHz PTS are
   not the pushed nanoseconds — the invariants are the *intervals* and the
   *shared origin*.
-- Backpressure is the intended behaviour, not a deadlock: the muxer waits on the
+- Backpressure is the intended behavior, not a deadlock: the muxer waits on the
   slower pad and the KLV `appsrc` is `block=TRUE`, so a caller must push in
   increasing PTS order, interleaved with the video's progress, rather than
   dumping a whole file's KLV up front. Documented on `InsertConfig`.

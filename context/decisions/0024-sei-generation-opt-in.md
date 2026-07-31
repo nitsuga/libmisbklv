@@ -69,7 +69,7 @@ in [`0023`](./0023-st0604-sei-passthrough.md).
 - **Keep it always-on** — rejected; that is the complaint. Every consumer pays
   the rewrite for one consumer's requirement, and passthrough stops meaning
   passthrough.
-- **Default to `Generate`, opt out** — rejected; it keeps surprising behaviour
+- **Default to `Generate`, opt out** — rejected; it keeps surprising behavior
   as the default and only helps the one consumer that is already going to have
   to change its pin. "We do not edit a caller's video unless asked" is the
   defensible default.
@@ -115,7 +115,7 @@ from item 2.
 
 # Consequences
 
-- **Behaviour changes for anyone on `0023`.** Passing a `video_source` no longer
+- **Behavior changes for anyone on `0023`.** Passing a `video_source` no longer
   generates SEI; `parrot-to-klv` opts in explicitly. It was re-pinning anyway.
 - **Passthrough is byte-exact again** under the default, and the test asserts it
   rather than the size comparison 0023 had to settle for.
@@ -133,7 +133,7 @@ from item 2.
 
 # Assumptions / open questions
 
-- **Recognising the source's ST 0604 depends on the gstreamer version**, and
+- **Recognizing the source's ST 0604 depends on the gstreamer version**, and
   getting it wrong is silent — the message is simply not matched, so the source's
   timestamp survives next to ours and the "one authority" property above is lost
   with nothing to signal it. 1.22 added a parsed payload type for

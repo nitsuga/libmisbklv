@@ -8,7 +8,7 @@
 #   UBUNTU=22.04 tools/gst-container/run.sh             # gst 1.20 instead
 #   GST_DEBUG=2,aggregator:5 tools/gst-container/run.sh -R gst_video_insert
 #
-# Why this exists: gstreamer behaviour differs enough between versions to hide
+# Why this exists: gstreamer behavior differs enough between versions to hide
 # real bugs. Two were found this way that a 1.20 host could not see at all — a
 # preroll deadlock that hung CI for hours a run, and, behind it, ST 0604 SEI
 # replacement silently doing nothing on 1.22+. See context/log.md, 2026-07-28.

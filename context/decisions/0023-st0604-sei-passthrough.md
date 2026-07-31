@@ -58,7 +58,7 @@ Implementation approach:
    2026-07-28: opt-in via `Sei0604` ([`0024`](./0024-sei-generation-opt-in.md))
 
 Byte layout and injection point follow ST 0604.6 §7, cross-checked against the
-encode/decode behaviour of the downstream consumer's existing SEI implementation
+encode/decode behavior of the downstream consumer's existing SEI implementation
 so the two interoperate without changes on their side.
 
 # Alternatives considered
@@ -171,7 +171,7 @@ it had already added as a dependency but never called. Fixed:
   second mapping's addresses; the correct `insertion_offset` was computed and
   never used. When the two mappings differ (multi-memory buffers) nothing
   matched, so a buffer sized for the edit was left partly unwritten — appending
-  uninitialised heap to every frame, or overflowing when stripped ranges
+  uninitialized heap to every frame, or overflowing when stripped ranges
   exceeded 35 bytes. Now offsets in a single mapping, with a size check that
   passes the original through if the arithmetic and the copy disagree.
 - **SEI scanning was unbounded and mis-parsed the syntax.** It walked past the

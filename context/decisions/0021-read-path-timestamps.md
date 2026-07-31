@@ -106,7 +106,7 @@ specified for what it can actually see.
 - `MockBackend` takes an optional per-packet `pts` vector, so the test double can
   express the contract instead of only the sentinel; omitted, it replays an
   untimed stream exactly as before.
-- One behavioural change for existing callers: code that treated `pts()` as
+- One behavioral change for existing callers: code that treated `pts()` as
   always `-1` now sees real values. The insert path's `kNoPts` fallback is
   unchanged, so a KLV-only sink fed untimed input behaves exactly as before.
 

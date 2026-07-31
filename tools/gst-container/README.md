@@ -23,7 +23,7 @@ are fixed and this run went through both code paths.
 
 ## Why bother
 
-Because gstreamer's behaviour differs between versions in ways that hide real
+Because gstreamer's behavior differs between versions in ways that hide real
 bugs, and CI was the only thing testing against a modern one. On 2026-07-28 this
 container found two faults that a gstreamer 1.20 host could not reproduce at all:
 
@@ -32,7 +32,7 @@ container found two faults that a gstreamer 1.20 host could not reproduce at all
   from one thread, so the dropped stream blocked the video behind it and the
   pipeline never prerolled. It hung CI for six hours a run.
 - **Silent loss of ST 0604 replacement.** gstreamer 1.22 added a parsed payload
-  type for `user_data_unregistered`; the code only recognised the older
+  type for `user_data_unregistered`; the code only recognized the older
   *unhandled* form, so on 1.24 a source's own timestamps survived next to the
   generated ones. Nothing failed — the output was just wrong.
 

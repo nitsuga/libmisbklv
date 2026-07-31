@@ -436,7 +436,7 @@ bool nal_is_vcl(guint type) {
 // one access unit leaves a reader guessing which is authoritative (ADR 0024).
 //
 // How a source ST 0604 SEI arrives depends on the gstreamer version, and getting
-// this wrong is silent: the message is simply not recognised, so the source's
+// this wrong is silent: the message is simply not recognized, so the source's
 // timestamp is left in place next to ours. 1.22 added a parsed payload type for
 // user_data_unregistered; before that it came through as an unhandled payload
 // and had to be matched by its raw type 5 plus the §7.1 identifier.
@@ -608,7 +608,7 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad*, GstPadProbeInfo* info,
 
   // Defensive: if the copy did not fill the buffer exactly, our size arithmetic
   // and our copy disagree. Pass the original through untouched rather than emit
-  // a buffer with an uninitialised tail.
+  // a buffer with an uninitialized tail.
   if (written != new_size || !inserted) {
     gst_buffer_unref(new_buffer);
     return GST_PAD_PROBE_OK;
@@ -1051,7 +1051,7 @@ class GstBackend : public MediaBackend {
         g_warning("misbklv: video source '%s': %s is not a container this "
                   "library demuxes",
                   video_path.c_str(),
-                  container.empty() ? "an unrecognised format" : container.c_str());
+                  container.empty() ? "an unrecognized format" : container.c_str());
         return fail(pipeline, Error::Unsupported);
       }
       GstElement* vsrc = gst_element_factory_make("filesrc", "vsrc");
