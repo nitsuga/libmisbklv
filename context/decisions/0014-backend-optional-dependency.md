@@ -18,7 +18,8 @@ the build keep gstreamer out of the core yet ship the backend when available?
 # Decision
 
 **A separate CMake target, `misbklv-gst`**, holding only the gstreamer
-implementation (`src/gst/gst_backend.cpp`); it links `misbklv` + gstreamer. The
+implementation (`src/gst/`, with a thin `gst_backend.cpp` facade and private
+responsibility units); it links `misbklv` + gstreamer. The
 core `misbklv` library never references gstreamer. An `option(MISBKLV_GSTREAMER
 ON)` gates it, and it builds only when `pkg_check_modules(gstreamer-1.0
 gstreamer-app-1.0)` succeeds — otherwise it is silently skipped and the core

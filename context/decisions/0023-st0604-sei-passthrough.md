@@ -95,7 +95,7 @@ so the two interoperate without changes on their side.
 Revised 2026-07-28 (see Revision below); this describes the current shape.
 
 **Files:**
-- `src/gst/gst_backend.cpp`:
+- `src/gst/gst_insert.cpp` and `gst_video.cpp`:
   - `kPtsMatchToleranceNs` — 200 ms tolerance for the PTS match
   - `VideoCtx::pts_to_sensor_timestamp` — mutex-guarded map (PTS ns → sensorTimestamp µs), no pruning
   - `VideoCtx::h264_parser` — `GstH264NalParser` owned for the session, freed in `~VideoCtx`

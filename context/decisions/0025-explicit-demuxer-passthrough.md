@@ -146,7 +146,7 @@ passthrough library should be writing.
   mechanism of, without changing its promise
 - [`0024`](./0024-sei-generation-opt-in.md) — `Sei0604::Generate` still refuses
   non-H.264, unchanged by this
-- `src/gst/gst_backend.cpp` — `sniff_container`, `demuxer_for_media_type`,
+- `src/gst/gst_video.cpp` — `sniff_container`, `demuxer_for_media_type`,
   `parser_for_media_type`
 - `test/gst_video_insert_test.cpp` — the MPEG-1/2 case that caught the parser
   table gap

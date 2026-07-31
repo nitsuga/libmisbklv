@@ -2,6 +2,13 @@
 
 ## 2026-07-31
 
+* **Split the GStreamer backend by responsibility without changing behavior.**
+  The thin backend facade now delegates extraction, insertion, and video/SEI
+  work to private source units. Because the split changes ownership and callback
+  seams rather than contracts, regression verification remains sensitive across
+  extraction, insertion, live streaming, video passthrough, and GStreamer
+  versions.
+
 * **Made high-level streaming failures observable.** `KlvStream` drains queued
   valid Messages before exposing a terminal backend failure, makes a Message
   parse failure terminal, and reports normal EOS/cancellation as success.

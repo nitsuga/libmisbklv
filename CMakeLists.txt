@@ -45,7 +45,12 @@ if(MISBKLV_GSTREAMER)
     pkg_check_modules(GST IMPORTED_TARGET gstreamer-1.0 gstreamer-app-1.0 gstreamer-codecparsers-1.0)
   endif()
   if(GST_FOUND)
-    add_library(misbklv-gst STATIC src/gst/gst_backend.cpp src/gst/stream.cpp)
+    add_library(misbklv-gst STATIC
+      src/gst/gst_backend.cpp
+      src/gst/gst_extract.cpp
+      src/gst/gst_insert.cpp
+      src/gst/gst_video.cpp
+      src/gst/stream.cpp)
     add_library(misbklv::gst ALIAS misbklv-gst)
     # Export as misbklv::gst (not misbklv::misbklv-gst); the ALIAS is build-tree only.
     set_target_properties(misbklv-gst PROPERTIES EXPORT_NAME gst)

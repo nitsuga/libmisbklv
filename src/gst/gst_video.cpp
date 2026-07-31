@@ -1,0 +1,520 @@
+// SPDX-License-Identifier: Apache-2.0
+#include "gst_backend_internal.hpp"
+
+#include <algorithm>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <vector>
+
+#include <gst/base/gsttypefindhelper.h>
+
+#include "misbklv/message.hpp"
+
+namespace misbklv::detail {
+namespace {
+
+inline constexpr std::chrono::seconds kVideoPadTimeout{10};
+inline constexpr std::uint64_t kPtsMatchToleranceNs = 200'000'000;
+inline constexpr std::uint8_t kTimeStatusReserved = 0b0001'1111;
+inline constexpr std::uint8_t kTimeStatusLockUnknown = 0b1000'0000;
+inline constexpr std::uint8_t kTimeStatusDiscontinuity = 0b0100'0000;
+inline constexpr std::uint8_t kTimeStatusReverse = 0b0010'0000;
+inline constexpr std::uint8_t kTimeStatusBase =
+    kTimeStatusLockUnknown | kTimeStatusReserved;
+inline constexpr std::int64_t kTimeLinearToleranceUs = 50'000;
+
+bool caps_are_video(GstCaps* caps) {
+  if (!caps || gst_caps_is_empty(caps)) return false;
+  const gchar* name = gst_structure_get_name(gst_caps_get_structure(caps, 0));
+  return name && std::strncmp(name, "video/", 6) == 0;
+}
+
+std::string caps_media_type(GstCaps* caps) {
+  if (!caps || gst_caps_is_empty(caps)) return {};
+  const gchar* name = gst_structure_get_name(gst_caps_get_structure(caps, 0));
+  return name ? std::string(name) : std::string();
+}
+
+const char* demuxer_for_media_type(const std::string& type) {
+  // This used to be parsebin's job. parsebin decides a stream is fully parsed
+  // by asking whether any decoder in the registry accepts its caps — a decoder
+  // it never instantiates. Normal systems hide this dependency because one is
+  // installed; minimal bundles do not, so parsebin never reaches final caps and
+  // reports "no suitable plugins found" for a stream it already parsed. The
+  // explicit table avoids requiring an H.264 decoder merely to not decode H.264
+  // (ADR 0025).
+  if (type == "video/quicktime") return "qtdemux";
+  if (type == "video/mpegts") return "tsdemux";
+  if (type == "video/x-matroska") return "matroskademux";
+  return nullptr;
+}
+
+std::string sniff_container(const std::string& path) {
+  // The known path lets us settle the container before a pipeline exists, so
+  // filesrc ! demuxer is built in one piece rather than a dynamic have-type
+  // branch racing preroll. 16 KiB is generous; a low-confidence answer is
+  // refused instead of half-plugging an unsupported file.
+  FILE* file = std::fopen(path.c_str(), "rb");
+  if (!file) return {};
+  std::vector<guint8> head(16384);
+  const size_t n = std::fread(head.data(), 1, head.size(), file);
+  std::fclose(file);
+  if (n == 0) return {};
+  GstTypeFindProbability probability = GST_TYPE_FIND_NONE;
+  GstCaps* caps = gst_type_find_helper_for_data(nullptr, head.data(), n, &probability);
+  if (!caps) return {};
+  std::string type;
+  if (probability >= GST_TYPE_FIND_POSSIBLE) type = caps_media_type(caps);
+  gst_caps_unref(caps);
+  return type;
+}
+
+const char* parser_for_media_type(const std::string& type) {
+  // H.26x from MP4 needs conversion from avc/hvc1 container form to byte-stream
+  // for mpegtsmux. MPEG-1/2 needs framing too: parsebin previously inserted a
+  // parser for every stream, while a bare TS demuxer hands MPEG video through
+  // unparsed and the muxer fails only at finish(). Parsers are idempotent, so a
+  // listed parser is harmless when a demuxer happened to parse already.
+  if (type == "video/x-h264") return "h264parse";
+  if (type == "video/x-h265") return "h265parse";
+  if (type == "video/mpeg") return "mpegvideoparse";
+  if (type == "video/x-h263") return "h263parse";
+  if (type == "video/x-vp9") return "vp9parse";
+  return nullptr;
+}
+
+std::vector<std::byte> generate_0604_sei_payload(std::uint64_t timestamp_microsec,
+                                                  std::uint8_t time_status) {
+  // ST 0604.6 §7: User Unregistered type 5, UUID "MISPmicrosectime", status,
+  // and the modified timestamp with its prescribed 0xFF separators.
+  std::vector<std::byte> payload;
+  payload.push_back(std::byte{5});
+  payload.push_back(std::byte{28});
+  const std::uint8_t uuid[16] = {'M','I','S','P','m','i','c','r','o','s','e','c','t','i','m','e'};
+  for (int i = 0; i < 16; ++i) payload.push_back(std::byte{uuid[i]});
+  payload.push_back(std::byte{time_status});
+  const auto ts_byte = [timestamp_microsec](unsigned i) {
+    return std::byte{static_cast<std::uint8_t>((timestamp_microsec >> (8 * (7 - i))) & 0xFF)};
+  };
+  payload.push_back(ts_byte(0));
+  payload.push_back(ts_byte(1));
+  payload.push_back(std::byte{0xFF});
+  payload.push_back(ts_byte(2));
+  payload.push_back(ts_byte(3));
+  payload.push_back(std::byte{0xFF});
+  payload.push_back(ts_byte(4));
+  payload.push_back(ts_byte(5));
+  payload.push_back(std::byte{0xFF});
+  payload.push_back(ts_byte(6));
+  payload.push_back(ts_byte(7));
+  return payload;
+}
+
+std::vector<std::byte> build_0604_sei_nal(const SensorTime& t) {
+  std::vector<std::byte> nal{std::byte{0x00}, std::byte{0x00}, std::byte{0x01},
+                             std::byte{0x06}};
+  const auto payload = generate_0604_sei_payload(t.timestamp_us, t.status);
+  nal.insert(nal.end(), payload.begin(), payload.end());
+  nal.push_back(std::byte{0x80});
+  return nal;
+}
+
+std::uint8_t sensor_time_status(std::int64_t delta_ts_us, std::int64_t delta_pts_us) {
+  if (delta_ts_us < 0)
+    return kTimeStatusBase | kTimeStatusDiscontinuity | kTimeStatusReverse;
+  if (std::llabs(delta_ts_us - delta_pts_us) > kTimeLinearToleranceUs)
+    return kTimeStatusBase | kTimeStatusDiscontinuity;
+  return kTimeStatusBase;
+}
+
+bool nal_is_vcl(guint type) {
+  return (type >= GST_H264_NAL_SLICE && type <= GST_H264_NAL_SLICE_IDR) ||
+         type == GST_H264_NAL_SLICE_AUX || type == GST_H264_NAL_SLICE_EXT ||
+         type == GST_H264_NAL_SLICE_DEPTH;
+}
+
+bool sei_message_is_replaced(const GstH264SEIMessage& msg) {
+  // Version-dependent parsing matters here: before 1.22 user-data-unregistered
+  // reaches codecparsers as raw type 5, while newer versions expose a typed
+  // payload. Missing either case silently leaves the source SEI beside ours.
+  if (msg.payloadType == GST_H264_SEI_PIC_TIMING) return true;
+  static const char kId[] = "MISPmicrosectime";
+  constexpr guint kIdLen = 16;
+#if GST_CHECK_VERSION(1, 22, 0)
+  if (msg.payloadType == GST_H264_SEI_USER_DATA_UNREGISTERED)
+    return std::memcmp(msg.payload.user_data_unregistered.uuid, kId, kIdLen) == 0;
+#endif
+  if (msg.payloadType != GST_H264_SEI_UNHANDLED_PAYLOAD) return false;
+  const auto& raw = msg.payload.unhandled_payload;
+  if (raw.payloadType != 5 || !raw.data || raw.size < kIdLen) return false;
+  return std::memcmp(raw.data, kId, kIdLen) == 0;
+}
+
+bool sei_nal_is_replaced(GstH264NalParser* parser, GstH264NalUnit* nalu) {
+  // Drop a whole SEI NAL only when every message is ours to replace. A mixed
+  // NAL may contain buffering/recovery data beside a source timestamp, and
+  // taking that bystander would be lossy.
+  GArray* messages = nullptr;
+  const GstH264ParserResult res = gst_h264_parser_parse_sei(parser, nalu, &messages);
+  bool all = false;
+  if (messages) {
+    if (res == GST_H264_PARSER_OK && messages->len > 0) {
+      all = true;
+      for (guint i = 0; i < messages->len && all; ++i)
+        all = sei_message_is_replaced(g_array_index(messages, GstH264SEIMessage, i));
+    }
+    g_array_free(messages, TRUE);
+  }
+  return all;
+}
+
+GstPadProbeReturn on_h264_buffer_inject_sei(GstPad*, GstPadProbeInfo* info,
+                                             gpointer user) {
+  auto* ctx = static_cast<VideoCtx*>(user);
+  if (!ctx->generate_sei || !ctx->h264_parser) return GST_PAD_PROBE_OK;
+  GstBuffer* buffer = GST_PAD_PROBE_INFO_BUFFER(info);
+  if (!buffer || !GST_BUFFER_PTS_IS_VALID(buffer)) return GST_PAD_PROBE_OK;
+  // Backward-only matching prevents a frame receiving a later KLV timestamp;
+  // no match within tolerance writes no replacement. An unmatched frame is
+  // still scanned: Generate makes KLV the sole timestamp authority, so source
+  // ST 0604 must not survive intermittently based on provenance.
+  const std::uint64_t pts_ns = GST_BUFFER_PTS(buffer);
+  SensorTime sensor_time;
+  bool matched = false;
+  {
+    std::lock_guard<std::mutex> lock(ctx->timestamp_mu);
+    auto it = ctx->pts_to_sensor_timestamp.upper_bound(pts_ns);
+    if (it != ctx->pts_to_sensor_timestamp.begin()) {
+      --it;
+      if (pts_ns - it->first <= kPtsMatchToleranceNs) {
+        sensor_time = it->second;
+        matched = true;
+      }
+    }
+  }
+  GstMapInfo map;
+  if (!gst_buffer_map(buffer, &map, GST_MAP_READ)) return GST_PAD_PROBE_OK;
+  // Collect Picture Timing/ST 0604 NALs to strip as [start,end) offsets, and
+  // the first VCL NAL before which to inject. They are offsets, never pointers:
+  // mapping a multi-memory GstBuffer again can return a different merged
+  // allocation, invalidating pointers from a prior map.
+  std::vector<std::pair<gsize, gsize>> strip;
+  gsize insert_at = 0;
+  bool have_insert = false;
+  GstH264NalUnit nalu;
+  guint offset = 0;
+  while (offset < map.size) {
+    const GstH264ParserResult res =
+        gst_h264_parser_identify_nalu(ctx->h264_parser, map.data, offset, map.size, &nalu);
+    if (res != GST_H264_PARSER_OK && res != GST_H264_PARSER_NO_NAL_END) break;
+    if (nalu.type == GST_H264_NAL_SEI) {
+      if (sei_nal_is_replaced(ctx->h264_parser, &nalu))
+        strip.emplace_back(nalu.sc_offset, nalu.offset + nalu.size);
+    } else if (nal_is_vcl(nalu.type) && !have_insert) {
+      insert_at = nalu.sc_offset;
+      have_insert = true;
+    }
+    if (res == GST_H264_PARSER_NO_NAL_END) break;
+    offset = nalu.offset + nalu.size;
+  }
+  const bool inject = matched && have_insert;
+  if (!inject && strip.empty()) {
+    gst_buffer_unmap(buffer, &map);
+    return GST_PAD_PROBE_OK;
+  }
+  const auto sei_nal = inject ? build_0604_sei_nal(sensor_time) : std::vector<std::byte>{};
+  gsize stripped = 0;
+  for (const auto& [s, e] : strip) stripped += e - s;
+  const gsize new_size = map.size - stripped + sei_nal.size();
+  if (new_size == 0) {
+    gst_buffer_unmap(buffer, &map);
+    return GST_PAD_PROBE_OK;
+  }
+  GstBuffer* new_buffer = gst_buffer_new_allocate(nullptr, new_size, nullptr);
+  if (!new_buffer) {
+    gst_buffer_unmap(buffer, &map);
+    return GST_PAD_PROBE_OK;
+  }
+  GstMapInfo new_map;
+  if (!gst_buffer_map(new_buffer, &new_map, GST_MAP_WRITE)) {
+    gst_buffer_unref(new_buffer);
+    gst_buffer_unmap(buffer, &map);
+    return GST_PAD_PROBE_OK;
+  }
+  guint8* dst = new_map.data;
+  gsize pos = 0;
+  std::size_t si = 0;
+  bool inserted = !inject;
+  while (pos < map.size) {
+    if (!inserted && pos == insert_at) {
+      std::memcpy(dst, sei_nal.data(), sei_nal.size());
+      dst += sei_nal.size();
+      inserted = true;
+    }
+    if (si < strip.size() && pos == strip[si].first) {
+      pos = strip[si].second;
+      ++si;
+      continue;
+    }
+    gsize run_end = map.size;
+    if (!inserted && insert_at > pos) run_end = std::min(run_end, insert_at);
+    if (si < strip.size() && strip[si].first > pos) run_end = std::min(run_end, strip[si].first);
+    std::memcpy(dst, map.data + pos, run_end - pos);
+    dst += run_end - pos;
+    pos = run_end;
+  }
+  const gsize written = static_cast<gsize>(dst - new_map.data);
+  gst_buffer_unmap(new_buffer, &new_map);
+  gst_buffer_unmap(buffer, &map);
+  // If size arithmetic and copying disagree, pass the original through rather
+  // than emit a buffer with an uninitialized tail.
+  if (written != new_size || !inserted) {
+    gst_buffer_unref(new_buffer);
+    return GST_PAD_PROBE_OK;
+  }
+  gst_buffer_copy_into(new_buffer, buffer,
+                       static_cast<GstBufferCopyFlags>(GST_BUFFER_COPY_METADATA), 0, -1);
+  GST_PAD_PROBE_INFO_DATA(info) = new_buffer;
+  gst_buffer_unref(buffer);
+  return GST_PAD_PROBE_OK;
+}
+
+void drop_pad_to_fakesink(GstPad* pad, VideoCtx* ctx) {
+  // A demuxer pushes every stream from one streaming thread. A plain sink in
+  // PAUSED prerolls and blocks that thread until PLAYING; then video queued
+  // behind it never reaches the muxer, the muxer never prerolls, and the sink
+  // never unblocks. The leaky downstream queue gives discarded pads a separate
+  // thread and prevents that 1.24 CI preroll deadlock.
+  GstElement* queue = gst_element_factory_make("queue", nullptr);
+  GstElement* fakesink = gst_element_factory_make("fakesink", nullptr);
+  if (!queue || !fakesink) {
+    if (queue) gst_object_unref(queue);
+    if (fakesink) gst_object_unref(fakesink);
+    return;
+  }
+  g_object_set(queue, "leaky", 2, "max-size-buffers", 5,
+               "max-size-bytes", 0, "max-size-time", G_GUINT64_CONSTANT(0), nullptr);
+  g_object_set(fakesink, "async", FALSE, "sync", FALSE, nullptr);
+  gst_bin_add_many(GST_BIN(ctx->pipeline), queue, fakesink, nullptr);
+  gst_element_sync_state_with_parent(queue);
+  gst_element_sync_state_with_parent(fakesink);
+  if (!gst_element_link(queue, fakesink)) {
+    g_warning("misbklv: failed to link the drop queue to its sink");
+    return;
+  }
+  if (GstPad* sinkpad = gst_element_get_static_pad(queue, "sink")) {
+    const GstPadLinkReturn ret = gst_pad_link(pad, sinkpad);
+    if (ret != GST_PAD_LINK_OK)
+      g_warning("misbklv: failed to link unused pad to drop queue: %d", ret);
+    gst_object_unref(sinkpad);
+  }
+}
+
+void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
+  auto* ctx = static_cast<VideoCtx*>(user);
+  GstCaps* caps = gst_pad_get_current_caps(pad);
+  if (!caps) caps = gst_pad_query_caps(pad, nullptr);
+  const bool video = caps_are_video(caps);
+  const std::string media_type = caps_media_type(caps);
+  if (caps) gst_caps_unref(caps);
+  if (video && ctx->generate_sei && media_type != "video/x-h264") {
+    std::lock_guard<std::mutex> lk(ctx->mu);
+    if (!ctx->linked) {
+      g_warning("misbklv: Sei0604::Generate needs H.264 video; source carries %s",
+                media_type.empty() ? "an unknown codec" : media_type.c_str());
+      ctx->sei_codec_unsupported = true;
+      drop_pad_to_fakesink(pad, ctx);
+      ctx->cv.notify_all();
+      return;
+    }
+  }
+  if (!video) {
+    // Audio, subtitles, and source-side KLV are all linked to the leaky drop
+    // branch; leaving a demuxer pad unlinked posts a not-linked pipeline error.
+    drop_pad_to_fakesink(pad, ctx);
+    return;
+  }
+  std::lock_guard<std::mutex> lk(ctx->mu);
+  if (ctx->linked) {
+    ++ctx->ignored_video_pads;
+    drop_pad_to_fakesink(pad, ctx);
+    return;
+  }
+  const char* parser_name = parser_for_media_type(media_type);
+  if (!parser_name) {
+    GstPad* mux_sink = gst_element_request_pad_simple(ctx->mux, "sink_%d");
+    if (mux_sink && gst_pad_link(pad, mux_sink) == GST_PAD_LINK_OK)
+      ctx->linked = true;
+    else
+      g_warning("misbklv: failed to link %s pad to muxer", media_type.c_str());
+    if (mux_sink) gst_object_unref(mux_sink);
+    ctx->cv.notify_all();
+    return;
+  }
+  GstElement* parse = gst_element_factory_make(parser_name, nullptr);
+  if (!parse) {
+    g_warning("misbklv: failed to create %s element", parser_name);
+    ctx->cv.notify_all();
+    return;
+  }
+  if (ctx->generate_sei) g_object_set(parse, "config-interval", -1, nullptr);
+  gst_bin_add(GST_BIN(ctx->pipeline), parse);
+  gst_element_sync_state_with_parent(parse);
+  GstPad* parse_sink = gst_element_get_static_pad(parse, "sink");
+  if (!parse_sink) {
+    g_warning("misbklv: failed to get %s sink pad", parser_name);
+    ctx->cv.notify_all();
+    return;
+  }
+  GstPadLinkReturn ret = gst_pad_link(pad, parse_sink);
+  gst_object_unref(parse_sink);
+  if (ret != GST_PAD_LINK_OK) {
+    g_warning("misbklv: failed to link video pad to %s: %d (demuxer parent: %s, parser parent: %s)",
+              parser_name, ret, GST_ELEMENT_NAME(gst_pad_get_parent_element(pad)),
+              GST_ELEMENT_NAME(GST_ELEMENT_PARENT(parse)));
+    ctx->cv.notify_all();
+    return;
+  }
+  if (gst_element_link(parse, ctx->mux)) {
+    ctx->linked = true;
+    if (ctx->generate_sei) {
+      GstPad* parse_src = gst_element_get_static_pad(parse, "src");
+      if (parse_src) {
+        gst_pad_add_probe(parse_src, GST_PAD_PROBE_TYPE_BUFFER,
+                          on_h264_buffer_inject_sei, ctx, nullptr);
+        gst_object_unref(parse_src);
+      }
+    }
+  } else {
+    g_warning("misbklv: failed to link %s to muxer", parser_name);
+  }
+  ctx->cv.notify_all();
+}
+
+void on_video_no_more_pads(GstElement*, gpointer user) {
+  auto* ctx = static_cast<VideoCtx*>(user);
+  {
+    std::lock_guard<std::mutex> lk(ctx->mu);
+    ctx->no_more_pads = true;
+  }
+  ctx->cv.notify_all();
+}
+
+}  // namespace
+
+VideoCtx::~VideoCtx() {
+  if (h264_parser) gst_h264_nal_parser_free(h264_parser);
+}
+
+void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt,
+                             std::int64_t pts_ns) {
+  auto msg_result = Message::parse(pkt);
+  if (!msg_result) return;
+  auto& msg = *msg_result;
+  if (!msg.has(2)) return;
+  auto ts_result = msg.get<std::uint64_t>(2);
+  if (!ts_result) return;
+  const std::uint64_t sensor_timestamp_us = *ts_result;
+  const auto pts = static_cast<std::uint64_t>(pts_ns);
+  std::lock_guard<std::mutex> lock(video.timestamp_mu);
+  // Derive ST 0603 Time Status from absolute time against the media timeline.
+  // Old mapping entries intentionally persist: video can lag KLV push by many
+  // seconds and still needs a backward lookup.
+  SensorTime entry{sensor_timestamp_us, kTimeStatusBase};
+  if (video.have_prev_push) {
+    entry.status = sensor_time_status(
+        static_cast<std::int64_t>(sensor_timestamp_us) -
+            static_cast<std::int64_t>(video.prev_push_ts_us),
+        (static_cast<std::int64_t>(pts) -
+         static_cast<std::int64_t>(video.prev_push_pts_ns)) / 1000);
+  }
+  video.have_prev_push = true;
+  video.prev_push_pts_ns = pts;
+  video.prev_push_ts_us = sensor_timestamp_us;
+  video.pts_to_sensor_timestamp[pts] = entry;
+}
+
+Result<std::monostate> prepare_video_branch(
+    GstElement* pipeline, GstElement* mux, const std::string& video_path,
+    Sei0604 sei_0604, std::unique_ptr<VideoCtx>& video) {
+  const std::string container = sniff_container(video_path);
+  const char* demuxer_name = demuxer_for_media_type(container);
+  if (!demuxer_name) {
+    g_warning("misbklv: video source '%s': %s is not a container this library demuxes",
+              video_path.c_str(),
+              container.empty() ? "an unrecognized format" : container.c_str());
+    return Result<std::monostate>::err(Error::Unsupported);
+  }
+  GstElement* vsrc = gst_element_factory_make("filesrc", "vsrc");
+  GstElement* parse = gst_element_factory_make(demuxer_name, "vparse");
+  if (!vsrc || !parse) {
+    if (vsrc) gst_object_unref(vsrc);
+    if (parse) gst_object_unref(parse);
+    g_warning("misbklv: could not create %s — is the plugin providing it installed?", demuxer_name);
+    return Result<std::monostate>::err(Error::Backend);
+  }
+  g_object_set(vsrc, "location", video_path.c_str(), nullptr);
+  video = std::make_unique<VideoCtx>();
+  video->mux = mux;
+  video->pipeline = pipeline;
+  video->generate_sei = sei_0604 == Sei0604::Generate;
+  if (video->generate_sei) video->h264_parser = gst_h264_nal_parser_new();
+  g_signal_connect(parse, "pad-added", G_CALLBACK(on_video_pad_added), video.get());
+  g_signal_connect(parse, "no-more-pads", G_CALLBACK(on_video_no_more_pads), video.get());
+  gst_bin_add_many(GST_BIN(pipeline), vsrc, parse, nullptr);
+  if (!gst_element_link(vsrc, parse))
+    return Result<std::monostate>::err(Error::Backend);
+  // Dynamic pads arrive during PAUSED preroll. Wait before PLAYING so the
+  // muxer's PMT includes both KLV and video even when callers push immediately.
+  if (gst_element_set_state(pipeline, GST_STATE_PAUSED) == GST_STATE_CHANGE_FAILURE)
+    return Result<std::monostate>::err(Error::Backend);
+  GstBus* bus = gst_element_get_bus(pipeline);
+  const auto deadline = std::chrono::steady_clock::now() + kVideoPadTimeout;
+  bool linked = false;
+  int ignored = 0;
+  for (;;) {
+    {
+      std::unique_lock<std::mutex> lk(video->mu);
+      if (video->cv.wait_for(lk, std::chrono::milliseconds(50), [&] {
+            return video->linked || video->no_more_pads;
+          })) {
+        linked = video->linked;
+        ignored = video->ignored_video_pads;
+        break;
+      }
+    }
+    GstMessage* msg = gst_bus_pop_filtered(bus, GST_MESSAGE_ERROR);
+    if (msg) {
+      GError* err = nullptr;
+      gchar* dbg = nullptr;
+      gst_message_parse_error(msg, &err, &dbg);
+      // qtdemux can post not-linked transiently while its dynamic pad is being
+      // connected. It is not an invalid source, so keep waiting for callback
+      // state; other errors are surfaced here because finish cannot report a
+      // message already consumed from this bus.
+      const bool is_not_linked = (dbg && std::strstr(dbg, "not-linked"));
+      if (!is_not_linked) {
+        g_warning("misbklv: video source '%s': %s", video_path.c_str(),
+                  err ? err->message : "pipeline error");
+        if (err) g_error_free(err);
+        g_free(dbg);
+        gst_message_unref(msg);
+        break;
+      }
+      if (err) g_error_free(err);
+      g_free(dbg);
+      gst_message_unref(msg);
+    }
+    if (std::chrono::steady_clock::now() > deadline) break;
+  }
+  gst_object_unref(bus);
+  if (!linked) return Result<std::monostate>::err(Error::Unsupported);
+  if (ignored)
+    g_warning("misbklv: %d extra video stream(s) in '%s' not carried",
+              ignored, video_path.c_str());
+  return Result<std::monostate>::ok({});
+}
+
+}  // namespace misbklv::detail

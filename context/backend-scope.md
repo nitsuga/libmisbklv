@@ -170,8 +170,9 @@ Opened here during scoping, each resolved by an ADR (see the
 
 ## Outcome
 
-Built as **`misbklv-gst`** (`src/gst/gst_backend.cpp`, `src/gst/stream.cpp`): the
-`MediaBackend`/`Inserter` implementation plus the `KlvStream`/`KlvSink` facade
+Built as **`misbklv-gst`** (`src/gst/`, including the thin `gst_backend.cpp`
+facade, responsibility units, and `stream.cpp`): the `MediaBackend`/`Inserter`
+implementation plus the `KlvStream`/`KlvSink` facade
 (ADR [`0018`](./decisions/0018-high-level-api.md)), live `extract` cancellable via
 a stop token (ADR [`0019`](./decisions/0019-extract-cancellation.md)). Extraction
 + insertion (KLV alone, or alongside a passed-through video stream — ADR
