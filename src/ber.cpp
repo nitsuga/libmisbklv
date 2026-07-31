@@ -1,16 +1,26 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "misbklv/ber.hpp"
 
+#include <limits>
+
 namespace misbklv::ber {
 
 Result<Parsed> read_oid(std::span<const std::byte> buf, std::size_t pos) {
+  if (pos >= buf.size()) return Result<Parsed>::err(Error::Truncated);
+
   std::uint64_t v = 0;
-  std::size_t n = 0;
-  while (pos + n < buf.size()) {
-    auto b = std::to_integer<std::uint8_t>(buf[pos + n]);
-    v = (v << 7) | (b & 0x7F);
-    ++n;
-    if ((b & 0x80) == 0) return Result<Parsed>::ok({v, n});
+  std::size_t cursor = pos;
+  while (cursor < buf.size()) {
+    auto b = std::to_integer<std::uint8_t>(buf[cursor]);
+    if (cursor == pos && b == 0x80)
+      return Result<Parsed>::err(Error::BadLength);
+
+    const auto payload = static_cast<std::uint64_t>(b & 0x7F);
+    if (v > (std::numeric_limits<std::uint64_t>::max() - payload) / 128)
+      return Result<Parsed>::err(Error::OutOfRange);
+    v = (v << 7) | payload;
+    ++cursor;
+    if ((b & 0x80) == 0) return Result<Parsed>::ok({v, cursor - pos});
   }
   return Result<Parsed>::err(Error::Truncated);
 }

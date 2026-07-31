@@ -2,6 +2,16 @@
 
 ## 2026-07-31
 
+* **Hardened VTarget Series, BER-OID/tag parsing, and packet framing.** VTarget
+  Series declared lengths now use overflow-safe handling; BER-OID rejects
+  forbidden leading-zero encodings and integer overflow, and decoded tags
+  outside the current `uint16_t` Item model are rejected rather than truncated
+  or aliased. Unknown in-range tags remain parseable. `packet_frame_length`
+  requires the SMPTE UL prefix, while GStreamer extraction discards non-UL bytes
+  to resynchronize and preserves a partial prefix across fragments. This is
+  framing hardening only; resource limits and extraction-error policy remain
+  deferred. Adversarial tests were added for the hardened boundaries.
+
 * **Hardened typed encode validation and its adversarial tests.** Wrong typed
   alternatives, invalid numeric widths, raw-integer representability, and
   LinearLDS domain failures now follow the established encode error policy;

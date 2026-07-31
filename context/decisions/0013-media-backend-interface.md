@@ -121,6 +121,12 @@ class MediaBackend {
   re-`finalize()` → `push()` into `open_insert` → re-extract → byte-exact, in
   both `GstBackend` and `MockBackend`.
 
+# Implementation refinement (2026-07-31)
+
+GStreamer extraction discards non-UL bytes to resynchronize its framing while
+preserving a partial SMPTE UL prefix across fragments. This is framing hardening
+only; resource limits and extraction-error policy remain deferred.
+
 # Assumptions / open questions
 
 - **Live-extraction stop mechanism** (stop token vs `on_packet` returning

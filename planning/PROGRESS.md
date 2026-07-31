@@ -8,8 +8,7 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-Between review-driven changes; the immediate parser-hardening follow-up is in
-**Next** below.
+Between review-driven changes.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
@@ -21,8 +20,9 @@ None currently.
 
 ## Next
 
-- **Malformed-input parser hardening**: review VTarget length-overflow handling
-  and BER-OID overflow/truncation paths.
+- **Message contract commit**: have `extract()` establish `in_source` before
+  `has()` incorporates staged edits, and ensure untouched encode returns only
+  the original `pkt.total_size` bytes.
 - **Registry breadth — 0903 side**: the remaining VMTI/VTarget items, as data
   needs them. (0601 is complete.)
 - **An SRT-specific hermetic streaming test** — the udp live path is covered,

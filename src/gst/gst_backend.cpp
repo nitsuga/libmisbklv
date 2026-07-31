@@ -8,6 +8,7 @@
 #include "misbklv/message.hpp"  // for KLV parsing in push()
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
@@ -34,6 +35,9 @@
 namespace misbklv {
 namespace {
 
+constexpr std::array<std::byte, 4> kSmpteUlPrefix = {
+    std::byte{0x06}, std::byte{0x0e}, std::byte{0x2b}, std::byte{0x34}};
+
 // Reassembly + framing state, shared with the appsink callbacks (one streaming
 // thread; extract() only blocks on the bus while these run).
 struct ExtractCtx {
@@ -46,8 +50,18 @@ struct ExtractCtx {
 
   void drain() {
     std::size_t pos = 0;
-    for (;;) {
-      std::span<const std::byte> rest(reassembly.data() + pos, reassembly.size() - pos);
+    while (pos < reassembly.size()) {
+      auto rest = std::span<const std::byte>(reassembly).subspan(pos);
+      const auto ul = std::search(rest.begin(), rest.end(), kSmpteUlPrefix.begin(),
+                                  kSmpteUlPrefix.end());
+      if (ul == rest.end()) {
+        // Retain only a possible partial UL so a prefix split across appsink
+        // buffers can complete on the next callback.
+        pos += rest.size() - std::min<std::size_t>(rest.size(), 3);
+        break;
+      }
+      pos += static_cast<std::size_t>(ul - rest.begin());
+      rest = std::span<const std::byte>(reassembly).subspan(pos);
       const std::size_t n = packet_frame_length(rest);
       if (n == 0) break;  // need more data
       (*on_packet)(KlvPacket{rest.subspan(0, n), marks.at(stream_off + pos)});

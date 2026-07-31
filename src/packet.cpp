@@ -1,9 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "misbklv/packet.hpp"
 
+#include <algorithm>
+#include <iterator>
+#include <limits>
+
 #include "misbklv/ber.hpp"
 
 namespace misbklv {
+namespace {
+
+constexpr std::byte kSmpteUlPrefix[] = {
+    std::byte{0x06}, std::byte{0x0e}, std::byte{0x2b}, std::byte{0x34}};
+
+bool has_smpte_ul_prefix(std::span<const std::byte> buf) {
+  return buf.size() >= std::size(kSmpteUlPrefix) &&
+         std::equal(std::begin(kSmpteUlPrefix), std::end(kSmpteUlPrefix), buf.begin());
+}
+
+}  // namespace
 
 Result<std::vector<Item>> parse_items(std::span<const std::byte> buf) {
   std::vector<Item> items;
@@ -12,6 +27,8 @@ Result<std::vector<Item>> parse_items(std::span<const std::byte> buf) {
   while (pos < end) {
     auto tag = ber::read_oid(buf, pos);
     if (!tag) return Result<std::vector<Item>>::err(tag.error());
+    if (tag->value > std::numeric_limits<std::uint16_t>::max())
+      return Result<std::vector<Item>>::err(Error::OutOfRange);
     pos += tag->consumed;
     auto ilen = ber::read_length(buf, pos);
     if (!ilen) return Result<std::vector<Item>>::err(ilen.error());
@@ -49,6 +66,7 @@ Result<Packet> parse_packet(std::span<const std::byte> buf) {
 }
 
 std::size_t packet_frame_length(std::span<const std::byte> buf) {
+  if (!has_smpte_ul_prefix(buf)) return 0;
   if (buf.size() < 17) return 0;  // 16-byte key + at least one length byte
   auto len = ber::read_length(buf, 16);
   if (!len) return 0;             // length not yet parseable -> need more data

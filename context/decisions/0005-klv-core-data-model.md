@@ -54,6 +54,14 @@ Sketch: `Packet` (UL key + length + items), `Item` (tag + length + value span),
 - Ownership: borrow (span) by default; copy when the caller must outlive the
   source buffer.
 
+# Implementation refinement (2026-07-31)
+
+BER-OID parsing rejects forbidden leading-zero encodings and `uint64_t`
+overflow. Because `Item` currently stores a `uint16_t` tag, decoded tags beyond
+that range are rejected rather than truncated or aliased; unknown tags within
+range remain parseable. `packet_frame_length` also requires the SMPTE UL prefix
+before accepting a packet.
+
 # Assumptions / open questions
 
 - Typed-view variant shape and `interpret()` ergonomics — settle at

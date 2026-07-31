@@ -35,8 +35,9 @@ Result<std::vector<Item>> parse_items(std::span<const std::byte> buf);
 Result<Packet> parse_packet(std::span<const std::byte> buf);
 
 // Byte length of the complete KLV packet at the front of `buf`, or 0 if `buf`
-// does not yet hold a whole packet (need more data). Frames a reassembled stream
-// of concatenated packets — used by the media backend (ADR 0013).
+// does not begin with the SMPTE UL prefix or does not yet hold a whole packet
+// (need more data). Frames a reassembled stream of concatenated packets — used
+// by the media backend (ADR 0013).
 std::size_t packet_frame_length(std::span<const std::byte> buf);
 
 }  // namespace misbklv

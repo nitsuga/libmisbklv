@@ -3,7 +3,8 @@
 //  (1) multi-byte BER-OID tags (>=128, e.g. 0601 Item 143 MSID),
 //  (2) Report-on-Change trimmed packets (fewer items than a full frame),
 //  (3) malformed / adversarial bytes must return a Result error, never crash
-//      or invoke UB (run under -fsanitize=address,undefined via MISBKLV_SANITIZE).
+//      or invoke UB (run under -fsanitize=address,undefined via MISBKLV_SANITIZE),
+//  (4) BER parser boundaries retain valid maxima and reject overflow/aliasing.
 // argv: <dayflight_first_packet.klv>
 #include <cmath>
 #include <cstddef>
@@ -14,8 +15,10 @@
 #include <vector>
 
 #include "misbklv/builder.hpp"
+#include "misbklv/ber.hpp"
 #include "misbklv/codec.hpp"
 #include "misbklv/packet.hpp"
+#include "misbklv/series.hpp"
 #include "misbklv/ts.hpp"
 #include "misbklv/types.hpp"
 #include "misbklv/registry/uas0601_tables.generated.hpp"
@@ -277,6 +280,13 @@ static void test_malformed() {
   check(!parse_packet(huge), "8-byte huge length -> Truncated (no OOB)");
   check(packet_frame_length(huge) == 0, "frame_length rejects huge length");
 
+  // A complete-looking frame is not KLV unless it begins with the SMPTE UL
+  // prefix. This is also the gate the GStreamer extractor uses to resync.
+  std::vector<std::byte> bogus_key(17, B(0xA5));
+  bogus_key[16] = B(0x00);  // a complete, zero-length short-form BER value
+  check(packet_frame_length(bogus_key) == 0,
+        "frame_length rejects non-UL key with complete BER length");
+
   // Bare TLV with a huge item length.
   std::vector<std::byte> item{B(0x05), B(0x88)};
   for (int i = 0; i < 8; ++i) item.push_back(B(0xFF));
@@ -296,6 +306,58 @@ static void test_malformed() {
   check(extract_returned, "extract_ts_klv(garbage) returns without crashing");
 }
 
+// --- (4) BER parser boundary values ----------------------------------------
+static void test_parser_boundaries() {
+  std::printf("(4) BER parser boundary values\n");
+
+  // A length of UINT64_MAX must not wrap the series bounds check.
+  std::vector<std::byte> huge_series{B(0x88)};
+  for (int i = 0; i < 8; ++i) huge_series.push_back(B(0xFF));
+  auto series = parse_vtarget_series(huge_series);
+  check(!series && series.error() == Error::Truncated,
+        "vTarget series UINT64_MAX length -> Truncated");
+
+  const std::vector<std::byte> leading_zero_bytes{B(0x80)};
+  auto leading_zero = ber::read_oid(leading_zero_bytes, 0);
+  check(!leading_zero && leading_zero.error() == Error::BadLength,
+        "BER-OID leading 0x80 -> BadLength");
+
+  const std::vector<std::byte> truncated_chain_bytes{B(0x81)};
+  auto truncated_chain = ber::read_oid(truncated_chain_bytes, 0);
+  check(!truncated_chain && truncated_chain.error() == Error::Truncated,
+        "truncated BER-OID continuation chain -> Truncated");
+
+  // UINT64_MAX occupies ten base-128 groups: 1 followed by nine 0x7f groups.
+  std::vector<std::byte> max_oid{B(0x81)};
+  for (int i = 0; i < 8; ++i) max_oid.push_back(B(0xFF));
+  max_oid.push_back(B(0x7F));
+  auto decoded_max = ber::read_oid(max_oid, 0);
+  check(decoded_max && decoded_max->value == std::numeric_limits<std::uint64_t>::max() &&
+            decoded_max->consumed == max_oid.size(),
+        "canonical UINT64_MAX BER-OID decodes");
+
+  // The next base-128 value is 2^64 and cannot fit in the API's uint64_t.
+  std::vector<std::byte> beyond_max{B(0x82)};
+  for (int i = 0; i < 8; ++i) beyond_max.push_back(B(0x80));
+  beyond_max.push_back(B(0x00));
+  auto decoded_beyond = ber::read_oid(beyond_max, 0);
+  check(!decoded_beyond && decoded_beyond.error() == Error::OutOfRange,
+        "BER-OID 2^64 -> OutOfRange");
+
+  // 65535 is the largest Item::tag and must retain its full identity.
+  const std::vector<std::byte> max_tag{B(0x83), B(0xFF), B(0x7F), B(0x00)};
+  auto parsed_max_tag = parse_items(max_tag);
+  check(parsed_max_tag && parsed_max_tag->size() == 1 &&
+            parsed_max_tag->front().tag == 65535,
+        "parse_items accepts tag 65535");
+
+  // 65537 must fail, rather than narrowing to uint16_t tag 1 (the checksum).
+  const std::vector<std::byte> alias_checksum{B(0x84), B(0x80), B(0x01), B(0x00)};
+  auto parsed_alias = parse_items(alias_checksum);
+  check(!parsed_alias && parsed_alias.error() == Error::OutOfRange,
+        "parse_items tag 65537 -> OutOfRange (cannot alias checksum tag 1)");
+}
+
 int main(int argc, char** argv) {
   const char* path =
       argc > 1 ? argv[1] : "test/fixtures/dayflight_first_packet.klv";
@@ -308,6 +370,7 @@ int main(int argc, char** argv) {
   test_multibyte_tag();
   test_roc_trimmed(full);
   test_malformed();
+  test_parser_boundaries();
   std::printf("%s\n", failures == 0 ? "HARDENING: all PASS" : "HARDENING: FAIL");
   return failures == 0 ? 0 : 1;
 }

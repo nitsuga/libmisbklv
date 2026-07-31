@@ -10,7 +10,7 @@ Result<std::vector<VTargetPack>> parse_vtarget_series(std::span<const std::byte>
     auto elen = ber::read_length(buf, pos);
     if (!elen) return Result<std::vector<VTargetPack>>::err(elen.error());
     pos += elen->consumed;
-    if (pos + elen->value > buf.size())
+    if (elen->value > buf.size() - pos)
       return Result<std::vector<VTargetPack>>::err(Error::Truncated);
     auto element = buf.subspan(pos, elen->value);
     pos += elen->value;
