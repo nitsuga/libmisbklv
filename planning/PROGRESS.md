@@ -20,9 +20,8 @@ None currently.
 
 ## Next
 
-- **Message contract commit**: have `extract()` establish `in_source` before
-  `has()` incorporates staged edits, and ensure untouched encode returns only
-  the original `pkt.total_size` bytes.
+- **Live extraction resilience**: define deliberate reassembly limits and
+  observable streaming errors.
 - **Registry breadth — 0903 side**: the remaining VMTI/VTarget items, as data
   needs them. (0601 is complete.)
 - **An SRT-specific hermetic streaming test** — the udp live path is covered,

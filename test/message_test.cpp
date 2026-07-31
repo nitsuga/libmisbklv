@@ -26,6 +26,24 @@ static std::vector<std::byte> read_file(const char* p) {
     out[i] = static_cast<std::byte>(static_cast<unsigned char>(raw[i]));
   return out;
 }
+static std::byte B(unsigned v) { return static_cast<std::byte>(v); }
+
+// Parseable ST 0601 packet with two intentional wire-level oddities that builder
+// authoring would normalize: the outer length uses long form for a short value,
+// and the checksum item appears before the ordinary item. Parsing deliberately
+// does not validate checksums, so the checksum bytes can be arbitrary here.
+static std::vector<std::byte> unusual_source_packet() {
+  const std::vector<std::byte> payload = {
+      B(0x01), B(0x02), B(0x12), B(0x34),  // checksum first
+      B(0x02), B(0x08),                    // Precision Time Stamp
+      B(0x00), B(0x00), B(0x00), B(0x00), B(0x00), B(0x00), B(0x00), B(0x01)};
+  std::vector<std::byte> out;
+  for (auto b : kUas0601Key) out.push_back(B(b));
+  out.push_back(B(0x81));  // noncanonical long-form length for a 14-byte value
+  out.push_back(static_cast<std::byte>(payload.size()));
+  out.insert(out.end(), payload.begin(), payload.end());
+  return out;
+}
 
 int main(int argc, char** argv) {
   const char* path =
@@ -45,6 +63,26 @@ int main(int argc, char** argv) {
   check(msg->has(13) && !msg->has(250), "has() reports membership");
   check(!msg->get<double>(250).has_value(), "get of absent tag -> nullopt");
   check(!msg->get<std::string_view>(13).has_value(), "type mismatch -> nullopt");
+
+  // Parsing a buffer with extra bytes is permitted, but byte-exact passthrough
+  // stops at the one parsed packet's total_size.
+  const std::size_t source_size = packet_frame_length(bytes);
+  std::vector<std::byte> with_trailer = bytes;
+  with_trailer.insert(with_trailer.end(), {B(0xDE), B(0xAD), B(0xBE)});
+  auto trailing = Message::parse(with_trailer);
+  auto original_packet = std::vector<std::byte>(bytes.begin(), bytes.begin() + source_size);
+  auto trimmed = trailing ? trailing->encode() : Result<ber::Bytes>::err(Error::Backend);
+  check(trailing && trimmed && *trimmed == original_packet,
+        "no-op parsed encode excludes trailing source bytes");
+
+  // An untouched parsed message must preserve source wire choices rather than
+  // routing through the builder's canonicalizing authoring path.
+  const auto unusual = unusual_source_packet();
+  auto unusual_msg = Message::parse(unusual);
+  auto unusual_encoded = unusual_msg ? unusual_msg->encode()
+                                     : Result<ber::Bytes>::err(Error::Backend);
+  check(unusual_msg && unusual_encoded && *unusual_encoded == unusual,
+        "no-op encode preserves noncanonical length and checksum placement");
 
   // no-op encode is byte-exact.
   auto same = msg->encode();
@@ -77,6 +115,18 @@ int main(int argc, char** argv) {
   check(static_cast<bool>(fresh), "create(Uas0601)");
   check(!Message::create(RegistryId::Vtarget0903), "create rejects a non-standalone type");
   if (fresh) {
+    check(static_cast<bool>(fresh->set(Uas0601::PrecisionTimeStamp,
+                                       Value{std::uint64_t{0x0004603E4F03D2CBull}})),
+          "set previously absent Precision Time Stamp");
+    check(fresh->has(Uas0601::PrecisionTimeStamp),
+          "has() sees an added tag before encode");
+    auto one_added = fresh->encode();
+    auto one_added_reparsed = one_added ? Message::parse(*one_added)
+                                        : Result<Message>::err(Error::Backend);
+    check(one_added_reparsed &&
+              one_added_reparsed->has(Uas0601::PrecisionTimeStamp),
+          "added tag survives encode and re-parse");
+
     check(static_cast<bool>(
               fresh->set(Uas0601::PrecisionTimeStamp, Value{std::uint64_t{0x0004603E4F03D2CBull}})),
           "set Precision Time Stamp");
@@ -95,6 +145,16 @@ int main(int argc, char** argv) {
       check(re && *re == *authored, "authored packet re-encodes byte-exact (checksum OK)");
     }
   }
+
+  // A created-but-unedited message has no source bytes to pass through; it
+  // must use the authoring path and yield a real standalone packet.
+  auto empty_fresh = Message::create(RegistryId::Uas0601);
+  auto empty_authored = empty_fresh ? empty_fresh->encode()
+                                    : Result<ber::Bytes>::err(Error::Backend);
+  auto empty_reparsed = empty_authored ? Message::parse(*empty_authored)
+                                       : Result<Message>::err(Error::Backend);
+  check(empty_authored && !empty_authored->empty() && empty_reparsed,
+        "create with no edits emits an authored packet, not empty passthrough");
 
   std::printf("%s\n", failures == 0 ? "MESSAGE: all PASS" : "MESSAGE: FAIL");
   return failures == 0 ? 0 : 1;

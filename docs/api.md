@@ -138,7 +138,7 @@ if (!msg) return;
 double lat  = msg->get<double>(tags::Uas0601::SensorLatitude).value_or(0.0);
 auto uas_ts = msg->get<std::uint64_t>(tags::Uas0601::PrecisionTimeStamp);
 msg->set(tags::Uas0601::SensorLatitude, Value{lat + 1.0});
-auto bytes  = msg->encode();                 // Result<Bytes>; byte-exact if unedited
+auto bytes  = msg->encode();                 // Result<Bytes>; original packet extent if unedited
 ```
 
 - **`get<T>(tag)`** returns `std::optional<T>`. `T` must match the item's kind:
@@ -147,9 +147,12 @@ auto bytes  = msg->encode();                 // Result<Bytes>; byte-exact if une
   Wrong type or absent tag → `nullopt`.
 - **`set(tag, Value)`** stages a typed edit (re-encoded at the item's on-wire
   width). Unknown tag → error.
-- **`encode()`** rebuilds the packet: untouched items pass through byte-exact,
-  edited ones via the codec, the checksum is recomputed. No edits → identical
-  bytes.
+- **`has(tag)`** reflects both items in the parsed source and staged additions.
+- **`encode()`** returns exactly the original packet extent for an unedited
+  parsed Message — preserving noncanonical BER and checksum placement while
+  excluding trailing input bytes. An edited Message is rebuilt: source items
+  without edits pass through byte-exact, edits and additions use the codec, and
+  the checksum is recomputed.
 - **Named tags** — `tag` may be a plain number or a generated per-registry enum:
   `tags::Uas0601::SensorLatitude`, `tags::Vmti0903::…`, `tags::Vtarget0903::…`
   (generated from the registry, so the value equals the ST tag number). Names and
@@ -180,7 +183,7 @@ auto bytes = msg->encode();      // Result<Bytes>: UL key + items + checksum (au
 
 - **`create(registry)`** takes a standalone packet type — `RegistryId::Uas0601`
   or `RegistryId::Vmti0903`. It errors for a non-standalone type (e.g.
-  `Vtarget0903`, a pack).
+  `Vtarget0903`, a pack), and `encode()` builds a packet from its staged items.
 - Items are emitted **in the order you `set()` them**, so set Item 2 (Precision
   Time Stamp) first for ST 0601. The checksum (Item 1) is appended automatically
   last; `get<T>` reads back whatever you've set.

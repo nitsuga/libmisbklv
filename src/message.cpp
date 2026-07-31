@@ -32,10 +32,14 @@ const ber::Bytes* Message::find_edit(std::uint16_t tag) const {
   return nullptr;
 }
 
-bool Message::has(std::uint16_t tag) const {
+bool Message::in_source(std::uint16_t tag) const {
   for (const auto& it : pkt_.items)
     if (it.tag == tag) return true;
   return false;
+}
+
+bool Message::has(std::uint16_t tag) const {
+  return in_source(tag) || find_edit(tag) != nullptr;
 }
 
 std::optional<std::span<const std::byte>> Message::value_of(std::uint16_t tag) const {
@@ -60,6 +64,10 @@ Result<std::monostate> Message::set(std::uint16_t tag, Value v) {
 }
 
 Result<ber::Bytes> Message::encode() const {
+  if (edits_.empty() && pkt_.total_size != 0)
+    return Result<ber::Bytes>::ok(
+        ber::Bytes(bytes_.begin(), bytes_.begin() + pkt_.total_size));
+
   LocalSetBuilder b(*reg_);
   for (const auto& it : pkt_.items) {
     if (it.tag == 1) continue;  // checksum re-emitted by finalize()
@@ -69,7 +77,7 @@ Result<ber::Bytes> Message::encode() const {
       b.append_raw(it.tag, it.value);
   }
   for (const auto& [tag, bytes] : edits_)  // tags added, not present in the source
-    if (!has(tag)) b.append_raw(tag, bytes);
+    if (!in_source(tag)) b.append_raw(tag, bytes);
   return std::move(b).finalize(reg_->ul_key, /*enforce_mandatory=*/false);
 }
 

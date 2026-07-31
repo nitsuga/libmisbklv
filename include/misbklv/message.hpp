@@ -35,7 +35,16 @@ class Message {
 
   const Registry& registry() const { return *reg_; }
   const std::vector<Item>& items() const { return pkt_.items; }  // wire order
+  // True if `tag` occurs in the parsed source packet or has a staged set() edit.
   bool has(std::uint16_t tag) const;
+
+  // Named-tag overload: has(tags::Uas0601::SensorLatitude).
+  template <class E,
+            std::enable_if_t<std::is_enum_v<E> &&
+                std::is_same_v<std::underlying_type_t<E>, std::uint16_t>, int> = 0>
+  bool has(E tag) const {
+    return has(static_cast<std::uint16_t>(tag));
+  }
 
   // Typed read: decodes the item (edited value if set()) and returns it iff the
   // requested type matches the descriptor's ValueKind, else nullopt.
@@ -72,8 +81,10 @@ class Message {
     return set(static_cast<std::uint16_t>(tag), std::move(v));
   }
 
-  // Rebuild the packet: untouched items pass through byte-exact, edited/added via
-  // the codec, checksum re-emitted. No edits => identical to the source bytes.
+  // With no staged edits on a parsed Message, returns an owned byte-for-byte copy
+  // of that packet only (excluding trailing parse input). Otherwise rebuilds:
+  // untouched items pass through byte-exact, edited/added via the codec, and the
+  // checksum is re-emitted.
   Result<ber::Bytes> encode() const;
 
   std::int64_t pts() const { return pts_; }
@@ -89,6 +100,7 @@ class Message {
   template <class U> friend class Result;  // Result<Message> value-inits on err()
   std::optional<std::span<const std::byte>> value_of(std::uint16_t tag) const;
   const ber::Bytes* find_edit(std::uint16_t tag) const;
+  bool in_source(std::uint16_t tag) const;
 
   std::vector<std::byte> bytes_;  // owned source copy; pkt_ spans into it
   Packet pkt_;

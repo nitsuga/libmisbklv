@@ -88,6 +88,14 @@ follow-on (the alternative not taken this pass).
 - A new concurrency surface (the stream's producer thread + queue) — kept small
   and behind the facade; the backend already owns threads (B4).
 
+# Implementation refinement (2026-07-31)
+
+`has()` reflects both source items and staged additions. `encode()` uses private
+source membership to distinguish those cases: an unedited parsed `Message`
+returns exactly its original packet extent, preserving noncanonical BER and
+checksum placement while excluding trailing input bytes. `Message::create`
+continues to build packets from staged items.
+
 # Assumptions / open questions
 
 - **`get<T>` type must match the descriptor's `ValueKind`** (e.g. `get<double>`

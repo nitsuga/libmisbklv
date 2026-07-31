@@ -2,6 +2,12 @@
 
 ## 2026-07-31
 
+* **Corrected the Message source/edit contract.** `has()` now reflects source
+  items and staged additions; `encode()` uses private source membership so an
+  unedited parsed Message returns only its original packet extent, preserving
+  noncanonical BER and checksum placement without trailing input. `create()`
+  continues to build packets from staged items.
+
 * **Hardened VTarget Series, BER-OID/tag parsing, and packet framing.** VTarget
   Series declared lengths now use overflow-safe handling; BER-OID rejects
   forbidden leading-zero encodings and integer overflow, and decoded tags
