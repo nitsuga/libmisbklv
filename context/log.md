@@ -10,6 +10,9 @@
   marks a rule *observed* where a real incident produced it and asks future
   sessions to append their own. This repo's own "Now" does not yet comply —
   recorded under PROGRESS § Known gaps.
+* **The link check now also resolves `[[slug]]` wikilinks** against concept
+  names. They are not the house style here (this bundle uses sibling-relative
+  markdown throughout), but a stray one no longer slips through unverified.
 * **Fixed the link-check CI's blind spot.** It silently remapped root-absolute
   links onto `context/` before checking existence, so the one form CONVENTIONS
   bans was the one form it repaired — which is how ~68 of them accumulated here
