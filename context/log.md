@@ -10,6 +10,15 @@
   marks a rule *observed* where a real incident produced it and asks future
   sessions to append their own. This repo's own "Now" does not yet comply —
   recorded under PROGRESS § Known gaps.
+* **Emptied PROGRESS "Now" of its feature inventory** (~85 lines → ~20), per the
+  rule adopted earlier today. Nothing was lost: every claim was already owned by
+  a concept, an ADR, or [`docs/api.md`](../docs/api.md), and the two kinds that
+  had no durable home got one — the build/test/CI facts are now `CLAUDE.md`
+  § Build / test / run (a section this repo never had), and the 0601 registry's
+  coverage (every §8 item but the deprecated Item 66; embedded Local Sets and
+  DLP/FLP/VLP packs as named opaque `bytes`) is now
+  [ADR 0012](./decisions/0012-registry-codegen.md) § Consequences, beside the
+  TOML it describes. "Now" is where the work is; the pointers carry the rest.
 * **The link check now also resolves `[[slug]]` wikilinks** against concept
   names. They are not the house style here (this bundle uses sibling-relative
   markdown throughout), but a stray one no longer slips through unverified.

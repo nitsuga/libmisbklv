@@ -90,6 +90,37 @@ So:
   only in a dated `log.md` snapshot (history, frozen at write time). Same for any
   state that moves — describe the state, don't tally it.
 
+## Build / test / run
+
+`cmake -S . -B build && cmake --build build && ctest --test-dir build`.
+
+Two options: `MISBKLV_GSTREAMER` (default ON) builds the gstreamer media backend
+— the KLV core builds and tests without it, and that separation is load-bearing
+(see [`context/backend-scope.md`](context/backend-scope.md)). `MISBKLV_SANITIZE`
+(default OFF) builds with `-fsanitize=address,undefined`; the core is kept clean
+under it.
+
+What the suites guard, so a change lands in the right one:
+
+- `st0601_examples` — the standard's own per-item worked examples. The authority
+  on scales and encoding for the 0601 registry; a scale change that passes
+  everything else must pass this.
+- `hardening` — multi-byte BER-OID tags (≥128), Report-on-Change trimmed
+  packets, and malformed/adversarial input (overflow guards in length
+  arithmetic, length validation in `codec::decode`).
+- `message`, `roundtrip`, `imapb`, `nested_vmti`, `vtarget_series`,
+  `standalone_vmti` — core encode/decode and the ST 1201 IMAPB path.
+- `gst_*` and `stream_*` — the backend: extraction and insertion, file and live,
+  against the sample streams in `data/`.
+- `api_stream`, `stream_stop` — the high-level API and prompt cancellation
+  ([ADR 0019](context/decisions/0019-extract-cancellation.md)).
+- `jmisb_crosscheck` — our output read back by an independent implementation.
+
+CI runs build+test, a **consumer smoke test** (`find_package(misbklv COMPONENTS
+gst)` against a real out-of-tree build), a **sanitizer** job (core only), and the
+**registry drift** check from
+[ADR 0012](context/decisions/0012-registry-codegen.md).
+
 ## Prose style
 
 **American English**, everywhere prose appears — code comments, doc strings, CLI

@@ -111,6 +111,13 @@ The generated header(s) (`include/misbklv/registry/*.generated.hpp`) are
 - Adding an item = edit TOML + `regenerate-registry` + commit; adding a standard
   = new TOML + a `RegistryId` enum entry.
 - Consumers build with **no Python**; only contributors regenerating need it.
+- **Coverage lives in the TOML, so it is reviewable in one place.**
+  `registry/0601.toml` carries every §8 item of ST 0601.19 except the deprecated
+  Item 66 — so the sample streams decode with no unregistered tags. Items the
+  standard defines as another standard's Local Set, or as a DLP/FLP/VLP pack, are
+  registered as named opaque `bytes`: addressable and byte-identical on
+  round-trip, without a typed nested registry. `registry/0903.toml` is filled as
+  data needs it rather than exhaustively.
 - The generator is the natural place to later *scrape* the standard's item table
   (`ST0601.19.txt` ~line 658) into TOML, if we automate ingestion.
 
