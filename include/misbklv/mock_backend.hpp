@@ -42,9 +42,12 @@ class MockBackend : public MediaBackend {
       : packets_(std::move(packets)), pts_(std::move(pts)) {}
 
   Result<std::monostate> extract(std::string_view, const PacketHandler& on_packet,
-                                 std::stop_token stop = {}) override {
+                                 std::stop_token stop = {},
+                                 ExtractOptions options = {}) override {
     for (std::size_t i = 0; i < packets_.size(); ++i) {
       if (stop.stop_requested()) break;  // cooperative cancel (ADR 0019)
+      if (packets_[i].size() > options.max_packet_bytes)
+        return Result<std::monostate>::err(Error::ResourceLimit);
       on_packet(KlvPacket{std::span<const std::byte>(packets_[i]),
                           i < pts_.size() ? pts_[i] : kNoPts});
     }

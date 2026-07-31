@@ -19,6 +19,12 @@
 namespace misbklv {
 
 inline constexpr std::int64_t kNoPts = -1;
+inline constexpr std::size_t kDefaultMaxKlvPacketBytes = 16 * 1024 * 1024;
+
+struct ExtractOptions {
+  // Cap for one complete KLV frame (UL + BER length + value) during extraction.
+  std::size_t max_packet_bytes = kDefaultMaxKlvPacketBytes;
+};
 
 // One complete, framed KLV packet delivered by extraction. `bytes` borrow the
 // backend's reassembly buffer and are valid ONLY during the handler call — copy
@@ -129,14 +135,15 @@ class MediaBackend {
  public:
   // Drive a demux pipeline; call `on_packet` for each complete KLV packet.
   // Blocking; the handler runs on the backend's thread. `source` is a bare path
-  // / "file:PATH" (ends at EOS) or a live "udp:host:port" / "srt:uri" (ends when
-  // the source goes idle after delivering data — no EOS crosses the network, B4).
+  // / "file:PATH" (ends at EOS), live "udp:host:port" (ends after received
+  // data then a UDP idle timeout), or live "srt:uri" (no natural idle end).
   // `stop` cancels a live extract early (cooperative, polled from another thread —
   // e.g. a KlvStream consumer that breaks); a default token is never signaled, so
   // extract runs to the natural end (ADR 0019).
   virtual Result<std::monostate> extract(std::string_view source,
                                          const PacketHandler& on_packet,
-                                         std::stop_token stop = {}) = 0;
+                                         std::stop_token stop = {},
+                                         ExtractOptions options = {}) = 0;
   virtual Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig&) = 0;
   virtual ~MediaBackend() = default;
 };

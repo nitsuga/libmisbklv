@@ -33,8 +33,9 @@ beyond MSID passthrough.
 - **Phase 3 — Implementation** (done, extending incrementally): the KLV core
   (milestones 1–6: round-trips, ST 1201 IMAPB, 0903 nesting / standalone /
   VTarget Series) and the gstreamer backend (every B-phase in
-  [`backend-scope`](../context/backend-scope.md): extraction 0x06 + 0x15, file +
-  live; insertion file + live, clock-paced, with optional video passthrough) —
+  [`backend-scope`](../context/backend-scope.md): 0x06 extraction file + live,
+  gst-free 0x06/0x15 offline extraction; insertion file + live, clock-paced,
+  with optional video passthrough) —
   both on stock gstreamer, no custom element. The in-library PMT-rewrite element that ADR 0008 planned
   was proven unnecessary ([ADR 0015](../context/decisions/0015-no-pmt-rewrite.md)).
   Ongoing within this phase: registry breadth (below).
@@ -50,9 +51,10 @@ beyond MSID passthrough.
   adversarial/real-world test pass (`hardening_test`, ASan+UBSan in CI),
   conformance against the standards' own worked examples
   (`st0601_examples_test`) and jmisb, `find_package` packaging with a consumer
-  smoke test, and the user guide ([`../docs/api.md`](../docs/api.md)). What keeps
-  it open is data-driven: conformance breadth follows the samples and the
-  registry (see PROGRESS "Known gaps").
+  smoke test, and the user guide ([`../docs/api.md`](../docs/api.md)); bounded
+  live-frame reassembly is settled in [ADR 0026](../context/decisions/0026-bounded-live-klv-reassembly.md).
+  What keeps it open is data-driven: conformance breadth follows the samples and
+  the registry (see PROGRESS "Known gaps").
 
 ## Open forks
 
@@ -68,6 +70,9 @@ Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 **Candidate future forks** (not yet opened), mostly downstream of
 registry/data breadth:
 
+- **Observable high-level streaming errors** — choose how `KlvStream` exposes a
+  worker-thread extraction failure after iteration has started, without turning
+  normal EOS or cooperative cancellation into exceptions by accident.
 - ST 0102 Security LS as a typed nested registry (seen as tag 48 in `falls`;
   currently opaque passthrough).
 - 0903 Array type (§9.1.2) — a descriptor-schema extension.
@@ -83,7 +88,8 @@ registry/data breadth:
   [ADR 0016](../context/decisions/0016-ts-0x15-extraction.md)); extends 0016.
 
 Incremental *work* that needs no fork (registry breadth, an SRT test) lives in
-[PROGRESS](./PROGRESS.md) "Next", not here.
+[PROGRESS](./PROGRESS.md) "Next", not here. PROGRESS can also point at the one
+candidate fork being considered next without duplicating this backlog's detail.
 
 ## Fork lifecycle
 

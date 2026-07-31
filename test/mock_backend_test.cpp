@@ -32,6 +32,21 @@ int main() {
   check(got_pts == std::vector<std::int64_t>{kNoPts, kNoPts},
         "untimed stream extracts as kNoPts");
 
+  // MockBackend applies the byte cap without requiring its canned packets to
+  // be structurally valid KLV. An over-limit canned packet is never delivered.
+  got.clear();
+  auto limited = be.extract("mock", [&](const KlvPacket& kp) {
+    got.emplace_back(kp.bytes.begin(), kp.bytes.end());
+  }, {}, ExtractOptions{.max_packet_bytes = 2});
+  check(!limited && limited.error() == Error::ResourceLimit && got.empty(),
+        "MockBackend limit rejects over-limit canned packet before callback");
+  got.clear();
+  auto arbitrary = be.extract("mock", [&](const KlvPacket& kp) {
+    got.emplace_back(kp.bytes.begin(), kp.bytes.end());
+  }, {}, ExtractOptions{.max_packet_bytes = 3});
+  check(arbitrary && got.size() == 2 && got[0] == p1 && got[1] == p2,
+        "MockBackend cap preserves within-limit arbitrary canned bytes");
+
   // ...and a timed one replays its timestamps (ADR 0021): the interface says
   // pts_ns is ns from the start of the source, so the test double must be able
   // to say something other than "no idea".

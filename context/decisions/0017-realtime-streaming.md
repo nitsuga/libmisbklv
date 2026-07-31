@@ -46,6 +46,14 @@ a receiver thread, realtime `open_insert`/`push` on the main thread — recovers
 the KLV **byte-exact**, and the 6-packet send takes ~165 ms (5 × 33 ms),
 confirming the output is clock-paced, not fast-pushed.
 
+# Update (2026-07-31)
+
+The idle-timeout behavior applies to UDP: `udpsrc` emits the timeout message.
+`srtsrc` has no equivalent idle termination, so SRT extraction ends through
+cooperative cancellation or an external source termination/error. The deferred
+stop-token alternative and the immediate-stop consequence above are superseded
+by [ADR 0019](./0019-extract-cancellation.md).
+
 # Alternatives considered
 
 - **A stop token / `bool`-returning handler to end extraction** — a cleaner

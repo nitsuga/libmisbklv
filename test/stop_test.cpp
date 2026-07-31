@@ -41,7 +41,8 @@ class StreamingMock : public MediaBackend {
   std::atomic<int> emitted{0};
 
   Result<std::monostate> extract(std::string_view, const PacketHandler& on_packet,
-                                 std::stop_token stop = {}) override {
+                                 std::stop_token stop = {},
+                                 ExtractOptions = {}) override {
     while (!stop.stop_requested()) {
       on_packet(KlvPacket{std::span<const std::byte>(pkt_), kNoPts});
       emitted.fetch_add(1, std::memory_order_relaxed);

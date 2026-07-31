@@ -20,8 +20,8 @@ None currently.
 
 ## Next
 
-- **Live extraction resilience**: define deliberate reassembly limits and
-  observable streaming errors.
+- **Observable high-level streaming errors**: make live extraction failures
+  visible through the streaming facade.
 - **Registry breadth — 0903 side**: the remaining VMTI/VTarget items, as data
   needs them. (0601 is complete.)
 - **An SRT-specific hermetic streaming test** — the udp live path is covered,

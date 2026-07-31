@@ -130,12 +130,24 @@ int main(int argc, char** argv) {
   std::printf("INSERT ROUND-TRIP: %s\n", match ? "byte-exact PASS" : "MISMATCH");
   if (!match) return 1;
 
-  // --- corrupt ES prefix: extractor must discard it and resynchronize --------
-  const std::size_t valid_size = packet_frame_length(input);
-  if (valid_size == 0) {
+  // Incremental extraction refuses an oversized declared frame before delivering
+  // it. The cap is one byte below the first real packet, so no callback is allowed.
+  const std::size_t first_packet_size = packet_frame_length(input);
+  if (first_packet_size == 0) {
     std::fprintf(stderr, "fixture has no complete first KLV packet\n");
     return 2;
   }
+  std::size_t over_limit_callbacks = 0;
+  auto over_limit = be->extract(argv[2], [&](const KlvPacket&) {
+    ++over_limit_callbacks;
+  }, {}, ExtractOptions{.max_packet_bytes = first_packet_size - 1});
+  const bool limit_ok = !over_limit && over_limit.error() == Error::ResourceLimit &&
+                        over_limit_callbacks == 0;
+  std::printf("EXTRACT LIMIT: %s\n", limit_ok ? "PASS" : "MISMATCH");
+  if (!limit_ok) return 1;
+
+  // --- corrupt ES prefix: extractor must discard it and resynchronize --------
+  const std::size_t valid_size = first_packet_size;
   std::vector<std::byte> garbage(17, std::byte{0xA5});
   garbage[16] = std::byte{0x00};  // superficially complete but not a known UL
   const auto valid = std::span<const std::byte>(input).first(valid_size);
@@ -156,5 +168,24 @@ int main(int argc, char** argv) {
   std::printf("EXTRACT RESYNC: %s (emitted=%zu bytes=%zu expected=%zu error=%d)\n",
               resync_ok ? "PASS" : "MISMATCH", emitted, resynced.size(), valid.size(),
               resync ? 0 : static_cast<int>(resync.error()));
-  return resync_ok ? 0 : 1;
+  if (!resync_ok) return 1;
+
+  // --- natural EOS with a declared frame missing its last byte is truncated ---
+  const auto partial = valid.first(valid.size() - 1);
+  const std::size_t cut1 = std::min<std::size_t>(3, partial.size());
+  const std::size_t cut2 = std::min<std::size_t>(6, partial.size());
+  const std::string truncated_path = std::string(argv[2]) + ".truncated.ts";
+  if (!mux_chunks(truncated_path.c_str(), partial.first(cut1),
+                  partial.subspan(cut1, cut2 - cut1), partial.subspan(cut2))) {
+    std::fprintf(stderr, "truncated test mux failed\n");
+    return 2;
+  }
+  std::size_t truncated_callbacks = 0;
+  auto truncated = be->extract(truncated_path, [&](const KlvPacket&) {
+    ++truncated_callbacks;
+  });
+  const bool truncated_ok = !truncated && truncated.error() == Error::Truncated &&
+                            truncated_callbacks == 0;
+  std::printf("EXTRACT TRUNCATED EOS: %s\n", truncated_ok ? "PASS" : "MISMATCH");
+  return truncated_ok ? 0 : 1;
 }

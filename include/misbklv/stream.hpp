@@ -28,10 +28,10 @@ namespace misbklv {
 // source's timing in `pts()` — nanoseconds from the start of the source, the same
 // timeline KlvSink emits on, so `KlvStream -> edit -> KlvSink` keeps a stream
 // where it was (ADR 0021). `kNoPts` for a source whose KLV PES are untimed.
-// Iteration ends when the source reaches EOS (file) or idles (live). Breaking
-// early is safe: the
-// destructor cooperatively cancels the extract (ADR 0019), so it returns promptly
-// even for an endless live source (no wait for the idle timeout / EOS).
+// Iteration ends when a file reaches EOS or UDP idles after data; SRT has no
+// natural idle end. Breaking early is safe: the destructor cooperatively cancels
+// the extract (ADR 0019), so it returns promptly even for an endless live source
+// (no wait for the idle timeout / EOS).
 class KlvStream {
  public:
   explicit KlvStream(std::string source);  // default gstreamer backend

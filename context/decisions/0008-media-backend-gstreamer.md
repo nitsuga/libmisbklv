@@ -83,6 +83,13 @@ already emits `stream_type 0x06` + `KLVA`, verified by a byte-exact insertion
 round-trip, so no PMT-rewrite element is built. Everything else in this ADR
 stands.
 
+# Update (2026-07-31)
+
+The original extraction statement is refined to describe the implementation:
+`GstBackend` uses `tsdemux` and extracts `stream_type` 0x06 KLV. The gst-free
+whole-buffer `extract_ts_klv` path handles both 0x06 and 0x15 offline; live 0x15
+extraction remains deferred. This corrects the current extraction boundary only.
+
 # Consequences
 
 - v1 ships a gstreamer backend doing extract + insert (file + real-time,

@@ -358,6 +358,68 @@ static void test_parser_boundaries() {
         "parse_items tag 65537 -> OutOfRange (cannot alias checksum tag 1)");
 }
 
+// --- (5) bounded live-frame inspection -------------------------------------
+static void test_bounded_frame_inspection() {
+  std::printf("(5) bounded live-frame inspection\n");
+  constexpr std::size_t cap = 20;
+  std::vector<std::byte> ul;
+  for (std::uint8_t b : kUas0601Key) ul.push_back(B(b));
+
+  auto empty = inspect_packet_frame({}, cap);
+  check(empty && !*empty, "empty frame inspection -> incomplete");
+  auto partial_ul = inspect_packet_frame(std::span<const std::byte>(ul).first(3), cap);
+  check(partial_ul && !*partial_ul, "partial matching UL -> incomplete");
+
+  const std::vector<std::byte> invalid_prefix{B(0x06), B(0x0E), B(0x2B), B(0x35)};
+  auto invalid = inspect_packet_frame(invalid_prefix, cap);
+  check(!invalid && invalid.error() == Error::BadLength,
+        "nonmatching UL prefix -> BadLength");
+
+  auto no_length = inspect_packet_frame(ul, cap);
+  check(no_length && !*no_length, "valid UL with missing BER length -> incomplete");
+  auto split_length = ul;
+  split_length.push_back(B(0x82));
+  split_length.push_back(B(0x00));
+  auto partial_length = inspect_packet_frame(split_length, cap);
+  check(partial_length && !*partial_length,
+        "valid UL with split legal BER length -> incomplete");
+
+  auto indefinite = ul;
+  indefinite.push_back(B(0x80));
+  auto bad_indefinite = inspect_packet_frame(indefinite, cap);
+  check(!bad_indefinite && bad_indefinite.error() == Error::BadLength,
+        "indefinite BER length -> BadLength");
+  auto excessive_count = ul;
+  excessive_count.push_back(B(0x89));
+  auto bad_count = inspect_packet_frame(excessive_count, cap);
+  check(!bad_count && bad_count.error() == Error::BadLength,
+        "BER length count over eight -> BadLength");
+
+  // 16-byte UL + one-byte length + four-byte value is over a 20-byte cap,
+  // even though none of that value has arrived yet.
+  auto over_cap = ul;
+  over_cap.push_back(B(0x04));
+  auto refused = inspect_packet_frame(over_cap, cap);
+  check(!refused && refused.error() == Error::ResourceLimit,
+        "declared frame over cap -> ResourceLimit before payload");
+
+  auto exact_cap = ul;
+  exact_cap.insert(exact_cap.end(), {B(0x03), B(0x00), B(0x00), B(0x00)});
+  auto complete = inspect_packet_frame(exact_cap, cap);
+  check(complete && *complete && **complete == cap,
+        "complete frame exactly at cap succeeds");
+  auto underfilled = exact_cap;
+  underfilled.pop_back();
+  auto incomplete = inspect_packet_frame(underfilled, cap);
+  check(incomplete && !*incomplete, "within-cap declared frame missing bytes -> incomplete");
+
+  // The compatibility framer stays unbounded and returns only a complete size.
+  check(packet_frame_length(exact_cap) == cap,
+        "packet_frame_length compatibility complete frame");
+  check(packet_frame_length(underfilled) == 0,
+        "packet_frame_length compatibility incomplete frame");
+}
+
 int main(int argc, char** argv) {
   const char* path =
       argc > 1 ? argv[1] : "test/fixtures/dayflight_first_packet.klv";
@@ -371,6 +433,7 @@ int main(int argc, char** argv) {
   test_roc_trimmed(full);
   test_malformed();
   test_parser_boundaries();
+  test_bounded_frame_inspection();
   std::printf("%s\n", failures == 0 ? "HARDENING: all PASS" : "HARDENING: FAIL");
   return failures == 0 ? 0 : 1;
 }

@@ -162,7 +162,9 @@ Opened here during scoping, each resolved by an ADR (see the
 - ~~**PMT rewrite is the hard part**~~ — **retired**: the B2 spike proved stock
   `mpegtsmux` (gst ≥ 1.20) emits `0x06`+KLVA, so `klvpmtrewrite` isn't built
   (ADR 0015). The single biggest planned risk is gone.
-- **0x15 extraction gap** — stock tsdemux can't; custom demux is more work.
+- **Live 0x15 extraction gap** — stock `tsdemux` cannot surface 0x15, so the
+  live GStreamer path handles 0x06 only. The gst-free whole-buffer extractor
+  handles both offline; live 0x15 needs an incremental TS demux.
 - **CI** — the gst backend needs the gst dev libs in CI; keep it a separate,
   skippable job so the core build stays light.
 

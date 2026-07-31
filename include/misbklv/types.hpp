@@ -25,6 +25,7 @@ enum class Error : std::uint8_t {
   Unsupported,  // not implemented in this backend / config
   // Typed encode validation; appended to preserve the existing numeric codes.
   TypeMismatch,  // Value variant does not match the ItemDescriptor::kind
+  ResourceLimit,  // configured parser/backend resource limit exceeded
 };
 
 // Minimal Result<T> — the full map/and_then API is deferred (ADR 0007).

@@ -20,14 +20,15 @@ ffmpeg backend are deferred — see
   standalone, and VTarget Series — decode and byte-exact re-encode.
 - **ST 1201 IMAPB** float↔integer mapping (incl. structural special values),
   cross-checked against the standards' vectors and jmisb.
-- **MPEG-TS via GStreamer**: extract (`stream_type` 0x06 **and** 0x15, from a
-  file or a live `udp:` / `srt:` source) and insert (file or live, clock-paced),
-  all with stock GStreamer — no custom plugin.
+- **MPEG-TS via GStreamer**: extract `stream_type` 0x06 from a file or live
+  `udp:` / `srt:` source, and insert to a file or live sink (clock-paced), all
+  with stock GStreamer — no custom plugin.
 - **Video passthrough on insert**: point the sink at a source file and its video
   elementary stream is re-muxed unchanged (parsed, never decoded) alongside your
   KLV — one call writes a TS with both a video PID and a KLV PID.
-- **gst-free file extraction**: pull KLV from a `.ts` buffer with zero
-  dependencies (`extract_ts_klv`); GStreamer is only needed for live sources.
+- **gst-free file extraction**: pull `stream_type` 0x06 **and** 0x15 KLV from a
+  `.ts` buffer with zero dependencies (`extract_ts_klv`); GStreamer is only
+  needed for live sources.
 - **High-level API**: an owned, editable `Message` (typed `get<T>`/`set`,
   byte-exact `encode`) plus a `KlvStream` / `KlvSink` read-edit-write facade —
   read and write share one timeline, so editing a stream doesn't re-time it.

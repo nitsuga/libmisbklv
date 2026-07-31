@@ -2,6 +2,16 @@
 
 ## 2026-07-31
 
+* **Bounded incremental GStreamer KLV reassembly.** Extraction now distinguishes
+  incomplete input from malformed BER, refuses declared frames above its
+  configurable cap, resynchronizes only before a valid UL, and reports natural
+  termination with a partial frame as `Truncated`. Cooperative cancellation
+  remains successful.
+
+* **Fork 24 — bounded live KLV frame reassembly accepted:** configurable 16 MiB
+  complete-frame cap and framing outcomes in
+  [ADR 0026](./decisions/0026-bounded-live-klv-reassembly.md).
+
 * **Corrected the Message source/edit contract.** `has()` now reflects source
   items and staged additions; `encode()` uses private source membership so an
   unedited parsed Message returns only its original packet extent, preserving

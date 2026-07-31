@@ -24,9 +24,15 @@ for (Message& m : in) {
 out.close();
 ```
 
-`for (Message& m : in)` pulls each packet until the source ends (EOS for a file,
-idle for a live source). `emit` re-encodes and muxes; `close` drains. See
+`for (Message& m : in)` pulls each packet until the source ends (EOS for a file;
+UDP after its idle timeout). SRT has no equivalent idle signal, so it continues
+until cancellation (for example, destroying the stream) or external source
+termination/error. `emit` re-encodes and muxes; `close` drains. See
 [`examples/klv_edit.cpp`](../examples/klv_edit.cpp).
+
+Low-level `MediaBackend::extract` callers can pass `ExtractOptions` to change the
+16 MiB default cap on a complete incrementally reassembled KLV frame. A declared
+frame above that cap returns `Error::ResourceLimit` before it is delivered.
 
 - **Timing carries through.** `m.pts()` is where the packet sat in the source —
   nanoseconds from the start of it — and `emit` writes it back at that time, so

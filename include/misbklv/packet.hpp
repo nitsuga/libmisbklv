@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -34,10 +35,17 @@ Result<std::vector<Item>> parse_items(std::span<const std::byte> buf);
 // Parse one KLV packet from the front of `buf`. Borrows into `buf` (ADR 0005).
 Result<Packet> parse_packet(std::span<const std::byte> buf);
 
+// Inspect the packet frame at the front of `buf`. A complete frame returns its
+// total byte size; a matching partial UL or incomplete legal BER header/value
+// returns an empty optional. A non-UL/malformed prefix or BER length is
+// BadLength, and a declared total above `max_packet_bytes` is ResourceLimit.
+Result<std::optional<std::size_t>> inspect_packet_frame(
+    std::span<const std::byte> buf, std::size_t max_packet_bytes);
+
 // Byte length of the complete KLV packet at the front of `buf`, or 0 if `buf`
 // does not begin with the SMPTE UL prefix or does not yet hold a whole packet
-// (need more data). Frames a reassembled stream of concatenated packets — used
-// by the media backend (ADR 0013).
+// (need more data), or if its BER framing is invalid. This compatibility
+// wrapper is effectively unlimited; use inspect_packet_frame() for errors/caps.
 std::size_t packet_frame_length(std::span<const std::byte> buf);
 
 }  // namespace misbklv
