@@ -1,5 +1,58 @@
 # Knowledge Bundle Log
 
+## 2026-08-01
+
+* **Migrated the knowledge bundle to OKF v0.2.** `timestamp:` became
+  `generated: {by, at}` across every concept and ADR, carrying each doc's
+  existing timestamp through unchanged; the actor is `claude/opus-5` throughout,
+  never the `human:` prefix, because trust tooling keys off that prefix and
+  these are agent-written docs. ADRs carry `decision_status:` rather than
+  `status:`, since v0.2 claims `status` for *document* lifecycle
+  (draft/stable/deprecated) — a different axis from decision state, as a
+  superseded ADR is still a stable document. CONVENTIONS gained the v0.2
+  frontmatter shape, the actor convention, the optional-families table, and a
+  `# Citations and sources` section giving `sources:` and the body `# Citations`
+  separate jobs: the machine-readable index of external inputs, and the
+  annotated bibliography saying what each source decided. Purely internal
+  cross-references get no `sources` entry, so most ADRs correctly have none.
+
+* **Made the agent entrypoint vendor-neutral.** `AGENTS.md` is now the canonical
+  file every agent reads; `CLAUDE.md` is a one-line `@AGENTS.md` import, since
+  Claude Code auto-loads that filename. A pointer, not a fork — duplicating the
+  rules into two files is the exact duplication those rules exist to prevent, so
+  another agent means another thin pointer. Live cross-references were repointed;
+  this log's earlier entries and ADRs 0008/0009 were left alone, being frozen
+  records of what `CLAUDE.md` said at the time.
+
+* **Resolved two contradictions the docs had carried.** `references/` was
+  described as "immutable — read, never modify" while this repo genuinely
+  ingests into it (ST 0603.5 landed 2026-07-27), which reads as a contradiction
+  and makes an agent hesitate before a directed ingest; it is now stated as
+  append-only, with immutability governing each snapshot rather than the
+  directory's file count, and the case neither doc covered — a source believed
+  wrong is never edited in place, it gets a `context/` concept citing it and
+  saying where it departs. Separately, CONVENTIONS claimed broken links "are not
+  errors", which is OKF *consumer*-tolerance semantics pasted into this repo's
+  own policy: consumers must tolerate a dangling link, but this bundle must not
+  ship one, and the link-check CI fails on it.
+
+* **Fixed a blind spot that had been silently disabling the link check.** The
+  workflow stripped HTML comments *before* code, so the bare `<!--` inside a
+  documented code block paired with a `-->` far below and swallowed everything
+  between — every check skipped that span, invisibly. Code spans are now removed
+  first, comments last. Verified against a constructed case: under the old
+  ordering a broken link below such a fence produced no hit at all; under the
+  new one it is caught. The workflow also gained a dangling-footnote check
+  (`[^label]` matching no `sources[].id` in the same file), and citations are now
+  anchored by section rather than position — a line or page number into a `.txt`
+  extract silently comes to point at the wrong text when the extract is
+  regenerated, which is worse than a broken link because it still resolves and
+  still looks right.
+
+* Backported from `okf-project-template` (commits `6301ae4`, `5643ecb`,
+  `a1e0a1c`, `46e4258`, `cabc297`), applied in dependency order rather than
+  template order so each file was written once into its final home.
+
 ## 2026-07-31
 
 * **Split the GStreamer backend by responsibility without changing behavior.**
