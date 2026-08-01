@@ -19,7 +19,7 @@ and direct the work. On disagreement, the OKF spec wins over this doc.
 
 | Path | Role |
 |------|------|
-| `../references/` | Immutable raw sources (standards PDFs + `.txt` extracts). Agent reads, never modifies. |
+| `../references/` | Raw sources (standards PDFs + `.txt` extracts), append-only. Agent reads, and deposits new snapshots on a directed ingest; never edits one that's already there. |
 | `context/` | This bundle. Agent-owned synthesis. |
 | `../docs/` | Human-facing authored guides (terse). Not agent-maintained. |
 | `../data/` | Sample MPEG-TS test vectors. |
@@ -131,8 +131,15 @@ the bundle, so it works nowhere. A lint on 2026-07-27 fixed ~68 of these.
 house style here — they do not render on GitHub.
 
 Relationship semantics — references, nests-in, depends-on — live in the
-surrounding prose; the link itself is untyped. Broken links are not errors; they
-may be not-yet-written knowledge.
+surrounding prose; the link itself is untyped.
+
+**Broken links are errors here.** OKF *consumers* must tolerate them — a
+dangling link may be not-yet-written knowledge — but that's a robustness rule
+for readers, not license for this bundle to ship them:
+[`link-check`](../.github/workflows/link-check.yml) fails the build on one.
+When a concept isn't written yet, name it in prose without linking, or write
+the stub; the lint's "concepts mentioned but not written" pass (§ Operations)
+is what turns those into links later.
 
 # Reserved files
 
@@ -164,5 +171,14 @@ read-through.
 
 # Source discipline
 
-Never edit files in `../references/`. The immutable PDFs are the source of
-truth; this bundle is the curated, cross-linked reading of them.
+`../references/` is **append-only**. Never edit, reformat, or delete a file
+that's already there — the immutable standards PDFs are the source of truth,
+and this bundle is the curated, cross-linked reading of them. Adding is
+different from editing: when the user directs an ingest (e.g. ST 0603.5, added
+2026-07-27), deposit the new standard's PDF and `.txt` extract there as a
+faithful snapshot (§ Operations — Ingest), then leave it alone forever.
+"Immutable" governs each snapshot, not the directory's file count.
+
+Correcting a source you believe is wrong is *never* an edit there: the
+correction is knowledge, so it belongs in a `context/` concept that cites the
+original and says where it departs from it.

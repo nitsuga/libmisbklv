@@ -22,7 +22,8 @@ v0.1 bundle.
 - Read [`context/index.md`](context/index.md) first — the bundle catalog.
 - [`context/CONVENTIONS.md`](context/CONVENTIONS.md) — frontmatter, type
   vocabulary, ingest/query/lint rules. Read before editing `context/`.
-- `context/` is agent-owned. `references/` is immutable — read, never modify.
+- `context/` is agent-owned. `references/` is append-only: read it, add a
+  snapshot on a directed ingest, never edit one that's already there.
 - For the live plan and status, read [`planning/PROGRESS.md`](planning/PROGRESS.md)
   and [`planning/ROADMAP.md`](planning/ROADMAP.md).
 
@@ -136,9 +137,10 @@ consistency, not correctness: the standards this library implements (MISB ST
 0601, "Frame **Center**") are American-spelled, so matching them keeps our prose
 and the item names we quote from disagreeing on the same page.
 
-**`references/` is exempt and must not be touched** — it is immutable
-source-of-truth input. So is any vendored third-party code: read it, never
-restyle it.
+**`references/` is exempt, and no snapshot already there is ever restyled** —
+it is append-only source-of-truth input: an ingest may add a new PDF/`.txt`
+snapshot, but nothing already deposited is edited, reformatted, or restyled to
+match. So is any vendored third-party code: read it, never restyle it.
 
 ## Commit messages
 
@@ -147,8 +149,9 @@ behalf, write the message without the Claude co-authorship line.
 
 ## Repo layout
 
-- `references/` — MISB standards (PDF + `.txt` extract). Source of truth.
-  **Read, never modify.**
+- `references/` — MISB standards (PDF + `.txt` extract). Source of truth,
+  **append-only**: read; add a snapshot on a directed ingest; never edit what's
+  there.
 - `context/` — agent knowledge bundle (maintain this).
 - `docs/` — human-facing guides (terse).
 - `data/` — sample MPEG-TS test vectors (Day Flight, Night Flight IR).
