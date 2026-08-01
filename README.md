@@ -120,6 +120,11 @@ and tested, and the library is installable via `find_package`. See
 and [`context/decisions/`](context/decisions/) for the architectural decisions
 (ADRs).
 
+Agent working instructions live in [`AGENTS.md`](AGENTS.md) — the one canonical,
+vendor-neutral copy. `CLAUDE.md` is a one-line `@AGENTS.md` import, since Claude
+Code auto-loads that filename; supporting another agent means adding another
+thin pointer, never a second copy of the rules.
+
 ## License
 
 Apache-2.0 — see [`LICENSE`](LICENSE).

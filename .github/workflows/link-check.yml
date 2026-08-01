@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Doc hygiene: fail if an internal Markdown link points at a file that doesn't
-# exist. The docs (CLAUDE.md, context/, planning/) are heavily cross-linked, and
+# exist. The docs (AGENTS.md, context/, planning/) are heavily cross-linked, and
 # a rename silently breaks them. Ignores links inside inline-code and HTML
 # comments, so documented link *syntax* examples don't trip it.
 name: link-check
