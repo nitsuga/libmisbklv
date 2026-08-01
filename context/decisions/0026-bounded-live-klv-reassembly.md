@@ -7,9 +7,11 @@ generated:
   by: claude/opus-5
   at: 2026-07-31T00:00:00Z
 sources:
-  - resource: ../../references/ST0903.6.pdf
+  - id: st0903
+    resource: ../../references/ST0903.6.pdf
     title: MISB ST 0903.6 §9.2 — VMTI LS item/count limits
-  - resource: ../../references/ST0601.19.pdf
+  - id: st0601
+    resource: ../../references/ST0601.19.pdf
     title: MISB ST 0601.19 §8 — "Not Limited" maximum lengths
 fork: 24
 ---
@@ -20,10 +22,10 @@ GStreamer extraction receives arbitrary fragments and must retain bytes until a
 complete KLV frame is available, whether its source is a file or a live socket.
 A declared BER length can otherwise make the incremental receiver retain
 unbounded data. The MISB standards do not supply a universal KLV item maximum:
-ST 0903 permits an unlimited number of VMTI LS items with no item size limit,
-while ST 0601 marks some maximum lengths as "Not Limited" and notes that network
-guards may use such bounds. The operational limit is therefore a library policy,
-not a standards conformance limit.
+ST 0903 permits an unlimited number of VMTI LS items with no item size
+limit,[^st0903] while ST 0601 marks some maximum lengths as "Not Limited" and
+notes that network guards may use such bounds.[^st0601] The operational limit
+is therefore a library policy, not a standards conformance limit.
 
 # Decision
 
@@ -86,3 +88,6 @@ across the entire frame: the 16-byte SMPTE UL, BER length, and declared value.
 [3] [`ST 0107.5`](../st0107.md) §6 — KLV BER mechanics.
 [4] [`0013`](./0013-media-backend-interface.md) — incremental backend framing;
     [`0019`](./0019-extract-cancellation.md) — cooperative cancellation.
+
+[^st0903]: ST 0903.6 §9.2 — VMTI LS item/count limits.
+[^st0601]: ST 0601.19 §8 — "Not Limited" maximum lengths.

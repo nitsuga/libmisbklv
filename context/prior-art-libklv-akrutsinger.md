@@ -8,7 +8,8 @@ generated:
   at: 2026-07-17T13:30:00Z
 resource: https://github.com/akrutsinger/libklv
 sources:
-  - resource: https://github.com/akrutsinger/libklv
+  - id: libklv-akrutsinger
+    resource: https://github.com/akrutsinger/libklv
     title: akrutsinger/libklv (README)
 ---
 

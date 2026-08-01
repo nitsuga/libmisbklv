@@ -1,8 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 # Doc hygiene: fail if an internal Markdown link points at a file that doesn't
 # exist. The docs (AGENTS.md, context/, planning/) are heavily cross-linked, and
-# a rename silently breaks them. Ignores links inside inline-code and HTML
-# comments, so documented link *syntax* examples don't trip it.
+# a rename silently breaks them. Also fails on:
+#   - a [^label] citation footnote whose label matches no sources[].id in the
+#     same file's frontmatter. That label is the join key OKF resolves
+#     attribution through, so a dangling one is a citation pointing nowhere —
+#     and the spec leaves the case undefined, so consumers can't be relied on
+#     to flag it.
+# Ignores links inside fenced blocks, inline code, and HTML comments, so
+# documented link *syntax* examples don't trip it.
 name: link-check
 
 on:
@@ -24,10 +30,19 @@ jobs:
           for f in sorted(glob.glob('**/*.md', recursive=True)):
               if f.startswith(('build/', 'build-')):   # local build trees
                   continue
-              text = open(f, encoding='utf-8').read()
-              text = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)  # drop HTML comments
+              raw = open(f, encoding='utf-8').read()
+              # sources[].id values declared in this file's frontmatter
+              fm = re.match(r'---\n(.*?)\n---\n', raw, flags=re.DOTALL)
+              ids = set(re.findall(r'^\s*-?\s*id:\s*(\S+)', fm.group(1), flags=re.M)) if fm else set()
+              # Order matters: code first, comments last. A doc that *documents*
+              # comment syntax has a bare `<!--` inside a code block, and
+              # stripping comments first pairs it with a `-->` far below,
+              # swallowing the fences in between and blinding every check that
+              # follows. Removing code spans first leaves only real comments.
+              text = raw
               text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)   # drop fenced code
               text = re.sub(r'`[^`]*`', '', text)                      # drop inline code
+              text = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)  # drop HTML comments
               base = os.path.dirname(f)
               for m in re.findall(r'\]\(([^)]+)\)', text):
                   t = m.split('#')[0].strip()
@@ -48,6 +63,10 @@ jobs:
                   slug = w.split('|')[0].split('#')[0].strip()
                   if slug not in concepts:
                       print(f'BROKEN WIKILINK  {f}  ->  [[{w}]]'); bad += 1
+              # [^label] citation footnotes join to sources[].id in this file.
+              for lab in set(re.findall(r'\[\^([^\]]+)\]', text)):
+                  if lab not in ids:
+                      print(f'DANGLING FOOTNOTE  {f}  ->  [^{lab}]   (no sources[].id)'); bad += 1
           print('all internal links resolve' if not bad else f'{bad} bad link(s)')
           sys.exit(1 if bad else 0)
           PY

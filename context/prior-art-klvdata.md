@@ -8,7 +8,8 @@ generated:
   at: 2026-07-17T13:30:00Z
 resource: https://github.com/paretech/klvdata
 sources:
-  - resource: https://github.com/paretech/klvdata
+  - id: klvdata
+    resource: https://github.com/paretech/klvdata
     title: paretech/klvdata (README)
 ---
 

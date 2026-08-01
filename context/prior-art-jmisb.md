@@ -8,7 +8,8 @@ generated:
   at: 2026-07-18T00:00:00Z
 resource: https://github.com/WestRidgeSystems/jmisb
 sources:
-  - resource: https://github.com/WestRidgeSystems/jmisb
+  - id: jmisb
+    resource: https://github.com/WestRidgeSystems/jmisb
     title: WestRidgeSystems/jmisb — api/src/main/java/org/jmisb/api/klv/
 ---
 

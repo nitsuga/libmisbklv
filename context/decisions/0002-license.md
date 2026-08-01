@@ -7,7 +7,8 @@ generated:
   by: claude/opus-5
   at: 2026-07-17T16:30:00Z
 sources:
-  - resource: https://www.apache.org/licenses/LICENSE-2.0
+  - id: apache-2.0
+    resource: https://www.apache.org/licenses/LICENSE-2.0
     title: Apache License 2.0
 fork: 2
 ---

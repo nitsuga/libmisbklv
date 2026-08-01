@@ -8,7 +8,8 @@ generated:
   at: 2026-07-17T13:30:00Z
 resource: https://github.com/n1tsu/libmisb0601
 sources:
-  - resource: https://github.com/n1tsu/libmisb0601
+  - id: libmisb0601
+    resource: https://github.com/n1tsu/libmisb0601
     title: n1tsu/libmisb0601 (README)
 ---
 

@@ -7,9 +7,11 @@ generated:
   by: claude/opus-5
   at: 2026-07-17T15:30:00Z
 sources:
-  - resource: https://developer.nvidia.com/embedded/jetpack-sdk-515
+  - id: jetpack-515
+    resource: https://developer.nvidia.com/embedded/jetpack-sdk-515
     title: NVIDIA JetPack 5.1.5
-  - resource: https://developer.nvidia.com/embedded/jetpack-sdk-60
+  - id: jetpack-60
+    resource: https://developer.nvidia.com/embedded/jetpack-sdk-60
     title: NVIDIA JetPack 6.0
 fork: 1
 ---

@@ -8,7 +8,8 @@ generated:
   at: 2026-07-17T13:30:00Z
 resource: https://github.com/mkassimi98/gstklvplugin
 sources:
-  - resource: https://github.com/mkassimi98/gstklvplugin
+  - id: gstklvplugin
+    resource: https://github.com/mkassimi98/gstklvplugin
     title: mkassimi98/gstklvplugin (README)
 ---
 

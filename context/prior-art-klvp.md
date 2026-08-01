@@ -8,7 +8,8 @@ generated:
   at: 2026-07-17T13:30:00Z
 resource: https://github.com/jimcavoy/klvp
 sources:
-  - resource: https://github.com/jimcavoy/klvp
+  - id: klvp
+    resource: https://github.com/jimcavoy/klvp
     title: jimcavoy/klvp (README)
 ---
 

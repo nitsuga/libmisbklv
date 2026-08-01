@@ -8,7 +8,8 @@ generated:
   at: 2026-07-18T00:00:00Z
 resource: ../data
 sources:
-  - resource: https://samples.ffmpeg.org/MPEG2/mpegts-klv/
+  - id: ffmpeg-samples
+    resource: https://samples.ffmpeg.org/MPEG2/mpegts-klv/
     title: FFmpeg sample MPEG-TS KLV files (Day Flight, Night Flight IR)
 ---
 
