@@ -176,6 +176,14 @@ cross-references (other concepts, other ADRs) need no `sources` entry; the
 body link is enough — most of this bundle's `# Citations` sections are exactly
 that, and stay bare.
 
+**Cite by stable anchor, not by position.** Name the section or clause
+(`ST 0601 §6.3`, `ST 0903 §4.2`) — never a line or page number of the `.txt`
+extract. Extracts get regenerated and revisions shift their numbering, so a
+positional citation silently comes to point at the wrong text, which is worse
+than a broken one: it still resolves, and it still looks right. The `.txt` file
+next to each standards PDF is a reading aid for grep/Read, not a citable
+address — always cite the standard itself.
+
 # Subdirectories
 
 Types stay flat in `context/` by default; the root `index.md` groups by type.
