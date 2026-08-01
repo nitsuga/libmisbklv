@@ -28,7 +28,10 @@ jobs:
           concepts = {os.path.splitext(os.path.basename(p))[0]
                       for p in glob.glob('context/**/*.md', recursive=True)}
           for f in sorted(glob.glob('**/*.md', recursive=True)):
-              if f.startswith(('build/', 'build-')):   # local build trees
+              # Skip only root build directories, not tracked root documents
+              # such as a future build-guide.md.
+              top = f.split(os.sep, 1)
+              if len(top) == 2 and (top[0] == 'build' or top[0].startswith('build-')):
                   continue
               raw = open(f, encoding='utf-8').read()
               # sources[].id values declared in this file's frontmatter
