@@ -1,9 +1,11 @@
 ---
 type: Decision
 title: Video passthrough on the insert path
-status: accepted
+decision_status: accepted
 tags: [decision, backend, muxing, video, phase-3]
-timestamp: 2026-07-25T18:00:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-25T18:00:00Z
 fork: 18
 ---
 

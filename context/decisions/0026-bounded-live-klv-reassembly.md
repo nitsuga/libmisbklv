@@ -1,9 +1,16 @@
 ---
 type: Decision
 title: Bounded live KLV frame reassembly
-status: accepted
+decision_status: accepted
 tags: [decision, streaming, hardening, gstreamer, phase-3]
-timestamp: 2026-07-31T00:00:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-31T00:00:00Z
+sources:
+  - resource: ../../references/ST0903.6.pdf
+    title: MISB ST 0903.6 §9.2 — VMTI LS item/count limits
+  - resource: ../../references/ST0601.19.pdf
+    title: MISB ST 0601.19 §8 — "Not Limited" maximum lengths
 fork: 24
 ---
 

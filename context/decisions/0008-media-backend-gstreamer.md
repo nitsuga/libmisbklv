@@ -1,9 +1,11 @@
 ---
 type: Decision
 title: Media backend — gstreamer (v1)
-status: accepted
+decision_status: accepted
 tags: [decision, architecture, backend, gstreamer, phase-2]
-timestamp: 2026-07-17T20:30:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-17T20:30:00Z
 fork: 5
 ---
 

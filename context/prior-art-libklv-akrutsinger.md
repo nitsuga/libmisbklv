@@ -3,8 +3,13 @@ type: Prior Art
 title: akrutsinger/libklv
 description: Namesake stub — C library for ST 0601.9 KLV encoding. Name collides with this project.
 tags: [prior-art, c, st0601, namesake]
-timestamp: 2026-07-17T13:30:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-17T13:30:00Z
 resource: https://github.com/akrutsinger/libklv
+sources:
+  - resource: https://github.com/akrutsinger/libklv
+    title: akrutsinger/libklv (README)
 ---
 
 # What

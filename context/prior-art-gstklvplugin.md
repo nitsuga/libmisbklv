@@ -3,8 +3,13 @@ type: Prior Art
 title: mkassimi98/gstklvplugin
 description: GStreamer plugin suite for ST 0601.8 KLV — JSON↔KLV, per-frame injection, PMT signaling. Most relevant to the gstreamer path.
 tags: [prior-art, c, gstreamer, st0601, stanag4609, st1402, mpegts]
-timestamp: 2026-07-17T13:30:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-17T13:30:00Z
 resource: https://github.com/mkassimi98/gstklvplugin
+sources:
+  - resource: https://github.com/mkassimi98/gstklvplugin
+    title: mkassimi98/gstklvplugin (README)
 ---
 
 # What

@@ -3,8 +3,13 @@ type: Sample Data
 title: data/ — KLV MPEG-TS samples
 description: KLV MPEG-TS test vectors in data/ — the two canonical .mpg (Day Flight, Night Flight IR) + three larger .ts (Cheyenne, falls, klv_metadata_test_sync). All verified ST 0601; 4678 real packets round-trip byte-exact.
 tags: [sample-data, mpegts, st0601, test-vector, h264]
-timestamp: 2026-07-18T00:00:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-18T00:00:00Z
 resource: ../data
+sources:
+  - resource: https://samples.ffmpeg.org/MPEG2/mpegts-klv/
+    title: FFmpeg sample MPEG-TS KLV files (Day Flight, Night Flight IR)
 ---
 
 # What

@@ -3,7 +3,9 @@ type: Conventions
 title: Why these rules
 description: The failure mode behind each planning-hygiene rule in AGENTS.md.
 tags: [meta, conventions, hygiene]
-timestamp: 2026-07-25T00:00:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-25T00:00:00Z
 ---
 
 # Why these rules

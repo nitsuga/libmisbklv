@@ -1,9 +1,11 @@
 ---
 type: Decision
 title: ST 0604 SEI generation is opt-in (Sei0604::Preserve | Generate)
-status: accepted
+decision_status: accepted
 tags: [decision, 0604, sei, video-passthrough, api, phase-3]
-timestamp: 2026-07-28T04:10:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-28T04:10:00Z
 fork: 22
 ---
 

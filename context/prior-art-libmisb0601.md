@@ -3,8 +3,13 @@ type: Prior Art
 title: n1tsu/libmisb0601
 description: C encode/decode library for ST 0601.6; init→add_klv→finalize encode API.
 tags: [prior-art, c, st0601]
-timestamp: 2026-07-17T13:30:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-17T13:30:00Z
 resource: https://github.com/n1tsu/libmisb0601
+sources:
+  - resource: https://github.com/n1tsu/libmisb0601
+    title: n1tsu/libmisb0601 (README)
 ---
 
 # What

@@ -1,9 +1,11 @@
 ---
 type: Decision
 title: "\"No output file on failure\" spans the whole insert session"
-status: accepted
+decision_status: accepted
 tags: [decision, backend, muxing, insertion, phase-3]
-timestamp: 2026-07-26T10:30:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-26T10:30:00Z
 fork: 20
 ---
 

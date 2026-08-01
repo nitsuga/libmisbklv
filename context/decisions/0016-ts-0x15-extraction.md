@@ -1,9 +1,11 @@
 ---
 type: Decision
 title: 0x15 KLV extraction via a gst-free TS demuxer
-status: accepted
+decision_status: accepted
 tags: [decision, backend, mpegts, extraction, phase-3]
-timestamp: 2026-07-19T03:00:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-19T03:00:00Z
 fork: 12
 ---
 

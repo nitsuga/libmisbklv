@@ -1,9 +1,11 @@
 ---
 type: Decision
 title: High-level streaming errors
-status: accepted
+decision_status: accepted
 tags: [decision, api, streaming, error, gstreamer, phase-3]
-timestamp: 2026-07-31T00:00:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-31T00:00:00Z
 fork: 25
 ---
 

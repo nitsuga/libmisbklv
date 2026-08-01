@@ -2,8 +2,9 @@
 
 Architecture Decision Records: the *why* of resolved forks. This table is the
 **register of decided forks** — the roadmap fork #, the ADR that resolved it, and
-status. `status` vocabulary and lifecycle in [`../CONVENTIONS.md`](../CONVENTIONS.md)
-§ Decisions. Forks *without* an ADR yet (genuinely open) live in
+status. `decision_status` vocabulary and lifecycle in
+[`../CONVENTIONS.md`](../CONVENTIONS.md) § Decisions. Forks *without* an ADR yet
+(genuinely open) live in
 [`../../planning/ROADMAP.md`](../../planning/ROADMAP.md); it points here for the
 decided ones rather than duplicating them.
 

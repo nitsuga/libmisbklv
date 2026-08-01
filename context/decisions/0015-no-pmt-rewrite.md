@@ -1,9 +1,11 @@
 ---
 type: Decision
 title: No klvpmtrewrite — stock mpegtsmux emits 0x06+KLVA
-status: accepted
+decision_status: accepted
 tags: [decision, backend, gstreamer, insertion, phase-3]
-timestamp: 2026-07-19T02:00:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-19T02:00:00Z
 fork: 13
 ---
 

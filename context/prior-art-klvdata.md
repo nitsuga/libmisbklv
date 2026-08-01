@@ -3,8 +3,13 @@ type: Prior Art
 title: paretech/klvdata
 description: Python KLV parser/constructor for ST 0601 + ST 0102; punts MPEG-TS demux to ffmpeg/gstreamer.
 tags: [prior-art, python, st0601, st0102, stanag4609]
-timestamp: 2026-07-17T13:30:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-17T13:30:00Z
 resource: https://github.com/paretech/klvdata
+sources:
+  - resource: https://github.com/paretech/klvdata
+    title: paretech/klvdata (README)
 ---
 
 # What

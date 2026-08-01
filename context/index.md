@@ -1,12 +1,12 @@
 ---
-okf_version: "0.1"
+okf_version: "0.2"
 ---
 
 # libmisbklv Knowledge Bundle
 
 Agent-facing knowledge base for libmisbklv, in
 [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
-v0.1. The agent owns this directory; humans curate sources and direct the work.
+v0.2. The agent owns this directory; humans curate sources and direct the work.
 
 Read [`CONVENTIONS.md`](./CONVENTIONS.md) before ingesting or editing.
 

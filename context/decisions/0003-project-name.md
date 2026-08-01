@@ -1,9 +1,11 @@
 ---
 type: Decision
 title: Project name — akrutsinger/libklv collision (resolved)
-status: accepted
+decision_status: accepted
 tags: [decision, naming, libmisbklv, phase-1]
-timestamp: 2026-07-17T17:30:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-17T17:30:00Z
 fork: 3
 ---
 

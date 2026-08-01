@@ -3,8 +3,13 @@ type: Prior Art
 title: WestRidgeSystems/jmisb
 description: Mature MIT-licensed Java MISB library; broadest peer (0601/0903/1201/0102/…). Per-item-class architecture (the approach we rejected); mine for correctness + test vectors, not design.
 tags: [prior-art, java, st0601, st0903, st1201, st0102, imap, test-vectors]
-timestamp: 2026-07-18T00:00:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-18T00:00:00Z
 resource: https://github.com/WestRidgeSystems/jmisb
+sources:
+  - resource: https://github.com/WestRidgeSystems/jmisb
+    title: WestRidgeSystems/jmisb — api/src/main/java/org/jmisb/api/klv/
 ---
 
 # What

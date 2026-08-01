@@ -3,8 +3,13 @@ type: Prior Art
 title: jimcavoy/klvp
 description: C++ KLV parser/encoder for ST 0601 + ST 0102; splits parser from a Local Set database.
 tags: [prior-art, cpp, st0601, st0102, stanag4609]
-timestamp: 2026-07-17T13:30:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-17T13:30:00Z
 resource: https://github.com/jimcavoy/klvp
+sources:
+  - resource: https://github.com/jimcavoy/klvp
+    title: jimcavoy/klvp (README)
 ---
 
 # What

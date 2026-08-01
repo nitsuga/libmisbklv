@@ -1,9 +1,16 @@
 ---
 type: Decision
 title: Build system & C++ standard
-status: accepted
+decision_status: accepted
 tags: [decision, build, cmake, cpp-standard, cpp20, jetson, multi-arch, cross-compile, phase-1]
-timestamp: 2026-07-17T15:30:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-17T15:30:00Z
+sources:
+  - resource: https://developer.nvidia.com/embedded/jetpack-sdk-515
+    title: NVIDIA JetPack 5.1.5
+  - resource: https://developer.nvidia.com/embedded/jetpack-sdk-60
+    title: NVIDIA JetPack 6.0
 fork: 1
 ---
 

@@ -1,9 +1,11 @@
 ---
 type: Decision
 title: ST 0604 (ES timestamps) — deferred from v1
-status: deferred
+decision_status: deferred
 tags: [decision, 0604, es-timestamps, deferred, phase-2]
-timestamp: 2026-07-17T21:00:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-17T21:00:00Z
 fork: 6
 ---
 

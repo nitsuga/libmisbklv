@@ -1,9 +1,11 @@
 ---
 type: Decision
 title: Registry descriptor schema
-status: accepted
+decision_status: accepted
 tags: [decision, architecture, registry, schema, codegen, phase-3]
-timestamp: 2026-07-17T21:30:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-17T21:30:00Z
 fork: 8
 ---
 

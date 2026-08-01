@@ -3,7 +3,9 @@ type: Component
 title: gstreamer media backend — scope & design
 description: Environment findings, component breakdown, and the phased plan for the gstreamer MPEG-TS backend.
 tags: [component, backend, gstreamer, mpegts, phase-3]
-timestamp: 2026-07-19T06:00:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-19T06:00:00Z
 ---
 
 # gstreamer backend — scope

@@ -1,9 +1,11 @@
 ---
 type: Decision
 title: Real-time streaming — live-sink pacing + live-source idle-timeout
-status: accepted
+decision_status: accepted
 tags: [decision, backend, gstreamer, realtime, udp, srt, phase-3]
-timestamp: 2026-07-19T05:00:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-19T05:00:00Z
 fork: 15
 ---
 

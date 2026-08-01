@@ -1,9 +1,14 @@
 ---
 type: Decision
 title: Project license
-status: accepted
+decision_status: accepted
 tags: [decision, license, permissive, apache-2.0, phase-1]
-timestamp: 2026-07-17T16:30:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-17T16:30:00Z
+sources:
+  - resource: https://www.apache.org/licenses/LICENSE-2.0
+    title: Apache License 2.0
 fork: 2
 ---
 

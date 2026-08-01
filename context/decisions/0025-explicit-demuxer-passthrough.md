@@ -1,9 +1,11 @@
 ---
 type: Decision
 title: Build the passthrough chain explicitly instead of with parsebin
-status: accepted
+decision_status: accepted
 tags: [decision, video-passthrough, gstreamer, packaging, phase-3]
-timestamp: 2026-07-28T10:15:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-28T10:15:00Z
 fork: 23
 ---
 

@@ -1,9 +1,11 @@
 ---
 type: Decision
 title: Cooperative extraction cancellation (stop token)
-status: accepted
+decision_status: accepted
 tags: [decision, backend, api, streaming, phase-3]
-timestamp: 2026-07-19T08:00:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-19T08:00:00Z
 fork: 17
 ---
 

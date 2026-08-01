@@ -1,9 +1,11 @@
 ---
 type: Decision
 title: Timestamps on the read path (KlvPacket::pts_ns)
-status: accepted
+decision_status: accepted
 tags: [decision, backend, extraction, timing, phase-3]
-timestamp: 2026-07-26T10:00:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-26T10:00:00Z
 fork: 19
 ---
 

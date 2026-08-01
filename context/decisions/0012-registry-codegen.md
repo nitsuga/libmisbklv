@@ -1,9 +1,11 @@
 ---
 type: Decision
 title: Registry codegen — source format & build integration
-status: accepted
+decision_status: accepted
 tags: [decision, architecture, registry, codegen, build, phase-3]
-timestamp: 2026-07-17T22:30:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-17T22:30:00Z
 fork: 10
 ---
 

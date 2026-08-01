@@ -1,9 +1,11 @@
 ---
 type: Decision
 title: ST 0604 SEI generation for video passthrough
-status: accepted
+decision_status: accepted
 tags: [decision, 0604, sei, video-passthrough, h264, generation, phase-3]
-timestamp: 2026-07-27T20:50:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-27T20:50:00Z
 fork: 21
 ---
 

@@ -1,9 +1,11 @@
 ---
 type: Decision
 title: Encode / serialization model
-status: accepted
+decision_status: accepted
 tags: [decision, architecture, encode, serialization, phase-3]
-timestamp: 2026-07-17T22:00:00Z
+generated:
+  by: claude/opus-5
+  at: 2026-07-17T22:00:00Z
 fork: 9
 ---
 
