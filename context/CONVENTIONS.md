@@ -224,6 +224,13 @@ than a broken one: it still resolves, and it still looks right. The `.txt` file
 next to each standards PDF is a reading aid for grep/Read, not a citable
 address — always cite the standard itself.
 
+The [`link-check`](../.github/workflows/link-check.yml) CI fails on the
+mechanical form of this — a backticked `path.ext:NN` anywhere outside
+[`log.md`](./log.md), whose dated entries are frozen snapshots. It cannot catch
+the subtler case: a symbol anchor is only as stable as the symbol, so a function
+that moves between files leaves a citation that still names it correctly and no
+longer says where it is. That one stays a read-through item (§ Operations).
+
 # Subdirectories
 
 Types stay flat in `context/` by default; the root `index.md` groups by type.

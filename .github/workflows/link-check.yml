@@ -7,8 +7,13 @@
 #     attribution through, so a dangling one is a citation pointing nowhere —
 #     and the spec leaves the case undefined, so consumers can't be relied on
 #     to flag it.
+#   - a positional citation (`path.ext:NN`) — CONVENTIONS § Citations bans them.
 # Ignores links inside fenced blocks, inline code, and HTML comments, so
 # documented link *syntax* examples don't trip it.
+#
+# Despite the name this now checks citation integrity as well as links. Two
+# prepared texts, and each check must use the right one — see link_text and
+# cite_text below.
 name: link-check
 
 on:
@@ -37,17 +42,30 @@ jobs:
               # sources[].id values declared in this file's frontmatter
               fm = re.match(r'---\n(.*?)\n---\n', raw, flags=re.DOTALL)
               ids = set(re.findall(r'^\s*-?\s*id:\s*(\S+)', fm.group(1), flags=re.M)) if fm else set()
-              # Order matters: code first, comments last. A doc that *documents*
+              # TWO prepared texts. They differ in one step, and which one a
+              # check reads decides whether it can see anything at all — so name
+              # them rather than letting a later check inherit the wrong one.
+              #
+              # link_text: for the link and footnote checks. Inline code goes,
+              # because a doc that *documents* link syntax writes examples there.
+              # Order matters: code first, comments last. A doc that documents
               # comment syntax has a bare `<!--` inside a code block, and
               # stripping comments first pairs it with a `-->` far below,
               # swallowing the fences in between and blinding every check that
               # follows. Removing code spans first leaves only real comments.
-              text = raw
-              text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)   # drop fenced code
-              text = re.sub(r'`[^`]*`', '', text)                      # drop inline code
-              text = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)  # drop HTML comments
+              link_text = raw
+              link_text = re.sub(r'```.*?```', '', link_text, flags=re.DOTALL)  # drop fenced code
+              link_text = re.sub(r'`[^`]*`', '', link_text)                     # drop inline code
+              link_text = re.sub(r'<!--.*?-->', '', link_text, flags=re.DOTALL) # drop HTML comments
+              #
+              # cite_text: for the positional-citation check only. Inline code is
+              # KEPT — a citation is written `like/this.cpp:42`, so stripping it
+              # would blind the check completely. Fenced blocks still go, because
+              # compiler and sanitizer output legitimately carries file:line.
+              cite_text = re.sub(r'```.*?```', '', raw, flags=re.DOTALL)
+              cite_text = re.sub(r'<!--.*?-->', '', cite_text, flags=re.DOTALL)
               base = os.path.dirname(f)
-              for m in re.findall(r'\]\(([^)]+)\)', text):
+              for m in re.findall(r'\]\(([^)]+)\)', link_text):
                   t = m.split('#')[0].strip()
                   if not t or t.startswith(('http://', 'https://', 'mailto:')):
                       continue
@@ -62,14 +80,24 @@ jobs:
                       print(f'BROKEN  {f}  ->  {m}'); bad += 1
               # [[slug]] wikilinks resolve by concept name, not path. Not the
               # house style here, but a stray one should still be checked.
-              for w in re.findall(r'\[\[([^\]]+)\]\]', text):
+              for w in re.findall(r'\[\[([^\]]+)\]\]', link_text):
                   slug = w.split('|')[0].split('#')[0].strip()
                   if slug not in concepts:
                       print(f'BROKEN WIKILINK  {f}  ->  [[{w}]]'); bad += 1
               # [^label] citation footnotes join to sources[].id in this file.
-              for lab in set(re.findall(r'\[\^([^\]]+)\]', text)):
+              for lab in set(re.findall(r'\[\^([^\]]+)\]', link_text)):
                   if lab not in ids:
                       print(f'DANGLING FOOTNOTE  {f}  ->  [^{lab}]   (no sources[].id)'); bad += 1
+              # Positional citations (`path.ext:NN`) — banned by CONVENTIONS
+              # § Citations. A line number into a file that later gets edited
+              # comes to point at the wrong text while still resolving and still
+              # looking right, so nothing downstream catches it: not review, not
+              # the checks above. Cite a section or a symbol instead.
+              # log.md is exempt — its entries are dated snapshots frozen at
+              # write time, the same place a specific number is allowed to live.
+              if os.path.basename(f) != 'log.md':
+                  for c in re.findall(r'`([\w./-]+\.(?:md|hpp|cpp|h|py|toml|txt|yml|cmake|sh):\d+)`', cite_text):
+                      print(f'POSITIONAL CITATION  {f}  ->  `{c}`   (cite a section or symbol)'); bad += 1
           print('all internal links resolve' if not bad else f'{bad} bad link(s)')
           sys.exit(1 if bad else 0)
           PY
