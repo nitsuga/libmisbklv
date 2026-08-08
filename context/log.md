@@ -19,6 +19,19 @@
   Host-retained cached commits and orphaned LFS payloads were reported for the
   separate GitHub Support purge.
 
+* **Corrected the historical-corpus attribution** in
+  [`data-samples`](./data-samples.md). The three `.ts` files shared the QGISFMV
+  distribution channel but not a rightsholder, so attributing all of them to Esri
+  was wrong: only `Cheyenne.ts` is Esri (Mission ID `ESRI_Metadata_Collect`, tail
+  `N97826`, C208B over Cheyenne, Wyoming), `falls.ts` is an L3 WESCAM MX turret
+  capture over Snoqualmie Falls with vendor-private `WESCAM`/`ARSX`/`JSONCMD`
+  streams and no locatable terms, and `klv_metadata_test_sync.ts` carries
+  injector-generated KLV using ST 0601's own printed example values (`Predator`,
+  `EO Nose`). Each identification comes from the files' own ST 0601 items. The
+  evidence is now tabulated there because it dies with the media otherwise, and
+  `falls.ts` — the separate rightsholder — is the one the purge most needs to
+  cover.
+
 ## 2026-08-01
 
 * **Migrated the knowledge bundle to OKF v0.2.** `timestamp:` became

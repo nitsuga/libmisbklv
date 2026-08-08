@@ -32,10 +32,22 @@ run the standard test suite.
 
 The removed files were: `Day Flight.mpg`, `Night Flight IR.mpg`, `Cheyenne.ts`,
 `falls.ts`, and `klv_metadata_test_sync.ts`. The first two came from the FFmpeg
-sample server; the three `.ts` files matched the public QGISFMV sample archive.
-The archive's historical documentation associated the QGISFMV samples with Esri,
-while the FFmpeg directory supplied no license grant. Public availability was
-not treated as permission to redistribute.
+sample server; the three `.ts` files matched the public QGISFMV sample archive
+(`QGISFMV_Samples.7z`), which is linked from that plugin's quick start with no
+stated license or attribution. The FFmpeg directory likewise supplied no license
+grant. Public availability was not treated as permission to redistribute.
+
+The three `.ts` files shared a distribution channel but **not** a rightsholder —
+each was identified from its own ST 0601 items, not from a recorded download:
+
+| File | Identifying items | Reading |
+|---|---|---|
+| `Cheyenne.ts` | Mission ID `ESRI_Metadata_Collect`, tail `N97826`, platform `C208B`; 2012-09-19; sensor track 41.13 N, 104.79 W | Esri. Matches the sample shipped with the ArcGIS Full Motion Video tutorial (a semi-trailer on a highway near Cheyenne, Wyoming). Esri sample data carries no redistribution grant. |
+| `falls.ts` | Platform `L3 Wescam - MX Turret`, sensors `EOW - DL` / `EOW_HD`; 2016-04-13; sensor track 47.55 N, 121.88 W (Snoqualmie Falls, Washington) | **A separate rightsholder from the other two.** The PMT also carried vendor-private streams tagged `WESCAM`, `VIDEO_BM_0`, `ARSX`, `JSONCMD`, `KLV_SYNC`, `KLV_ASYNC` — OEM recorder output, not a scrubbed public sample. No source URL or terms were ever located; the highest-risk file of the five. |
+| `klv_metadata_test_sync.ts` | Mission ID `1234567-89`, platform `Predator`, sensor `EO Nose`; 2017-12-12 | Synthetic metadata. Those strings are the literal example values printed in [ST 0601](./st0601.md) Items 10 and 11, so the KLV track was injector-generated over a short carrier clip. The metadata is very unlikely to be protectable; the carrier video's origin was never established. |
+
+This table is the durable record of *why* the corpus was removed, and is not
+reconstructible once the media is gone — hence its retention here.
 
 The extracted `.klv` fixtures derived from that corpus were removed with it.
 Historical ADRs and the durable log retain the probe results because they explain
