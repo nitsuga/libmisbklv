@@ -6,7 +6,8 @@
 //   2. the KLV comes back byte-exact (the gst_insert_test property, with video)
 //   3. the video elementary stream is passthrough, not re-encoded
 //   4. the KLV PES timestamps are the ones we pushed (90 kHz rounding)
-//   5. the source's own KLV / audio streams are dropped, not forwarded
+//   5. the source's distinct KLV PID is dropped; output metadata is exclusively
+//      the KLV supplied through this test
 //   6. a failed open_insert() writes no output file — and never deletes one it
 //      did not create
 //   7. BOTH library extractors read those timestamps back (ADR 0021) — the gst
@@ -16,8 +17,8 @@
 //      re-emitted through a KlvSink with the same video, keeps its timing
 //   9. no output file after a failure LATER than open_insert either (ADR 0022) —
 //      a failing finish(), and a session abandoned without one
-// Runs the whole battery twice: once on the given MPEG-TS source, then again on
-// an MP4 remuxed from it (the `qtdemux` path — what a consumer converting MP4s
+// Runs the whole battery twice: once on the generated MPEG-TS source, then again
+// on an MP4 remuxed from it (the `qtdemux` path — what a consumer converting MP4s
 // actually hits, and a different demuxer + caps negotiation into the muxer).
 // A non-TS source skips the source-comparison checks, which need a TS to read.
 // argv: <video-source.ts> <input.klv> <temp.ts>
@@ -402,10 +403,21 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
     gst_pts.push_back(kp.pts_ns);
   });
   check("KLV byte-exact", r && klv_back == input);
+  const auto src_bytes = read_file(source.c_str());
+  if (is_mpegts(src_bytes)) {
+    std::vector<std::byte> source_klv;
+    for (const auto& e : read_pmt(src_bytes)) {
+      if (e.stream_type == 0x06 && e.klva) {
+        source_klv = read_pes(src_bytes, e.pid).payload;
+        break;
+      }
+    }
+    check("source KLV PID dropped",
+          !source_klv.empty() && source_klv != input && klv_back != source_klv);
+  }
 
   // --- 3. video is passthrough, not re-encoded ------------------------------
   const auto out_video = read_pes(out_ts, video_pid);
-  const auto src_bytes = read_file(source.c_str());
   if (is_mpegts(src_bytes)) {  // compare against the source's own video ES
     unsigned src_video_pid = 0, src_video_type = 0;
     for (const auto& e : read_pmt(src_bytes))
@@ -461,9 +473,9 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
       off += n;
     }
 
-    // Some sources carry their own ST 0604 SEI, which passthrough preserves —
-    // `klv_metadata_test_sync.ts` has one per frame. So the output legitimately
-    // holds two populations: the source's, and the ones we generated from KLV.
+    // Preserve keeps any source ST 0604 SEI; Generate replaces it. The authored
+    // carrier has none, but retaining this accounting keeps the test valid for
+    // a future source with existing timestamp SEI.
     std::vector<std::uint64_t> from_source;
     if (const auto ref = read_file(reference_ts.c_str()); is_mpegts(ref)) {
       unsigned p = 0;
@@ -812,9 +824,8 @@ int main(int argc, char** argv) {
   std::printf("MPEG-TS source (%s)\n", ts_source.c_str());
   const std::size_t ts_frames = run_case(*be, ts_source, input, out_path, ts_source);
 
-  // Same battery with ST 0604 SEI generation requested (ADR 0024) — the mode
-  // parrot-to-klv runs in. The source carries its own ST 0604, so this also
-  // covers replacement rather than duplication.
+  // Same battery with ST 0604 SEI generation requested (ADR 0024). The authored
+  // source starts without timestamp SEI, so this proves insertion from KLV.
   std::printf("TS source, Sei0604::Generate\n");
   const std::size_t gen_frames = run_case(*be, ts_source, input, out_path + ".sei.ts",
                                           ts_source, Sei0604::Generate);

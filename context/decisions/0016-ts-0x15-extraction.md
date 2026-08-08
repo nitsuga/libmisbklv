@@ -13,8 +13,9 @@ fork: 12
 
 Fork 12 (backend F-B). Stock gstreamer `tsdemux` exposes `stream_type 0x06`+KLVA
 as `meta/x-klv` (handled in B1), but **silently drops `0x15` metadata streams**
-(scope finding; Cheyenne, `klv_metadata_test_sync`). A PES probe showed why they
-differ: `0x15` carries KLV inside **SMPTE RP 217 metadata AU cells** (PES
+(historical scope finding from Cheyenne and `klv_metadata_test_sync`). A PES
+probe showed why they differ: `0x15` carries KLV inside **SMPTE RP 217 metadata
+AU cells** (PES
 `stream_id 0xfc`, a 5-byte cell header before the KLV), whereas `0x06` carries
 KLV directly in the PES. Options were (a) a custom demux, (b) defer 0x15, (c) a
 `tsdemux` property to unlock it (none found — tsdemux creates no pad at all).
@@ -26,8 +27,9 @@ library** (`ts.hpp`/`ts.cpp`). It finds the KLV elementary PID **by content** (a
 PES payload starting with a SMPTE UL `06 0e 2b 34`), reassembles PES per PID, and
 unwraps to KLV — handling **both** signaling types: `0x06` (KLV = PES payload)
 and `0x15` (strip the metadata AU cell header). Framed via `packet_frame_length`.
-Verified **byte-identical to ffmpeg** on `0x06` (Day Flight) and `0x15` (Cheyenne,
-sync), and the output round-trips through the core (407/407 packets).
+Verified historically **byte-identical to ffmpeg** on `0x06` (Day Flight) and
+`0x15` (Cheyenne, sync), and the output round-trips through the core (407/407
+packets).
 
 A bonus: **file/bytes KLV extraction now needs no gstreamer at all** — a
 dependency-free core capability. The gstreamer `GstBackend` extraction (B1) stays

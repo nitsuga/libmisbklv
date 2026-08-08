@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // gst-free MPEG-TS KLV extractor test (fork 12 / B3). Extract KLV from a .ts
 // (0x06 or 0x15) and assert byte-exact against a reference ES. Also checks the
-// per-packet timestamps (ADR 0021) over real captures — the exact values are
+// per-packet timestamps (ADR 0021) over generated carriers — the exact values are
 // pinned against known-pushed ones in gst_video_insert_test; what's asserted
 // here is that a timestamped capture yields timestamps at all, and that they
 // advance rather than jumping around. argv: <source.ts> <expected.klv>
@@ -54,8 +54,8 @@ int main(int argc, char** argv) {
   std::printf("extracted %zu packets, %zu bytes (expected %zu)\n", npkt,
               out.size(), expected.size());
   std::printf("every unit is a whole KLV packet: %s\n", all_parse ? "yes" : "no");
-  // A capture whose KLV PES carry no PTS (Day Flight) correctly yields kNoPts
-  // throughout — that is data, not a defect. What must never happen is a
+  // An untimed synthetic carrier correctly yields kNoPts throughout — that is
+  // data, not a defect. What must never happen is a
   // partially or non-monotonically timestamped stream, which is what a
   // mis-attributed mark would look like.
   std::printf("timestamps: %zu/%zu packets, %s, first=%lld last=%lld ns\n", timed,

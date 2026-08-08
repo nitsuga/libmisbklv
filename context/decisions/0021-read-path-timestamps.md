@@ -21,11 +21,12 @@ timestamp at all. Every consumer saw `-1` on every packet of every file.
 The field was written that way on purpose. The B0 spike found "PES PTS is
 unreliable (`GST_CLOCK_TIME_NONE`)" and [`0017`](./0017-realtime-streaming.md)
 recorded that PTS on extraction "stays `kNoPts`", with correlation deferred to
-the KLV's own Item 2 Precision Time Stamp. That conclusion came from one sample:
-`data/Day Flight.mpg`, whose KLV PES genuinely carry **no** PTS (`PTS_DTS_flags`
-clear — verified byte-wise, not inferred). It does not generalize. `falls.ts`
-carries a PTS on every one of its 1 953 KLV PES; `Cheyenne.ts` and
-`klv_metadata_test_sync.ts` carry one on every `0x15` PES too.
+the KLV's own Item 2 Precision Time Stamp. That conclusion came from one
+historical sample: `data/Day Flight.mpg`, whose KLV PES genuinely carry **no**
+PTS (`PTS_DTS_flags` clear — verified byte-wise, not inferred). It does not
+generalize. The other historical captures, `falls.ts`, `Cheyenne.ts`, and
+`klv_metadata_test_sync.ts`, carried a PTS on every KLV PES (including every
+`0x15` PES in the latter two).
 
 [`0020`](./0020-video-passthrough.md) turned the gap into a break. With a
 `video_source`, `push()` **requires** a real PTS on the source's timeline and
@@ -103,8 +104,9 @@ specified for what it can actually see.
   now asserts that **both** extractors report them back (its own independent PES
   parser stays the witness that the timing is in the file), plus a
   `KlvStream` → `KlvSink` round trip over a video source that checks the timing
-  survives re-muxing. `ts_extract_test` checks the real captures: timestamps
-  present on all packets or none, and non-decreasing.
+  survives re-muxing. `ts_extract_test` checks the generated project-owned
+  timed and untimed `0x06`/`0x15` fixtures: timestamps are present on all
+  packets or none, and are non-decreasing.
 - `MockBackend` takes an optional per-packet `pts` vector, so the test double can
   express the contract instead of only the sentinel; omitted, it replays an
   untimed stream exactly as before.

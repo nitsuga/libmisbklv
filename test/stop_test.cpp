@@ -3,7 +3,7 @@
 // simulated by a mock that emits until its std::stop_token is signaled. If the
 // token were ignored, both tests would hang forever (CI timeout) — so reaching
 // the end at all proves early exit works; the timing bound proves it's prompt.
-// argv: <dayflight_first_packet.klv>
+// argv: <input.klv>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -94,8 +94,11 @@ class UnsupportedInsertBackend : public MediaBackend {
 };
 
 int main(int argc, char** argv) {
-  const char* path =
-      argc > 1 ? argv[1] : "test/fixtures/dayflight_first_packet.klv";
+  if (argc < 2) {
+    std::fprintf(stderr, "usage: stop_test <input.klv>\n");
+    return 2;
+  }
+  const char* path = argv[1];
   const auto pkt = read_file(path);
   if (pkt.empty()) { std::fprintf(stderr, "no fixture: %s\n", path); return 2; }
 

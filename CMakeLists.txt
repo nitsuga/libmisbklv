@@ -63,7 +63,8 @@ endif()
 
 # Regenerate the committed registry tables from TOML source (ADR 0012).
 # Not part of the default build; CI runs it and checks for drift.
-find_package(Python3 COMPONENTS Interpreter)
+# The synthetic fixture generator uses the stdlib `tomllib` parser (Python 3.11+).
+find_package(Python3 3.11 REQUIRED COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
   set(_gen_dir ${CMAKE_CURRENT_SOURCE_DIR}/include/misbklv/registry)
   add_custom_target(regenerate-registry
@@ -84,20 +85,41 @@ endif()
 
 enable_testing()
 
+
+# Hermetic, Apache-2.0 test corpus. Generated into the build tree from invented
+# values; no third-party media or derived metadata is needed to build or test.
+set(_fixture_dir ${CMAKE_CURRENT_BINARY_DIR}/test-fixtures)
+set(_fixture_generator ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/generate_synthetic_fixtures.py)
+set(_basic ${_fixture_dir}/synthetic-basic.klv)
+set(_first ${_fixture_dir}/synthetic-first-packet.klv)
+set(_comprehensive ${_fixture_dir}/synthetic-comprehensive.klv)
+set(_timed_06 ${_fixture_dir}/synthetic-timed-0x06.ts)
+set(_untimed_06 ${_fixture_dir}/synthetic-untimed-0x06.ts)
+set(_timed_15 ${_fixture_dir}/synthetic-timed-0x15.ts)
+set(_video ${_fixture_dir}/synthetic-video.ts)
+add_custom_command(
+  OUTPUT ${_basic} ${_first} ${_comprehensive} ${_timed_06} ${_untimed_06} ${_timed_15} ${_video}
+  COMMAND ${Python3_EXECUTABLE} ${_fixture_generator}
+          ${CMAKE_CURRENT_SOURCE_DIR}/registry/uas0601.toml ${_fixture_dir}
+  DEPENDS ${_fixture_generator} ${CMAKE_CURRENT_SOURCE_DIR}/registry/uas0601.toml
+  COMMENT "Generating project-owned synthetic KLV/MPEG-TS fixtures")
+add_custom_target(synthetic_test_fixtures ALL
+  DEPENDS ${_basic} ${_first} ${_comprehensive} ${_timed_06} ${_untimed_06} ${_timed_15} ${_video})
 add_executable(roundtrip_test test/roundtrip_test.cpp)
 target_link_libraries(roundtrip_test PRIVATE misbklv)
-add_test(NAME roundtrip
-  COMMAND roundtrip_test
-          ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight_first_packet.klv)
+add_dependencies(roundtrip_test synthetic_test_fixtures)
+add_test(NAME roundtrip COMMAND roundtrip_test ${_first})
 
 add_executable(stream_roundtrip_test test/stream_roundtrip_test.cpp)
 target_link_libraries(stream_roundtrip_test PRIVATE misbklv)
-add_test(NAME stream_dayflight
-  COMMAND stream_roundtrip_test
-          ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight.klv)
-add_test(NAME stream_nightflight
-  COMMAND stream_roundtrip_test
-          ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/nightflight_ir.klv)
+add_dependencies(stream_roundtrip_test synthetic_test_fixtures)
+add_test(NAME stream_synthetic_basic COMMAND stream_roundtrip_test ${_basic})
+add_test(NAME stream_synthetic_comprehensive COMMAND stream_roundtrip_test ${_comprehensive})
+
+add_executable(synthetic_fixture_test test/synthetic_fixture_test.cpp)
+target_link_libraries(synthetic_fixture_test PRIVATE misbklv)
+add_dependencies(synthetic_fixture_test synthetic_test_fixtures)
+add_test(NAME synthetic_fixture_coverage COMMAND synthetic_fixture_test ${_basic} ${_comprehensive})
 
 add_executable(nested_roundtrip_test test/nested_roundtrip_test.cpp)
 target_link_libraries(nested_roundtrip_test PRIVATE misbklv)
@@ -130,15 +152,15 @@ add_executable(st0601_examples_test test/st0601_examples_test.cpp)
 target_link_libraries(st0601_examples_test PRIVATE misbklv)
 add_test(NAME st0601_examples COMMAND st0601_examples_test)
 
-add_executable(hardening_test test/hardening_test.cpp)  # real-world hardening
+add_executable(hardening_test test/hardening_test.cpp)
 target_link_libraries(hardening_test PRIVATE misbklv)
-add_test(NAME hardening COMMAND hardening_test
-  ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight_first_packet.klv)
+add_dependencies(hardening_test synthetic_test_fixtures)
+add_test(NAME hardening COMMAND hardening_test ${_first})
 
 add_executable(message_test test/message_test.cpp)  # high-level Message (ADR 0018)
 target_link_libraries(message_test PRIVATE misbklv)
-add_test(NAME message COMMAND message_test
-  ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight_first_packet.klv)
+add_dependencies(message_test synthetic_test_fixtures)
+add_test(NAME message COMMAND message_test ${_first})
 
 add_executable(mock_backend_test test/mock_backend_test.cpp)
 target_link_libraries(mock_backend_test PRIVATE misbklv)
@@ -147,36 +169,37 @@ add_test(NAME mock_backend COMMAND mock_backend_test)
 if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
   add_executable(gst_backend_test test/gst_backend_test.cpp)
   target_link_libraries(gst_backend_test PRIVATE misbklv-gst)
-  add_test(NAME gst_extract COMMAND gst_backend_test
-    "${CMAKE_CURRENT_SOURCE_DIR}/data/Day Flight.mpg"
-    "${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight.klv")
+  add_dependencies(gst_backend_test synthetic_test_fixtures)
+  add_test(NAME gst_extract COMMAND gst_backend_test ${_timed_06} ${_basic})
 
   add_executable(gst_insert_test test/gst_insert_test.cpp)  # B2 insertion round-trip
   target_link_libraries(gst_insert_test PRIVATE misbklv-gst)
+  add_dependencies(gst_insert_test synthetic_test_fixtures)
   add_test(NAME gst_insert COMMAND gst_insert_test
-    "${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight.klv"
+    ${_basic}
     "${CMAKE_CURRENT_BINARY_DIR}/insert_roundtrip.ts")
 
-  # Video passthrough on the insert path (ADR 0020). The source carries video +
-  # its own KLV, so it also proves the source's KLV is dropped, not forwarded.
-  # The test remuxes that source to MP4 itself and repeats the battery, so the
-  # qtdemux path is covered without committing a binary fixture.
+  # Video passthrough on the insert path (ADR 0020), using an authored H.264 TS
+  # carrier. The test remuxes it to MP4 itself and repeats the battery, covering
+  # qtdemux without committing a binary fixture or requiring an encoder.
   add_executable(gst_video_insert_test test/gst_video_insert_test.cpp)
   target_link_libraries(gst_video_insert_test PRIVATE misbklv-gst)
+  add_dependencies(gst_video_insert_test synthetic_test_fixtures)
   add_test(NAME gst_video_insert COMMAND gst_video_insert_test
-    "${CMAKE_CURRENT_SOURCE_DIR}/data/klv_metadata_test_sync.ts"
-    "${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight.klv"
+    ${_video}
+    ${_basic}
     "${CMAKE_CURRENT_BINARY_DIR}/video_insert.ts")
 
   add_executable(gst_stream_test test/gst_stream_test.cpp)  # B4 real-time udp round-trip
   target_link_libraries(gst_stream_test PRIVATE misbklv-gst Threads::Threads)
-  add_test(NAME gst_stream COMMAND gst_stream_test
-    "${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight.klv")
+  add_dependencies(gst_stream_test synthetic_test_fixtures)
+  add_test(NAME gst_stream COMMAND gst_stream_test ${_basic})
 
   add_executable(api_test test/api_test.cpp)  # high-level facade end-to-end (ADR 0018)
   target_link_libraries(api_test PRIVATE misbklv-gst)
+  add_dependencies(api_test synthetic_test_fixtures)
   add_test(NAME api_stream COMMAND api_test
-    "${CMAKE_CURRENT_SOURCE_DIR}/data/Day Flight.mpg"
+    ${_timed_06}
     "${CMAKE_CURRENT_BINARY_DIR}/api_edit.ts")
 
   add_executable(klv_edit examples/klv_edit.cpp)  # user-facing example (not a test)
@@ -184,34 +207,19 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
 
   add_executable(stop_test test/stop_test.cpp)  # cooperative cancellation (ADR 0019)
   target_link_libraries(stop_test PRIVATE misbklv-gst Threads::Threads)
-  add_test(NAME stream_stop COMMAND stop_test
-    "${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/dayflight_first_packet.klv")
+  add_dependencies(stop_test synthetic_test_fixtures)
+  add_test(NAME stream_stop COMMAND stop_test ${_first})
 endif()
 
-# --- Regression over real MPEG-TS captures ----------------------------------
-# The KLV elementary streams were extracted once and **committed** under
-# test/fixtures/ (cheyenne/falls/falls_ext/sync.klv), rather than re-extracted at
-# build time with ffmpeg. A demuxer's exact byte output is NOT stable across
-# ffmpeg versions — ffmpeg 6 framed falls.ts stream 0 differently than 4.4, which
-# made CI non-deterministic — so committing the fixtures makes this regression
-# hermetic and drops the ffmpeg build/test dependency entirely.
-set(_fix ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures)
-add_test(NAME stream_cheyenne  COMMAND stream_roundtrip_test ${_fix}/cheyenne.klv)
-add_test(NAME stream_falls     COMMAND stream_roundtrip_test ${_fix}/falls.klv)
-add_test(NAME stream_falls_ext COMMAND stream_roundtrip_test ${_fix}/falls_ext.klv)  # extended 0601 (tags 75-91)
-add_test(NAME stream_sync      COMMAND stream_roundtrip_test ${_fix}/sync.klv)
-
 # --- gst-free MPEG-TS KLV extractor (fork 12 / B3): 0x06 + 0x15 --------------
-# Cross-checks our extractor's output against the committed reference KLV; the
-# .ts/.mpg inputs come from git-lfs (`git lfs pull`).
+# Cross-checks project-owned timed/untimed PES and both signaling types against
+# the generated elementary-stream reference.
 add_executable(ts_extract_test test/ts_extract_test.cpp)
 target_link_libraries(ts_extract_test PRIVATE misbklv)
-add_test(NAME ts_extract_dayflight COMMAND ts_extract_test  # 0x06
-  "${CMAKE_CURRENT_SOURCE_DIR}/data/Day Flight.mpg" ${_fix}/dayflight.klv)
-add_test(NAME ts_extract_cheyenne COMMAND ts_extract_test  # 0x15
-  "${CMAKE_CURRENT_SOURCE_DIR}/data/Cheyenne.ts" ${_fix}/cheyenne.klv)
-add_test(NAME ts_extract_sync COMMAND ts_extract_test  # 0x15
-  "${CMAKE_CURRENT_SOURCE_DIR}/data/klv_metadata_test_sync.ts" ${_fix}/sync.klv)
+add_dependencies(ts_extract_test synthetic_test_fixtures)
+add_test(NAME ts_extract_timed_0x06 COMMAND ts_extract_test ${_timed_06} ${_basic})
+add_test(NAME ts_extract_untimed_0x06 COMMAND ts_extract_test ${_untimed_06} ${_basic})
+add_test(NAME ts_extract_timed_0x15 COMMAND ts_extract_test ${_timed_15} ${_basic})
 
 # --- Install / export --------------------------------------------------------
 # Core:  find_package(misbklv)                 -> misbklv::misbklv

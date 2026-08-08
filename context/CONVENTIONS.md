@@ -24,7 +24,8 @@ and direct the work. On disagreement, the OKF spec wins over this doc.
 | `../references/` | Raw sources (standards PDFs + `.txt` extracts), append-only. Agent reads, and deposits new snapshots on a directed ingest; never edits one that's already there. |
 | `context/` | This bundle. Agent-owned synthesis. |
 | `../docs/` | Human-facing authored guides (terse). Not agent-maintained. |
-| `../data/` | Sample MPEG-TS test vectors. |
+| `../data/` | Ignored workspace for developer-provided media; not a test-data source. |
+| `../test/fixtures/` | Project-owned deterministic KLV/MPEG-TS fixtures and generators. |
 | `../planning/` | Project management (ROADMAP, PROGRESS). Transient; human + agent read/write. Not OKF concepts. |
 
 The `.txt` next to each standards PDF is a faithful text extract for grep/Read.

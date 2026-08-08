@@ -18,7 +18,8 @@ explicitly punted *what a descriptor contains* — the field set every codec
 and the codegen consume. That schema is the keystone: nothing in Phase 3 can be
 written concretely until it exists.
 
-The Phase 3 extraction spike (2026-07-17, `Day Flight.mpg`; see
+The Phase 3 extraction spike (2026-07-17, the historical `Day Flight.mpg` sample;
+see
 [`log`](../log.md)) grounded the requirements in real bytes and corrected a KB
 error — 0601's core numeric items are **not** uniformly IMAPB. The schema must
 therefore capture, per item:

@@ -35,9 +35,9 @@ struct ExtractOptions {
 // edit → write round trip preserves timing (ADR 0021). It is the timestamp of
 // the PES that carried the packet's FIRST byte (one PES may hold several
 // packets; one packet may span two). `kNoPts` when that PES carried no PTS —
-// which is a property of the stream, not a failure: real captures exist whose
-// KLV PES are entirely untimed (`data/Day Flight.mpg`), and correlation for
-// those is via the KLV's own Item 2 Precision Time Stamp.
+// which is a property of the stream, not a failure: a carrier may contain
+// entirely untimed KLV PES, and correlation for those is via the KLV's own
+// Item 2 Precision Time Stamp.
 //
 // "Start of the source" is established per extractor and can differ by about a
 // frame on a stream that begins mid-PES: the gstreamer backend uses the

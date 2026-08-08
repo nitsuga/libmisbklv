@@ -76,9 +76,11 @@ tool, unaffected by aarch64 cross-compile.
 The generated header(s) (`include/misbklv/registry/*.generated.hpp`) are
 **checked in**, not build-time artifacts. Rationale:
 
-- **No Python build dependency for consumers** — the library builds from the
-  committed C++ alone (matters for the embedded/Jetson/closed-app targets
-  [`0006`](./0006-tag-registry.md) optimizes for).
+- **No Python dependency for installed-library consumers** — the library's
+  registry code builds from the committed C++ alone (matters for the
+  embedded/Jetson/closed-app targets [`0006`](./0006-tag-registry.md) optimizes
+  for). A source checkout's default test build separately invokes the
+  project-owned fixture generator and therefore requires Python 3.11+.
 - The tables are **in-tree, greppable, reviewable** — a code review sees the
   actual constants.
 - Regeneration is explicit: a CMake target (`regenerate-registry`) runs the
@@ -112,7 +114,9 @@ The generated header(s) (`include/misbklv/registry/*.generated.hpp`) are
   gains a drift-check step (`regenerate` → `git diff --exit-code`).
 - Adding an item = edit TOML + `regenerate-registry` + commit; adding a standard
   = new TOML + a `RegistryId` enum entry.
-- Consumers build with **no Python**; only contributors regenerating need it.
+- Consumers of an installed library build with **no Python**; source checkouts
+  need Python 3.11+ for the default synthetic-fixture build, while contributors
+  regenerating the registry use the same host-side tool.
 - **Coverage lives in the TOML, so it is reviewable in one place.**
   `registry/0601.toml` carries every §8 item of ST 0601.19 except the deprecated
   Item 66 — so the sample streams decode with no unregistered tags. Items the
@@ -125,8 +129,8 @@ The generated header(s) (`include/misbklv/registry/*.generated.hpp`) are
 
 # Assumptions / open questions
 
-- Python ≥ 3.11 for `tomllib` (contributors only). If an older Python must
-  generate, add `tomli`. Non-blocking.
+- Python ≥ 3.11 for `tomllib` (registry regeneration and source-checkout fixture
+  builds). If an older Python must generate, add `tomli`. Non-blocking.
 - Exact generated-file layout (one header vs per-registry) — settle in
   implementation; a single `.generated.hpp` is the default.
 - Whether to also emit a small runtime self-check (table sorted / non-empty) —

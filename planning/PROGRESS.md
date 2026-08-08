@@ -43,8 +43,8 @@ None currently.
   now **covered synthetically** by `hardening_test`; still worth a *real*
   RoC-trimmed or multi-byte-tag capture if one turns up (current coverage is
   hand-constructed, not vendor data).
-- Need a real VMTI stream (M3/M5/M6 use hand-authored fixtures — the `data/*.ts`
-  are all 0601, no tag 74).
+- Need a real VMTI stream (M3/M5/M6 use hand-authored fixtures; the removed
+  external corpus was all 0601 and had no tag 74).
 - ST 0102 Security LS (tag 48) is registered as named opaque `bytes`, not a
   typed nested registry — as are the other embedded Local Sets and the
   DLP/FLP/VLP packs. Typing any of them is a candidate fork in

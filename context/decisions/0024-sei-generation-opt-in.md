@@ -22,8 +22,8 @@ consumer existed and needed it. It does not generalise:
   was, and the test's byte-exact assertion had to be weakened to a size
   comparison to accommodate that.
 - Writing the round-trip test for 0023 turned up a case its Context had assumed
-  away: **`data/klv_metadata_test_sync.ts` already carries 418 of its own
-  `MISPmicrosectime` SEIs.** The premise "sources don't have 0604" holds for
+  away: **the historical `klv_metadata_test_sync.ts` sample carried 418 of its
+  own `MISPmicrosectime` SEIs.** The premise "sources don't have 0604" holds for
   Parrot MP4s, not generally. On such a source the output carried *two*
   Precision Time Stamps per access unit we timed — the source's and ours, with
   different values and nothing to say which is authoritative.
@@ -146,9 +146,10 @@ from item 2.
 - **A NAL mixing replaced and unrelated SEI messages is left alone.** Stripping
   is whole-NAL, so it only happens when *every* message in that NAL is one we
   replace — a Picture Timing sharing a NAL with a buffering period survives, and
-  with it a source ST 0604 in that same NAL would too. Not observed in the
-  samples (`Generate` leaves 0 source SEI on `klv_metadata_test_sync.ts`), and
-  the alternative drops bystander messages. Revisit if a real stream packs them.
+  with it a source ST 0604 in that same NAL would too. This was not observed in
+  the historical sample corpus (`Generate` left 0 source SEI on its
+  `klv_metadata_test_sync.ts` video); current regression coverage uses the
+  project-owned synthetic video fixture. Revisit if a real stream packs them.
 - The linearity tolerance for the Time Status (50 ms) is a judgement, not a
   standard's number: wide enough that clock drift between the KLV's absolute
   time and the media timeline never trips it, narrow enough to catch a real

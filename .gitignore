@@ -7,3 +7,9 @@
 # Editor / OS cruft
 *.swp
 .DS_Store
+__pycache__/
+*.pyc
+
+# Developer-provided media; project-owned fixtures live under test/fixtures.
+/data/*
+!/data/README.md

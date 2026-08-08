@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Milestone 1: byte-exact round-trip of Day Flight.mpg's first ST 0601 packet.
+// Byte-exact round-trip of the generated synthetic ST 0601 packet.
 // Decode -> re-encode via the builder -> assert identical bytes. Acceptance
 // gate for ADRs 0010 (descriptor schema) + 0011 (encode model).
 #include <cstddef>
@@ -28,8 +28,11 @@ static std::vector<std::byte> read_file(const char* path) {
 }
 
 int main(int argc, char** argv) {
-  const char* path =
-      argc > 1 ? argv[1] : "test/fixtures/dayflight_first_packet.klv";
+  if (argc < 2) {
+    std::fprintf(stderr, "usage: roundtrip_test <input.klv>\n");
+    return 2;
+  }
+  const char* path = argv[1];
   const std::vector<std::byte> original = read_file(path);
   if (original.empty()) {
     std::fprintf(stderr, "could not read fixture: %s\n", path);

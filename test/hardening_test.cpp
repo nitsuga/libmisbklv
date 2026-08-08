@@ -5,7 +5,7 @@
 //  (3) malformed / adversarial bytes must return a Result error, never crash
 //      or invoke UB (run under -fsanitize=address,undefined via MISBKLV_SANITIZE),
 //  (4) BER parser boundaries retain valid maxima and reject overflow/aliasing.
-// argv: <dayflight_first_packet.klv>
+// argv: <input.klv>
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
@@ -421,8 +421,11 @@ static void test_bounded_frame_inspection() {
 }
 
 int main(int argc, char** argv) {
-  const char* path =
-      argc > 1 ? argv[1] : "test/fixtures/dayflight_first_packet.klv";
+  if (argc < 2) {
+    std::fprintf(stderr, "usage: hardening_test <input.klv>\n");
+    return 2;
+  }
+  const char* path = argv[1];
   const auto full = read_file(path);
   if (full.empty()) {
     std::fprintf(stderr, "could not read fixture: %s\n", path);

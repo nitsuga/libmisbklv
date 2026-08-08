@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Message facade (ADR 0018): parse -> typed get -> edit -> encode. No-op encode
 // must be byte-exact; an edit must survive a re-parse.
-// argv: <dayflight_first_packet.klv>
+// argv: <input.klv>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -46,8 +46,11 @@ static std::vector<std::byte> unusual_source_packet() {
 }
 
 int main(int argc, char** argv) {
-  const char* path =
-      argc > 1 ? argv[1] : "test/fixtures/dayflight_first_packet.klv";
+  if (argc < 2) {
+    std::fprintf(stderr, "usage: message_test <input.klv>\n");
+    return 2;
+  }
+  const char* path = argv[1];
   const auto bytes = read_file(path);
   if (bytes.empty()) { std::fprintf(stderr, "no fixture: %s\n", path); return 2; }
 
@@ -55,10 +58,10 @@ int main(int argc, char** argv) {
   check(static_cast<bool>(msg), "parse");
   if (!msg) return 2;
 
-  // typed read: SensorLatitude (tag 13) ~ 54.68 deg on Day Flight.
+  // Typed read: the synthetic fixture authors SensorLatitude (tag 13) as 12.5°.
   auto lat = msg->get<double>(13);
   check(lat.has_value(), "get<double>(13) present");
-  check(lat && std::fabs(*lat - 54.68) < 0.5, "SensorLatitude ~ 54.68");
+  check(lat && std::fabs(*lat - 12.5) < 0.001, "SensorLatitude == 12.5");
   check(msg->get<std::uint64_t>(2).has_value(), "get<uint64_t>(2) timestamp present");
   check(msg->has(13) && !msg->has(250), "has() reports membership");
   check(!msg->get<double>(250).has_value(), "get of absent tag -> nullopt");

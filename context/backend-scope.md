@@ -17,7 +17,14 @@ generated:
 
 Scoping for the media backend (ADR [`0008`](./decisions/0008-media-backend-gstreamer.md)):
 the layer between the KLV core (parse/build) and MPEG-TS I/O. Library-style
-gstreamer (link libs, drive pipelines; not shipped plugins). This doc grounds
+gstreamer (link libs, drive pipelines; not shipped plugins).
+
+> **Corpus note (2026-08-08):** The external media used by the probes below has
+> been removed from the repository. The findings remain historical evidence;
+> current regression coverage uses the project-owned synthetic fixtures under
+> `../test/fixtures/` (see [ADR 0028](./decisions/0028-hermetic-synthetic-fixtures.md)).
+
+This doc grounds
 that shape in the real environment and records the component breakdown, the
 design forks (now resolved), and the phased plan. Empirical probes done
 2026-07-19.
@@ -36,9 +43,10 @@ design forks (now resolved), and the phased plan. Empirical probes done
 
 ## Key finding — extraction is two regimes
 
-Probed `tsdemux` pad output across all `data/` samples (via python-gi):
+Probed `tsdemux` pad output across the historical external sample corpus (via
+python-gi):
 
-| Signaling | Samples | stock `tsdemux` → `meta/x-klv`? |
+| Signaling | Historical files | stock `tsdemux` → `meta/x-klv`? |
 |---|---|---|
 | `stream_type 0x06` + KLVA reg. descriptor | Day Flight, Night Flight IR, falls | **yes** — `private_… → meta/x-klv, parsed=true` |
 | `stream_type 0x15` (metadata) | Cheyenne, klv_metadata_test_sync | **no** — video/audio pads only; KLV silently dropped |
@@ -99,7 +107,7 @@ Opened here during scoping, each resolved by an ADR (see the
 
 ## B0 spike results (2026-07-19, python-gi)
 
-`tsdemux ! meta/x-klv ! appsink` on `Day Flight.mpg` (0x06):
+`tsdemux ! meta/x-klv ! appsink` on the historical `Day Flight.mpg` (0x06):
 
 - **Extraction is byte-identical to the ffmpeg-extracted `.klv`** (977 B) — so
   gstreamer feeds the core exactly what our round-trip tests already accept.
@@ -112,9 +120,10 @@ Opened here during scoping, each resolved by an ADR (see the
   the KLV's own Item 2 Precision Time Stamp, not PES PTS — consistent with
   [`0009`](./decisions/0009-st0604-deferred.md). (Confirm on more
   samples; may be a demux-config detail.) — **Confirmed on more samples, and it
-  is the sample, not the demuxer**: Day Flight's KLV PES really do carry no PTS,
-  while `falls.ts` / `Cheyenne.ts` / `klv_metadata_test_sync.ts` timestamp every
-  one. Extraction reports them as of ADR
+  is the historical sample, not the demuxer**: Day Flight's KLV PES really do
+  carry no PTS, while the historical `falls.ts` / `Cheyenne.ts` /
+  `klv_metadata_test_sync.ts` captures timestamp every one. Extraction reports
+  them as of ADR
   [`0021`](./decisions/0021-read-path-timestamps.md); Item 2 remains the fallback
   for streams like this one.
 
@@ -123,7 +132,8 @@ Opened here during scoping, each resolved by an ADR (see the
 - **B0 — extraction spike**: done (above).
 - **B1 — extraction (0x06) + interface + mock**: land `MediaBackend` (F-A),
   `GstBackend` extraction, the mock backend, and the optional-dep CMake (F-D).
-  Test: extract from `Day Flight.mpg` → core, vs the committed `.klv`.
+  Test: extract from the project-owned synthetic 0x06 fixture → core, versus
+  its generated KLV reference fixture.
 - **B2 — insertion** (done): `appsrc ! mpegtsmux ! filesink`. The B2 spike showed
   stock `mpegtsmux` (gst 1.20.3) already emits `0x06`+KLVA, so **`klvpmtrewrite`
   is not needed** (ADR [`0015`](./decisions/0015-no-pmt-rewrite.md), F-C

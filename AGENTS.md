@@ -99,6 +99,8 @@ So:
 ## Build / test / run
 
 `cmake -S . -B build && cmake --build build && ctest --test-dir build`.
+Python 3.11+ is required at configure/build time because the hermetic fixture
+generator uses the standard-library `tomllib` module.
 
 Two options: `MISBKLV_GSTREAMER` (default ON) builds the gstreamer media backend
 — the KLV core builds and tests without it, and that separation is load-bearing
@@ -117,7 +119,8 @@ What the suites guard, so a change lands in the right one:
 - `message`, `roundtrip`, `imapb`, `nested_vmti`, `vtarget_series`,
   `standalone_vmti` — core encode/decode and the ST 1201 IMAPB path.
 - `gst_*` and `stream_*` — the backend: extraction and insertion, file and live,
-  against the sample streams in `data/`.
+  against project-owned synthetic fixtures under `test/fixtures/`. The
+  developer-provided media in `data/` is not required by the suite.
 - `api_stream`, `stream_stop` — the high-level API and prompt cancellation
   ([ADR 0019](context/decisions/0019-extract-cancellation.md)).
 - `jmisb_crosscheck` — our output read back by an independent implementation.
@@ -154,5 +157,7 @@ behalf, write the message without the Claude co-authorship line.
   there.
 - `context/` — agent knowledge bundle (maintain this).
 - `docs/` — human-facing guides (terse).
-- `data/` — sample MPEG-TS test vectors (Day Flight, Night Flight IR).
+- `data/` — ignored developer-provided media; see `data/README.md`.
+- `test/fixtures/` — project-owned deterministic KLV/MPEG-TS fixtures and the
+  generator used to create them.
 - `planning/` — live plan + progress (ROADMAP.md, PROGRESS.md). Read first for "what now".

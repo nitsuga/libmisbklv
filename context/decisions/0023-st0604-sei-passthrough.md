@@ -250,7 +250,8 @@ discontinuity from the KLV timestamp sequence is a follow-on, not part of this.
   resolved by [`0024`](./0024-sei-generation-opt-in.md): under `Generate` the
   source's ST 0604 is replaced, not added to, so exactly one Precision Time
   Stamp survives per access unit. Writing the round-trip test is what surfaced
-  it — `data/klv_metadata_test_sync.ts` carries 418 of its own.
+  it in the historical sample corpus — `klv_metadata_test_sync.ts` carried 418
+  of its own.
 
 # Citations
 

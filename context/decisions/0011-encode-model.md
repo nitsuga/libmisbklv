@@ -129,7 +129,8 @@ NaN, infinity, and out-of-range values.
   *reserializing* an existing item passes its **source length**, because a
   wire item's length is not always the standard's canonical length (0601 has
   variable-length items, and older-revision streams size items differently — e.g.
-  `Day Flight.mpg` encodes Item 22 Target Width as 4 bytes vs 0601.19's uint16).
+  the historical `Day Flight.mpg` sample encoded Item 22 Target Width as 4 bytes
+  vs 0601.19's uint16).
   Mandatory-item enforcement is likewise opt-out on `finalize()` so a
   Report-on-Change packet that omits items can be reserialized faithfully.
 

@@ -52,7 +52,7 @@ library-style, `MediaBackend` interface, real-time via `appsrc`) stands.
 
 # Assumptions / open questions
 
-- Verified on 1.20.3 with the `Day Flight` 6-packet stream; assume it holds for
+- Verified historically on 1.20.3 with the `Day Flight` 6-packet stream; assume it holds for
   larger streams (mpegtsmux carries the KLV PES payload verbatim). Confirm on a
   bigger sample if a doubt arises.
 - Real-time (`udpsink`/`srtsink`, B4) uses the same mux; signaling is identical.

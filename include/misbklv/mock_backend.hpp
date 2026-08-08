@@ -36,7 +36,7 @@ class MockBackend : public MediaBackend {
   // `pts` (optional, parallel to `packets`) are the timestamps extract() reports
   // — nanoseconds from the start of the source, as a real backend does (ADR
   // 0021). Omit it to replay an untimed stream: every packet gets kNoPts, which
-  // is what a capture like Day Flight actually yields.
+  // is what an untimed KLV carrier yields.
   explicit MockBackend(std::vector<ber::Bytes> packets = {},
                        std::vector<std::int64_t> pts = {})
       : packets_(std::move(packets)), pts_(std::move(pts)) {}

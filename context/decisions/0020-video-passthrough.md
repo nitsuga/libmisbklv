@@ -148,16 +148,17 @@ is trivially revisited if a consumer needs it (link non-video pads too).
 - Existing callers are untouched: empty `video_source` takes the original
   code path (straight to `PLAYING`, `kNoPts` still synthesized), and
   `gst_insert_test` passes unchanged as the regression guard.
-- New `gst_video_insert_test` (CTest `gst_video_insert`) muxes
-  `data/klv_metadata_test_sync.ts`'s video with `dayflight.klv` and asserts, over
-  the output TS read back with its own small TS/PES reader: the PMT lists exactly
-  two elementary streams (video + `0x06`/`KLVA`, so the source's own KLV was
-  dropped), the KLV re-extracts byte-exact, the video elementary stream is
-  **byte-identical** to the source's with the same frame count and codec, the
-  pushed PTS intervals survive, both branches share one PTS origin, and `kNoPts`
-  is refused. Both failure paths are covered — a missing source *and* a readable
-  videoless one — each asserting no output file is left, plus that a pre-existing
-  file at the sink path is not deleted.
+- New `gst_video_insert_test` (CTest `gst_video_insert`) muxes the generated
+  `synthetic-video.ts` carrier with the generated synthetic KLV stream and
+  asserts, over the output TS read back with its own small TS/PES reader: the PMT
+  lists exactly two elementary streams (video + `0x06`/`KLVA`), the carrier's
+  distinct source-side KLV is not forwarded, the supplied KLV re-extracts
+  byte-exact, the video elementary stream is **byte-identical** to the source's
+  with the same frame count and
+  codec, the pushed PTS intervals survive, both branches share one PTS origin,
+  and `kNoPts` is refused. Both failure paths are covered — a missing source
+  *and* a readable videoless one — each asserting no output file is left, plus
+  that a pre-existing file at the sink path is not deleted.
 - **Both demuxer paths are covered.** The test runs its whole battery a second
   time against an MP4 remuxed from the TS source (`tsdemux ! h264parse ! mp4mux`,
   skipped if `mp4mux` is absent), because `parsebin` auto-plugs `qtdemux` there —
