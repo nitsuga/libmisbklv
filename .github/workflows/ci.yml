@@ -16,7 +16,7 @@ jobs:
       - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++ python3 \
+          sudo apt-get install -y cmake g++ \
             libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             libgstreamer-plugins-bad1.0-dev \
             gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
@@ -61,7 +61,7 @@ jobs:
       - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++ python3
+          sudo apt-get install -y cmake g++
       - name: Configure (ASan + UBSan, no gstreamer)
         run: cmake -S . -B build-san -DMISBKLV_SANITIZE=ON -DMISBKLV_GSTREAMER=OFF
       - name: Build
@@ -72,17 +72,19 @@ jobs:
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
           ASAN_OPTIONS: abort_on_error=1
 
-  registry-drift:
+  generated-drift:
     timeout-minutes: 10
-    # ADR 0012: the committed constexpr tables must match a fresh regeneration.
+    # ADRs 0012/0028: committed generated outputs must match fresh regeneration.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Regenerate registry tables
+      - name: Regenerate committed outputs
         run: |
           for r in uas0601 vmti0903 vtarget0903; do
             python3 tools/gen_registry.py \
               "registry/$r.toml" "include/misbklv/registry/${r}_tables.generated.hpp"
           done
+          python3 test/fixtures/generate_synthetic_fixtures.py \
+            registry/uas0601.toml test/fixtures
       - name: Fail on drift
-        run: git diff --exit-code -- include/misbklv/registry
+        run: git diff --exit-code -- include/misbklv/registry test/fixtures

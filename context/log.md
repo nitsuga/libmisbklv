@@ -5,11 +5,19 @@
 * **Fork-free test-data provenance decision accepted:** third-party media and
   derived fixtures are removed from the current tree; backend regression inputs
   move to project-authored deterministic fixtures, and `data/` remains an ignored
-  workspace for developer-provided media. Source-checkout builds generate the
-  fixtures with Python 3.11+; installed-library consumers still need no Python
+  workspace for developer-provided media. The small generated fixtures are
+  committed and CI-checked against their Python 3.11+ recipe, so normal source
+  and installed-library builds need no Python
   ([ADR 0028](./decisions/0028-hermetic-synthetic-fixtures.md)). Fresh final
-  verification passed all 16 core-only cases, all 22 GStreamer cases, and all
-  16 core cases under AddressSanitizer and UndefinedBehaviorSanitizer.
+  verification passed all 16 core-only cases with Python discovery disabled,
+  all 22 GStreamer cases, and all 16 core cases under AddressSanitizer and
+  UndefinedBehaviorSanitizer.
+
+* **Rewrote repository history to withdraw the external corpus:** the five LFS
+  media paths and seven derived KLV fixtures are absent from reachable commits;
+  the local LFS payload cache was pruned and GitHub `main` was force-updated.
+  Host-retained cached commits and orphaned LFS payloads were reported for the
+  separate GitHub Support purge.
 
 ## 2026-08-01
 

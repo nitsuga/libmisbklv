@@ -6,9 +6,10 @@ video files here while investigating an integration or reproducing a report.
 Files in this directory are ignored by Git; do not add third-party media or
 other files whose redistribution terms are unclear.
 
-The regular build and test suite does not depend on this directory. Its
-hermetic KLV and MPEG-TS inputs live under [`../test/fixtures/`](../test/fixtures/)
-and are generated from project-authored values by
+The regular build and test suite does not depend on this directory. Its small,
+committed hermetic KLV and MPEG-TS inputs live under
+[`../test/fixtures/`](../test/fixtures/) and are regenerated from
+project-authored values by
 [`generate_synthetic_fixtures.py`](../test/fixtures/generate_synthetic_fixtures.py).
 Those fixtures are covered by the repository's Apache-2.0 license and are the
 right place for deterministic regression inputs.

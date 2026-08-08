@@ -46,17 +46,18 @@ not files currently shipped by the project.
 
 Regression inputs are project-authored, deterministic, and covered by
 Apache-2.0. [`../test/fixtures/generate_synthetic_fixtures.py`](../test/fixtures/generate_synthetic_fixtures.py)
-generates the KLV and MPEG-TS cases used by tests, including:
+regenerates the committed KLV and MPEG-TS cases used by tests, including:
 
 - basic and single-packet ST 0601 streams;
 - comprehensive values, special values, variable widths, and a multi-byte BER-OID tag;
 - timed and untimed `stream_type 0x06` PES; and
-- timed `stream_type 0x15` metadata access units; and
+- timed `stream_type 0x15` metadata access units;
 - a project-owned synthetic video carrier for passthrough and remux tests.
 
-The generator uses only the Python 3.11+ standard library and invented values.
-It is a recipe as well as provenance for the generated fixtures, so a clean
-checkout can recreate them without downloading media from an external site.
+The committed fixtures let a clean checkout build and test without Python or
+network access. Their optional generator uses only the Python 3.11+ standard
+library and invented values; it is both recipe and provenance, and CI rejects
+drift between the committed bytes and fresh regeneration.
 
 # Citations
 

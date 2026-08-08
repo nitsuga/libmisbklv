@@ -63,8 +63,9 @@ endif()
 
 # Regenerate the committed registry tables from TOML source (ADR 0012).
 # Not part of the default build; CI runs it and checks for drift.
-# The synthetic fixture generator uses the stdlib `tomllib` parser (Python 3.11+).
-find_package(Python3 3.11 REQUIRED COMPONENTS Interpreter)
+# Regeneration uses the stdlib `tomllib` parser (Python 3.11+), but normal
+# configure/build/test consumes committed outputs and has no Python dependency.
+find_package(Python3 3.11 QUIET COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
   set(_gen_dir ${CMAKE_CURRENT_SOURCE_DIR}/include/misbklv/registry)
   add_custom_target(regenerate-registry
@@ -81,15 +82,22 @@ if(Python3_Interpreter_FOUND)
             ${CMAKE_CURRENT_SOURCE_DIR}/registry/vtarget0903.toml
             ${_gen_dir}/vtarget0903_tables.generated.hpp
     COMMENT "Regenerating registry tables from registry/*.toml")
+  add_custom_target(regenerate-synthetic-fixtures
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/generate_synthetic_fixtures.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/registry/uas0601.toml
+            ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures
+    COMMENT "Regenerating committed synthetic KLV/MPEG-TS fixtures")
+else()
+  message(STATUS "Python 3.11+ not found: regeneration targets disabled")
 endif()
 
 enable_testing()
 
 
-# Hermetic, Apache-2.0 test corpus. Generated into the build tree from invented
-# values; no third-party media or derived metadata is needed to build or test.
-set(_fixture_dir ${CMAKE_CURRENT_BINARY_DIR}/test-fixtures)
-set(_fixture_generator ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/generate_synthetic_fixtures.py)
+# Hermetic, Apache-2.0 test corpus. The small committed fixtures are generated
+# from invented values and checked for drift in CI; normal builds need no Python.
+set(_fixture_dir ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures)
 set(_basic ${_fixture_dir}/synthetic-basic.klv)
 set(_first ${_fixture_dir}/synthetic-first-packet.klv)
 set(_comprehensive ${_fixture_dir}/synthetic-comprehensive.klv)
@@ -97,28 +105,17 @@ set(_timed_06 ${_fixture_dir}/synthetic-timed-0x06.ts)
 set(_untimed_06 ${_fixture_dir}/synthetic-untimed-0x06.ts)
 set(_timed_15 ${_fixture_dir}/synthetic-timed-0x15.ts)
 set(_video ${_fixture_dir}/synthetic-video.ts)
-add_custom_command(
-  OUTPUT ${_basic} ${_first} ${_comprehensive} ${_timed_06} ${_untimed_06} ${_timed_15} ${_video}
-  COMMAND ${Python3_EXECUTABLE} ${_fixture_generator}
-          ${CMAKE_CURRENT_SOURCE_DIR}/registry/uas0601.toml ${_fixture_dir}
-  DEPENDS ${_fixture_generator} ${CMAKE_CURRENT_SOURCE_DIR}/registry/uas0601.toml
-  COMMENT "Generating project-owned synthetic KLV/MPEG-TS fixtures")
-add_custom_target(synthetic_test_fixtures ALL
-  DEPENDS ${_basic} ${_first} ${_comprehensive} ${_timed_06} ${_untimed_06} ${_timed_15} ${_video})
 add_executable(roundtrip_test test/roundtrip_test.cpp)
 target_link_libraries(roundtrip_test PRIVATE misbklv)
-add_dependencies(roundtrip_test synthetic_test_fixtures)
 add_test(NAME roundtrip COMMAND roundtrip_test ${_first})
 
 add_executable(stream_roundtrip_test test/stream_roundtrip_test.cpp)
 target_link_libraries(stream_roundtrip_test PRIVATE misbklv)
-add_dependencies(stream_roundtrip_test synthetic_test_fixtures)
 add_test(NAME stream_synthetic_basic COMMAND stream_roundtrip_test ${_basic})
 add_test(NAME stream_synthetic_comprehensive COMMAND stream_roundtrip_test ${_comprehensive})
 
 add_executable(synthetic_fixture_test test/synthetic_fixture_test.cpp)
 target_link_libraries(synthetic_fixture_test PRIVATE misbklv)
-add_dependencies(synthetic_fixture_test synthetic_test_fixtures)
 add_test(NAME synthetic_fixture_coverage COMMAND synthetic_fixture_test ${_basic} ${_comprehensive})
 
 add_executable(nested_roundtrip_test test/nested_roundtrip_test.cpp)
@@ -154,12 +151,10 @@ add_test(NAME st0601_examples COMMAND st0601_examples_test)
 
 add_executable(hardening_test test/hardening_test.cpp)
 target_link_libraries(hardening_test PRIVATE misbklv)
-add_dependencies(hardening_test synthetic_test_fixtures)
 add_test(NAME hardening COMMAND hardening_test ${_first})
 
 add_executable(message_test test/message_test.cpp)  # high-level Message (ADR 0018)
 target_link_libraries(message_test PRIVATE misbklv)
-add_dependencies(message_test synthetic_test_fixtures)
 add_test(NAME message COMMAND message_test ${_first})
 
 add_executable(mock_backend_test test/mock_backend_test.cpp)
@@ -169,12 +164,10 @@ add_test(NAME mock_backend COMMAND mock_backend_test)
 if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
   add_executable(gst_backend_test test/gst_backend_test.cpp)
   target_link_libraries(gst_backend_test PRIVATE misbklv-gst)
-  add_dependencies(gst_backend_test synthetic_test_fixtures)
   add_test(NAME gst_extract COMMAND gst_backend_test ${_timed_06} ${_basic})
 
   add_executable(gst_insert_test test/gst_insert_test.cpp)  # B2 insertion round-trip
   target_link_libraries(gst_insert_test PRIVATE misbklv-gst)
-  add_dependencies(gst_insert_test synthetic_test_fixtures)
   add_test(NAME gst_insert COMMAND gst_insert_test
     ${_basic}
     "${CMAKE_CURRENT_BINARY_DIR}/insert_roundtrip.ts")
@@ -184,7 +177,6 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
   # qtdemux without committing a binary fixture or requiring an encoder.
   add_executable(gst_video_insert_test test/gst_video_insert_test.cpp)
   target_link_libraries(gst_video_insert_test PRIVATE misbklv-gst)
-  add_dependencies(gst_video_insert_test synthetic_test_fixtures)
   add_test(NAME gst_video_insert COMMAND gst_video_insert_test
     ${_video}
     ${_basic}
@@ -192,12 +184,10 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
 
   add_executable(gst_stream_test test/gst_stream_test.cpp)  # B4 real-time udp round-trip
   target_link_libraries(gst_stream_test PRIVATE misbklv-gst Threads::Threads)
-  add_dependencies(gst_stream_test synthetic_test_fixtures)
   add_test(NAME gst_stream COMMAND gst_stream_test ${_basic})
 
   add_executable(api_test test/api_test.cpp)  # high-level facade end-to-end (ADR 0018)
   target_link_libraries(api_test PRIVATE misbklv-gst)
-  add_dependencies(api_test synthetic_test_fixtures)
   add_test(NAME api_stream COMMAND api_test
     ${_timed_06}
     "${CMAKE_CURRENT_BINARY_DIR}/api_edit.ts")
@@ -207,7 +197,6 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
 
   add_executable(stop_test test/stop_test.cpp)  # cooperative cancellation (ADR 0019)
   target_link_libraries(stop_test PRIVATE misbklv-gst Threads::Threads)
-  add_dependencies(stop_test synthetic_test_fixtures)
   add_test(NAME stream_stop COMMAND stop_test ${_first})
 endif()
 
@@ -216,7 +205,6 @@ endif()
 # the generated elementary-stream reference.
 add_executable(ts_extract_test test/ts_extract_test.cpp)
 target_link_libraries(ts_extract_test PRIVATE misbklv)
-add_dependencies(ts_extract_test synthetic_test_fixtures)
 add_test(NAME ts_extract_timed_0x06 COMMAND ts_extract_test ${_timed_06} ${_basic})
 add_test(NAME ts_extract_untimed_0x06 COMMAND ts_extract_test ${_untimed_06} ${_basic})
 add_test(NAME ts_extract_timed_0x15 COMMAND ts_extract_test ${_timed_15} ${_basic})

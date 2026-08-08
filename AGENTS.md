@@ -99,8 +99,8 @@ So:
 ## Build / test / run
 
 `cmake -S . -B build && cmake --build build && ctest --test-dir build`.
-Python 3.11+ is required at configure/build time because the hermetic fixture
-generator uses the standard-library `tomllib` module.
+Normal builds consume committed generated fixtures and need no Python. Python
+3.11+ is needed only for the optional registry/fixture regeneration targets.
 
 Two options: `MISBKLV_GSTREAMER` (default ON) builds the gstreamer media backend
 — the KLV core builds and tests without it, and that separation is load-bearing
@@ -126,9 +126,10 @@ What the suites guard, so a change lands in the right one:
 - `jmisb_crosscheck` — our output read back by an independent implementation.
 
 CI runs build+test, a **consumer smoke test** (`find_package(misbklv COMPONENTS
-gst)` against a real out-of-tree build), a **sanitizer** job (core only), and the
-**registry drift** check from
-[ADR 0012](context/decisions/0012-registry-codegen.md).
+gst)` against a real out-of-tree build), a **sanitizer** job (core only), and
+**generated-output drift** checks for the registry tables and synthetic fixtures
+([ADR 0012](context/decisions/0012-registry-codegen.md),
+[ADR 0028](context/decisions/0028-hermetic-synthetic-fixtures.md)).
 
 ## Prose style
 

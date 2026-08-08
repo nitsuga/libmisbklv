@@ -9,6 +9,8 @@
 
 # Media files are developer-provided and ignored under data/. Project-owned
 # regression fixtures are small enough to remain in regular Git.
+test/fixtures/synthetic-*.klv -filter -diff -merge -text
+test/fixtures/synthetic-*.ts  -filter -diff -merge -text
 
 # Built artifacts that shouldn't pollute diffs
 *.o    filter=lfs diff=lfs merge=lfs -text
