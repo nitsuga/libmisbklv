@@ -1,5 +1,15 @@
 # Knowledge Bundle Log
 
+## 2026-08-10
+
+* **README build requirements now complete.** The gst facade's CMake check
+  needs `pkg-config` and `gstreamer-codecparsers-1.0`, but the requirements
+  prose and the Ubuntu/Debian apt command listed neither (codecparsers ships in
+  `libgstreamer-plugins-bad1.0-dev`). Added both, plus the codecparsers dev
+  files and `pkg-config` to the Fedora and Arch package lists. Surfaced while
+  wiring up parrot-to-klv's own README after a bare host's mux test failed with
+  "media pipeline failed".
+
 ## 2026-08-08
 
 * **Fork-free test-data provenance decision accepted:** third-party media and
