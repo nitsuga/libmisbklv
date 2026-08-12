@@ -31,8 +31,11 @@ struct SensorTime {
 };
 
 struct VideoCtx {
-  GstElement* mux = nullptr;
   GstElement* pipeline = nullptr;  // for creating fakesinks
+  // The muxer sink pad reserved for video while the pipeline was still NULL,
+  // so it takes the lower ES PID and is announced first in the PMT (ADR 0020
+  // § stream order). Borrowed: the muxer owns the pad; this is only linked.
+  GstPad* reserved_video_pad = nullptr;
   std::mutex mu;
   std::condition_variable cv;
   bool linked = false;
@@ -54,9 +57,13 @@ struct VideoCtx {
 // Adds and prerolls the video branch. On an error the caller retains `video`
 // until it has taken the pipeline to NULL, keeping all callback user pointers
 // valid during teardown.
+// `reserved_video_pad` is the muxer sink pad reserved for video while the
+// pipeline was NULL (borrowed, owned by the muxer); the video stream is linked
+// onto it once the demuxer exposes its pad, keeping video first in the PMT.
 Result<std::monostate> prepare_video_branch(
-    GstElement* pipeline, GstElement* mux, const std::string& video_path,
-    Sei0604 sei_0604, std::unique_ptr<VideoCtx>& video);
+    GstElement* pipeline, GstPad* reserved_video_pad,
+    const std::string& video_path, Sei0604 sei_0604,
+    std::unique_ptr<VideoCtx>& video);
 
 void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt,
                              std::int64_t pts_ns);

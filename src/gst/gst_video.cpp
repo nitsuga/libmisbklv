@@ -85,6 +85,21 @@ const char* parser_for_media_type(const std::string& type) {
   return nullptr;
 }
 
+const char* mux_caps_for_media_type(const std::string& type) {
+  // The video pad is reserved while the pipeline is NULL and only linked after
+  // PAUSED, by which point it is activated and will not renegotiate on link
+  // (the sink template's fixed caps win). A capsfilter with these caps —
+  // exactly what mpegtsmux's sink template accepts — makes that link safe
+  // regardless of the parser's negotiation state: the capsfilter's src pad has
+  // no current caps until data flows, so the link is checked against its ANY
+  // template, and the fixed caps force the byte-stream / parsed form the muxer
+  // accepts (ADR 0020 § stream order; the avc current-caps NOFORMAT case).
+  if (type == "video/x-h264") return "video/x-h264, stream-format=byte-stream";
+  if (type == "video/x-h265") return "video/x-h265, stream-format=byte-stream";
+  if (type == "video/mpeg") return "video/mpeg, systemstream=false, parsed=true";
+  return nullptr;
+}
+
 std::vector<std::byte> generate_0604_sei_payload(std::uint64_t timestamp_microsec,
                                                   std::uint8_t time_status) {
   // ST 0604.6 §7: User Unregistered type 5, UUID "MISPmicrosectime", status,
@@ -344,12 +359,16 @@ void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
   }
   const char* parser_name = parser_for_media_type(media_type);
   if (!parser_name) {
-    GstPad* mux_sink = gst_element_request_pad_simple(ctx->mux, "sink_%d");
-    if (mux_sink && gst_pad_link(pad, mux_sink) == GST_PAD_LINK_OK)
+    // No parser needed: link the demuxer pad straight onto the reserved pad.
+    // The reserved pad is already activated, so the link is checked against the
+    // source's current caps; for these codecs the demuxer's caps already match
+    // the muxer's template, so this holds. (A codec the muxer does not accept
+    // fails here rather than at finish(), which is the honest error.)
+    if (ctx->reserved_video_pad &&
+        gst_pad_link(pad, ctx->reserved_video_pad) == GST_PAD_LINK_OK)
       ctx->linked = true;
     else
       g_warning("misbklv: failed to link %s pad to muxer", media_type.c_str());
-    if (mux_sink) gst_object_unref(mux_sink);
     ctx->cv.notify_all();
     return;
   }
@@ -377,19 +396,57 @@ void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
     ctx->cv.notify_all();
     return;
   }
-  if (gst_element_link(parse, ctx->mux)) {
-    ctx->linked = true;
-    if (ctx->generate_sei) {
-      GstPad* parse_src = gst_element_get_static_pad(parse, "src");
-      if (parse_src) {
-        gst_pad_add_probe(parse_src, GST_PAD_PROBE_TYPE_BUFFER,
-                          on_h264_buffer_inject_sei, ctx, nullptr);
-        gst_object_unref(parse_src);
+  GstPad* parse_src = gst_element_get_static_pad(parse, "src");
+  if (!parse_src) {
+    g_warning("misbklv: failed to get %s src pad", parser_name);
+    ctx->cv.notify_all();
+    return;
+  }
+  // The video muxer pad was reserved while the pipeline was NULL so it takes
+  // the lower ES PID and is announced first in the PMT (ADR 0020 § stream
+  // order). By now it is activated, so it will not renegotiate on link — an
+  // avc current-caps source would fail with NOFORMAT. Routing the stream
+  // through a capsfilter whose src has no current caps (template ANY) makes
+  // the link safe; its fixed caps then force the byte-stream form the muxer
+  // accepts. Codecs outside the capsfilter table link the parser's src
+  // directly (their current caps already match the muxer template).
+  bool linked = false;
+  if (const char* mux_caps = mux_caps_for_media_type(media_type)) {
+    GstElement* capsfilter = gst_element_factory_make("capsfilter", nullptr);
+    if (!capsfilter) {
+      g_warning("misbklv: failed to create capsfilter for %s", media_type.c_str());
+    } else {
+      GstCaps* fcaps = gst_caps_from_string(mux_caps);
+      g_object_set(capsfilter, "caps", fcaps, nullptr);
+      gst_caps_unref(fcaps);
+      gst_bin_add(GST_BIN(ctx->pipeline), capsfilter);
+      gst_element_sync_state_with_parent(capsfilter);
+      if (gst_element_link(parse, capsfilter)) {
+        GstPad* cf_src = gst_element_get_static_pad(capsfilter, "src");
+        if (cf_src) {
+          linked = ctx->reserved_video_pad &&
+                   gst_pad_link(cf_src, ctx->reserved_video_pad) == GST_PAD_LINK_OK;
+          gst_object_unref(cf_src);
+        }
+      } else {
+        g_warning("misbklv: failed to link %s to capsfilter", parser_name);
       }
     }
   } else {
-    g_warning("misbklv: failed to link %s to muxer", parser_name);
+    linked = ctx->reserved_video_pad &&
+             gst_pad_link(parse_src, ctx->reserved_video_pad) == GST_PAD_LINK_OK;
   }
+  if (!linked) {
+    g_warning("misbklv: failed to link %s to the reserved muxer pad", parser_name);
+    gst_object_unref(parse_src);
+    ctx->cv.notify_all();
+    return;
+  }
+  ctx->linked = true;
+  if (ctx->generate_sei)
+    gst_pad_add_probe(parse_src, GST_PAD_PROBE_TYPE_BUFFER,
+                      on_h264_buffer_inject_sei, ctx, nullptr);
+  gst_object_unref(parse_src);
   ctx->cv.notify_all();
 }
 
@@ -437,8 +494,9 @@ void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt,
 }
 
 Result<std::monostate> prepare_video_branch(
-    GstElement* pipeline, GstElement* mux, const std::string& video_path,
-    Sei0604 sei_0604, std::unique_ptr<VideoCtx>& video) {
+    GstElement* pipeline, GstPad* reserved_video_pad,
+    const std::string& video_path, Sei0604 sei_0604,
+    std::unique_ptr<VideoCtx>& video) {
   const std::string container = sniff_container(video_path);
   const char* demuxer_name = demuxer_for_media_type(container);
   if (!demuxer_name) {
@@ -457,8 +515,8 @@ Result<std::monostate> prepare_video_branch(
   }
   g_object_set(vsrc, "location", video_path.c_str(), nullptr);
   video = std::make_unique<VideoCtx>();
-  video->mux = mux;
   video->pipeline = pipeline;
+  video->reserved_video_pad = reserved_video_pad;
   video->generate_sei = sei_0604 == Sei0604::Generate;
   if (video->generate_sei) video->h264_parser = gst_h264_nal_parser_new();
   g_signal_connect(parse, "pad-added", G_CALLBACK(on_video_pad_added), video.get());

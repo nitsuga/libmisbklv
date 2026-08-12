@@ -1,5 +1,16 @@
 # Knowledge Bundle Log
 
+## 2026-08-12
+
+* **The insert path's output PMT now announces video first, KLV second**,
+  reversing the stream-ordering limitation ADR 0020 had recorded as standing —
+  [ADR 0020](./decisions/0020-video-passthrough.md) § Stream order (revised)
+  owns the mechanism and why the two 2026-07-28 attempts failed.
+  `gst_video_insert_test` pins the order; the full battery passes (TS and MP4
+  sources, both SEI modes, Time Status, H.265/MPEG-1/2, read→edit→write), and
+  a consumer `ffmpeg -map 0:0` selects the video. PROGRESS's known gap and
+  `docs/api.md`'s select-by-index caveat are gone.
+
 ## 2026-08-10
 
 * **README build requirements now complete.** The gst facade's CMake check

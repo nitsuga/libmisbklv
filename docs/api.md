@@ -62,9 +62,10 @@ generated — give the sink a `video_source`. Its video elementary stream is
 re-muxed **unchanged** (parsed, never decoded, so H.264 and H.265 both just
 work); the source's audio and any KLV it already carries are dropped.
 
-**Select streams by type, not by index.** The muxer announces the KLV first, so
-`0:0` is the metadata and `0:1` the video (`ffmpeg -map 0:v`). It orders the PMT
-by internal pad order and reversing that costs more than it is worth — see
+**Select streams by index or by type.** The muxer announces the video first, so
+`0:0` is the video and `0:1` the KLV (`ffmpeg -map 0:0` or `-map 0:v`). Video is
+announced first because its muxer pad is reserved before the KLV `appsrc` links,
+giving it the lower PID — see
 [ADR 0020](../context/decisions/0020-video-passthrough.md) § Stream order. PIDs
 and stream types are correct either way.
 

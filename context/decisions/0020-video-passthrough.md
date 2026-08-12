@@ -5,7 +5,7 @@ decision_status: accepted
 tags: [decision, backend, muxing, video, phase-3]
 generated:
   by: claude/opus-5
-  at: 2026-07-25T18:00:00Z
+  at: 2026-08-12T18:00:00Z
 fork: 18
 ---
 
@@ -75,16 +75,18 @@ the matching defaulted constructor argument.
   yields no video pad (unparseable, or audio-only) fails with
   `Error::Unsupported`; the wait is bounded (10 s) and also breaks on a bus
   error.
-- **The PMT announces KLV first, video second — and that stands** (added
-  2026-07-28, after an attempt to change it was reverted). `mpegtsmux` numbers
-  the PMT by the order sink pads are *requested*, and the KLV `appsrc` is linked
-  while the pipeline is still NULL, so it takes `sink_0`. The video pad can only
-  be requested once the demuxer exposes its pad, which is necessarily later.
-
-  Cosmetically this is wrong way round — a consumer doing `ffmpeg -map 0:0`
-  expects video — but every way of reversing it that we have tried costs
-  correctness, and correctness is not a trade we make for stream numbering. See
-  *Stream order* below for what was tried and measured.
+- **The PMT announces video first, KLV second.** `mpegtsmux` orders the PMT by
+  elementary-stream PID, and allocates PIDs in sink-pad request order. The
+  video muxer pad is therefore *reserved* while the pipeline is still NULL —
+  before the KLV `appsrc` links, which auto-requests the next pad — so video
+  takes the lower PID and the PMT lists it as stream `0:0`, KLV as `0:1`. The
+  reservation alone does not move the video: the pad is only linked once the
+  demuxer exposes its pad during preroll, and an activated pad will not
+  renegotiate on link (a source whose current caps are `avc` fails with
+  `GST_PAD_LINK_NOFORMAT`). Routing the video through a `capsfilter` whose src
+  pad has no current caps (template `ANY`) makes that link unconditionally safe
+  and forces the byte-stream form the muxer accepts. See *Stream order* below
+  for the mechanism and the two earlier attempts that failed.
 - **One timeline, enforced.** Both branches must share the source's timeline or
   the KLV does not line up with the frames it describes. The video branch is
   timestamped from the file, running from zero; the caller must therefore push
@@ -193,17 +195,21 @@ is trivially revisited if a consumer needs it (link non-video pads too).
   bytes against the source will see a difference; the picture data itself is
   untouched.
 
-## Stream order: why KLV is `0:0` and why it stays there (2026-07-28)
+## Stream order: video is `0:0`, KLV is `0:1` (2026-07-28, fixed 2026-08-12)
 
-Attempted, shipped, and reverted the same day. Recorded here because the cost
-was real and the next person to notice `0:0` is the metadata stream will want to
-fix it too.
+The PMT announced KLV first, video second, from the first shipped version of the
+video branch. A consumer doing `ffmpeg -map 0:0` got the metadata stream, which
+is the wrong way round for tooling that selects by index. Two attempts to flip
+it were made on 2026-07-28; both failed, the change was reverted, and the order
+was pinned so a future attempt would be deliberate. That attempt is this
+section — it succeeded, and this is what the previous failures were teaching.
 
-**The constraint.** `mpegtsmux` assigns PMT position by the order sink pads are
-*requested*. To put video first, its pad must be requested first — but the video
-pad's caps are only known once the demuxer exposes it, which requires `PAUSED`.
-The KLV `appsrc` has no such dependency and is linked while the pipeline is
-still NULL. That asymmetry is the whole problem.
+**The constraint.** `mpegtsmux` orders the PMT by elementary-stream PID, and
+allocates PIDs in sink-pad request order. To put video first, its pad must be
+requested first — but the video pad's caps are only known once the demuxer
+exposes it, which requires `PAUSED`. The KLV `appsrc` has no such dependency
+and is linked while the pipeline is still NULL. That asymmetry is the whole
+problem.
 
 **Attempt 1 — defer the `appsrc` link until after the video-pad wait.** Gets the
 order right and is the version that shipped. It is racy twice over:
@@ -228,22 +234,46 @@ order right and is the version that shipped. It is racy twice over:
   emitted.
 
 **Attempt 2 — reserve the video sink pad up front, before linking the `appsrc`.**
-This is the shape that *should* work: both pads requested on one thread while the
-pipeline is still NULL, no deferral, no timing change at all. It does not work,
-and the reason is worth knowing. `mpegtsmux` refuses the later link onto that
-reserved pad with `GST_PAD_LINK_NOFORMAT`, because once the pad has been
-activated through the state change the link is checked against the parser's
-*current* caps — still `avc`, straight from the demuxer — while the muxer accepts
-only `byte-stream`. The **template** caps intersect perfectly; the current ones
-do not. A freshly requested pad renegotiates on link, an activated reserved one
-will not. Inserting the capsfilter explicitly, via
+Both pads requested on one thread while the pipeline is still NULL, no deferral,
+no timing change at all. It does not work — unless the link goes through a
+capsfilter (the 2026-08-12 fix below). As first tried, `mpegtsmux` refuses the
+later link onto that reserved pad with `GST_PAD_LINK_NOFORMAT`, because once the
+pad has been activated through the state change the link is checked against the
+parser's *current* caps — still `avc`, straight from the demuxer — while the
+muxer accepts only `byte-stream`. The **template** caps intersect perfectly; the
+current ones do not. A freshly requested pad renegotiates on link, an activated
+reserved one will not. Inserting the capsfilter explicitly, via
 `gst_element_link_pads_filtered` onto the pad by name, fails the same way.
 
-**Decision: leave the order alone.** Stream numbering is cosmetic; dropped
-telemetry and wrong timestamps are not. A consumer that needs the video can
-select it by stream type or codec rather than by index, which is what a PMT is
-for. `gst_video_insert_test` now pins the current order so a future attempt is a
-visible, deliberate change.
+**The fix (2026-08-12) — reserve the pad up front, link through a capsfilter.**
+Both pads are now requested while the pipeline is NULL: the video muxer pad
+first (so it takes the lower PID), then the KLV pad explicitly by name — a plain
+`gst_element_link` would re-request `sink_%d` and *reuse* the reserved video pad
+for the KLV stream, handing the metadata the video's PMT position. The reserved
+video pad stays unlinked until the demuxer exposes its pad at preroll. The
+remaining piece is attempt 2's `NOFORMAT`:
+
+- The reserved pad is activated by `PAUSED` and will not renegotiate, so the
+  link is decided by the source's current caps. A parser that has already
+  converted presents `byte-stream` (fine), but the conversion happens *after*
+  the demuxer prerolls and is not something to race.
+- Routing the video through a `capsfilter` makes the link unconditionally safe:
+  the capsfilter's **src pad has no current caps until data flows**, so the link
+  is checked against its template — `ANY` — which always intersects. Its fixed
+  caps (`video/x-h264, stream-format=byte-stream`, etc., matching the muxer's
+  sink template) then force the parser's output into the byte-stream form the
+  muxer accepts, and negotiation happens downstream of the link instead of at
+  it.
+- No KLV link is deferred: the KLV `appsrc` is linked while NULL exactly as
+  before, so attempt 1's two regressions (the PMT race and the SEI segment
+  instability) are structurally absent. The PMT lists video `0:0`, KLV `0:1`.
+
+**Verification.** `gst_video_insert_test` now asserts video is announced first
+and KLV second, and the whole battery still passes — TS and MP4 sources,
+`Sei0604::Preserve` and `Generate`, the Time Status derivation cases, H.265 and
+MPEG-1/2 passthrough, and the read→edit→write round trip. A consumer
+`ffmpeg -map 0:0` selects the video. Per the transferable lesson below, the
+suite was additionally run repeatedly under CPU load: all iterations green.
 
 **The transferable lesson** is not about `mpegtsmux`. The shipped change was
 green on its first suite run and had been reasoned about carefully; both

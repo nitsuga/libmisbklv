@@ -185,14 +185,46 @@ Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg) {
   gst_caps_unref(caps);
   if (cfg.realtime) g_object_set(sink, "sync", TRUE, nullptr);
   gst_bin_add_many(GST_BIN(pipeline), appsrc, mux, sink, nullptr);
-  if (!gst_element_link_many(appsrc, mux, sink, nullptr))
+  // Reserve the video muxer pad FIRST, while the pipeline is still NULL, so it
+  // takes the lower ES PID. mpegtsmux orders the PMT by ES PID and allocates
+  // them in pad-request order, so video must be requested before the KLV
+  // appsrc links (which auto-requests the next pad). The pad stays unlinked
+  // until the demuxer exposes its video pad during PAUSED preroll; reserving
+  // it here fixes its PMT position without deferring the KLV link at all
+  // (ADR 0020 § stream order — the deferral that previously destabilized
+  // ST 0604 SEI timing). Borrowed after the unref: the muxer owns the pad.
+  GstPad* reserved_video_pad = nullptr;
+  if (!video_path.empty()) {
+    reserved_video_pad = gst_element_request_pad_simple(mux, "sink_%d");
+    if (!reserved_video_pad) return fail(pipeline, Error::Backend);
+    gst_object_unref(reserved_video_pad);
+    // Link the KLV appsrc onto its own requested pad, allocated after the
+    // video pad and so one PID above it. This must be an explicit request:
+    // gst_element_link resolves the sink through gst_element_get_compatible_pad,
+    // which hands back the existing unlinked reserved video pad rather than
+    // allocating a new one — giving the metadata stream the video's PMT slot.
+    // A wildcard request never reuses an existing pad, so no name arithmetic
+    // is needed to stay above the video.
+    GstPad* klv_pad = gst_element_request_pad_simple(mux, "sink_%d");
+    if (!klv_pad) return fail(pipeline, Error::Backend);
+    GstPad* srcpad = gst_element_get_static_pad(appsrc, "src");
+    const bool klv_linked =
+        srcpad && gst_pad_link(srcpad, klv_pad) == GST_PAD_LINK_OK;
+    if (srcpad) gst_object_unref(srcpad);
+    gst_object_unref(klv_pad);
+    if (!klv_linked || !gst_element_link(mux, sink))
+      return fail(pipeline, Error::Backend);
+  } else if (!gst_element_link_many(appsrc, mux, sink, nullptr)) {
     return fail(pipeline, Error::Backend);
+  }
 
   std::unique_ptr<VideoCtx> video;
   if (!video_path.empty()) {
     // Dynamic pads are linked by the video unit through parsers where required;
     // nothing is decoded, preserving codec passthrough.
-    auto prepared = prepare_video_branch(pipeline, mux, video_path, cfg.sei_0604, video);
+    auto prepared =
+        prepare_video_branch(pipeline, reserved_video_pad, video_path,
+                             cfg.sei_0604, video);
     if (!prepared) return fail(pipeline, prepared.error());
   }
   if (gst_element_set_state(pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
