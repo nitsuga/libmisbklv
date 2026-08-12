@@ -494,7 +494,7 @@ void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt,
 }
 
 Result<std::monostate> prepare_video_branch(
-    GstElement* pipeline, GstElement* mux, GstPad* reserved_video_pad,
+    GstElement* pipeline, GstPad* reserved_video_pad,
     const std::string& video_path, Sei0604 sei_0604,
     std::unique_ptr<VideoCtx>& video) {
   const std::string container = sniff_container(video_path);
@@ -515,7 +515,6 @@ Result<std::monostate> prepare_video_branch(
   }
   g_object_set(vsrc, "location", video_path.c_str(), nullptr);
   video = std::make_unique<VideoCtx>();
-  video->mux = mux;
   video->pipeline = pipeline;
   video->reserved_video_pad = reserved_video_pad;
   video->generate_sei = sei_0604 == Sei0604::Generate;

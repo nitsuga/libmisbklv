@@ -2,25 +2,14 @@
 
 ## 2026-08-12
 
-* **The insert path's output PMT now announces video first, KLV second** —
-  the stream-ordering limitation that ADR 0020 recorded (KLV was `0:0`) is
-  gone. `open_insert` reserves the video muxer pad while the pipeline is still
-  NULL so it takes the lower ES PID (mpegtsmux orders the PMT by PID and
-  allocates them in pad-request order); the KLV appsrc links to an
-  explicitly-requested pad one above it, because a plain `gst_element_link`
-  re-requests `sink_%d` and grabs the reserved video pad. The video links to
-  the reserved pad through a per-codec `capsfilter` once the demuxer exposes
-  its pad — the capsfilter's src has no current caps (template ANY), which
-  sidesteps the reserved-and-activated pad's no-renegotiate `NOFORMAT` on an
-  `avc` source that had killed the 2026-07-28 attempt. No KLV link is deferred,
-  so the two attempt-1 regressions (the video-only-PMT race and the ST 0604
-  SEI segment instability) are structurally absent. `gst_video_insert_test`
-  pins video-first + KLV-second; the full battery passes on TS and MP4
-  sources, both SEI modes, the Time Status cases, H.265/MPEG-1/2, and the
-  read→edit→write round trip; a consumer `ffmpeg -map 0:0` now selects the
-  video; repeated runs under CPU load were green. ADR 0020 § Stream order
-  updated with the working mechanism; PROGRESS and `docs/api.md` refreshed
-  (the "select by type, not by index" caveat is gone).
+* **The insert path's output PMT now announces video first, KLV second**,
+  reversing the stream-ordering limitation ADR 0020 had recorded as standing —
+  [ADR 0020](./decisions/0020-video-passthrough.md) § Stream order (revised)
+  owns the mechanism and why the two 2026-07-28 attempts failed.
+  `gst_video_insert_test` pins the order; the full battery passes (TS and MP4
+  sources, both SEI modes, Time Status, H.265/MPEG-1/2, read→edit→write), and
+  a consumer `ffmpeg -map 0:0` selects the video. PROGRESS's known gap and
+  `docs/api.md`'s select-by-index caveat are gone.
 
 ## 2026-08-10
 

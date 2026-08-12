@@ -31,7 +31,6 @@ struct SensorTime {
 };
 
 struct VideoCtx {
-  GstElement* mux = nullptr;
   GstElement* pipeline = nullptr;  // for creating fakesinks
   // The muxer sink pad reserved for video while the pipeline was still NULL,
   // so it takes the lower ES PID and is announced first in the PMT (ADR 0020
@@ -62,7 +61,7 @@ struct VideoCtx {
 // pipeline was NULL (borrowed, owned by the muxer); the video stream is linked
 // onto it once the demuxer exposes its pad, keeping video first in the PMT.
 Result<std::monostate> prepare_video_branch(
-    GstElement* pipeline, GstElement* mux, GstPad* reserved_video_pad,
+    GstElement* pipeline, GstPad* reserved_video_pad,
     const std::string& video_path, Sei0604 sei_0604,
     std::unique_ptr<VideoCtx>& video);
 

@@ -8,11 +8,11 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-The output PMT announces **video first, KLV second** (ADR 0020 § Stream order):
-the video muxer pad is reserved while the pipeline is NULL so it takes the
-lower ES PID, and the video links to it through a capsfilter that sidesteps the
-reserved pad's no-renegotiate `NOFORMAT`. A consumer's `ffmpeg -map 0:0` now
-selects the video.
+Between review-driven changes.
+
+<!-- Keep this section about where the WORK is. A sentence that would still be
+     true after a month of no work is knowledge, not status: it belongs in a
+     context/ concept or an ADR, with at most a pointer here. -->
 
 ## In progress
 

@@ -198,16 +198,14 @@ Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg) {
     reserved_video_pad = gst_element_request_pad_simple(mux, "sink_%d");
     if (!reserved_video_pad) return fail(pipeline, Error::Backend);
     gst_object_unref(reserved_video_pad);
-    // Link the KLV appsrc onto an explicitly-requested pad one above the
-    // video pad's. gst_element_link would re-request "sink_%d" and grab the
-    // reserved video pad instead of allocating the next free one, handing the
-    // metadata stream the video pad's PMT position.
-    GstPadTemplate* tpl =
-        gst_element_class_get_pad_template(GST_ELEMENT_GET_CLASS(mux), "sink_%d");
-    const gchar* vname = GST_PAD_NAME(reserved_video_pad);
-    gchar* kname = g_strdup_printf("sink_%d", std::atoi(vname + 5) + 1);
-    GstPad* klv_pad = gst_element_request_pad(mux, tpl, kname, nullptr);
-    g_free(kname);
+    // Link the KLV appsrc onto its own requested pad, allocated after the
+    // video pad and so one PID above it. This must be an explicit request:
+    // gst_element_link resolves the sink through gst_element_get_compatible_pad,
+    // which hands back the existing unlinked reserved video pad rather than
+    // allocating a new one — giving the metadata stream the video's PMT slot.
+    // A wildcard request never reuses an existing pad, so no name arithmetic
+    // is needed to stay above the video.
+    GstPad* klv_pad = gst_element_request_pad_simple(mux, "sink_%d");
     if (!klv_pad) return fail(pipeline, Error::Backend);
     GstPad* srcpad = gst_element_get_static_pad(appsrc, "src");
     const bool klv_linked =
@@ -225,7 +223,7 @@ Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg) {
     // Dynamic pads are linked by the video unit through parsers where required;
     // nothing is decoded, preserving codec passthrough.
     auto prepared =
-        prepare_video_branch(pipeline, mux, reserved_video_pad, video_path,
+        prepare_video_branch(pipeline, reserved_video_pad, video_path,
                              cfg.sei_0604, video);
     if (!prepared) return fail(pipeline, prepared.error());
   }

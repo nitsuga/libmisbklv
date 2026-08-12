@@ -5,7 +5,7 @@ decision_status: accepted
 tags: [decision, backend, muxing, video, phase-3]
 generated:
   by: claude/opus-5
-  at: 2026-07-25T18:00:00Z
+  at: 2026-08-12T18:00:00Z
 fork: 18
 ---
 
