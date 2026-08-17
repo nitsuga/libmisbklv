@@ -9,7 +9,7 @@ namespace misbklv::gen {
 
 
 inline constexpr ItemDescriptor vtarget_0903_items[] = {
-    { .tag = 1, .name = "targetCentroid", .units = "", .kind = ValueKind::UInt, .variable = true, .fixed_len = 0, .is_signed = false, .map = {0.0, 0.0}, .specials = {}, .flags = kNone, .child = RegistryId::None },
+    { .tag = 1, .name = "targetCentroid", .units = "", .kind = ValueKind::UInt, .variable = true, .fixed_len = 6, .is_signed = false, .map = {0.0, 0.0}, .specials = {}, .flags = kNone, .child = RegistryId::None },
     { .tag = 4, .name = "targetPriority", .units = "", .kind = ValueKind::UInt, .variable = false, .fixed_len = 1, .is_signed = false, .map = {0.0, 0.0}, .specials = {}, .flags = kNone, .child = RegistryId::None },
     { .tag = 8, .name = "targetColor", .units = "", .kind = ValueKind::UInt, .variable = false, .fixed_len = 3, .is_signed = false, .map = {0.0, 0.0}, .specials = {}, .flags = kNone, .child = RegistryId::None },
     { .tag = 10, .name = "targetLocationOffsetLat", .units = "deg", .kind = ValueKind::IMAPB, .variable = false, .fixed_len = 3, .is_signed = false, .map = {-19.2, 19.2}, .specials = {}, .flags = kNone, .child = RegistryId::None },

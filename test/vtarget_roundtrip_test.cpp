@@ -47,6 +47,50 @@ static ber::Bytes rebuild_items(const Registry& reg, const std::vector<Item>& it
   return b.serialize_items();
 }
 
+// ADR 0029: targetCentroid (tag 1) authors with no length argument at its
+// default encode width V6, emits a 6-byte value, and round-trips through the
+// Series parse path. Values beyond 2^48-1 are rejected before encoding.
+static int test_centroid_default_width() {
+  int local_failures = 0;
+  const auto check = [&local_failures](bool ok, const char* what) {
+    std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", what);
+    if (!ok) ++local_failures;
+  };
+
+  const std::uint64_t centroid = 409600;  // ST 0903 §10.2.2.2 worked example value
+  LocalSetBuilder b(gen::vtarget_0903);
+  check(static_cast<bool>(b.set(1, Value{centroid})), "set(1, centroid) at default width");
+  const ber::Bytes items = b.serialize_items();
+  check(items.size() == 8, "pack items: OID(1) + len(1) + 6 value bytes");
+
+  const ber::Bytes pack = build_vtarget_pack(7, items);
+  const ber::Bytes series = build_series({pack});
+  auto packs = parse_vtarget_series(series);
+  check(static_cast<bool>(packs), "default-width pack parses from a series");
+  if (packs && packs->size() == 1) {
+    const auto& p = (*packs)[0];
+    check(p.target_id == 7, "target id round-trips");
+    const Item* c = nullptr;
+    for (const auto& it : p.items) if (it.tag == 1) c = &it;
+    check(c != nullptr, "centroid item present in parsed pack");
+    if (c) {
+      check(c->value.size() == 6, "centroid emitted at 6 bytes (V6)");
+      auto v = codec::decode(*gen::vtarget_0903.find(1), c->value);
+      check(v && std::get<std::uint64_t>(*v) == centroid, "centroid value round-trips");
+    }
+  } else {
+    check(false, "expected exactly one parsed pack");
+  }
+
+  // V6 boundary: 2^48-1 fits the default width; 2^48 is rejected.
+  LocalSetBuilder max_b(gen::vtarget_0903);
+  check(static_cast<bool>(max_b.set(1, Value{std::uint64_t{0xFFFFFFFFFFFFull}})),
+        "centroid 2^48-1 fits V6");
+  check(max_b.set(1, Value{std::uint64_t{0x1000000000000ull}}).error() == Error::RangeError,
+        "centroid 2^48 rejected (RangeError)");
+  return local_failures;
+}
+
 int main(int argc, char** argv) {
   const char* path = argc > 1 ? argv[1] : "test/fixtures/vmti_vtarget.klv";
   const std::vector<std::byte> data = read_file(path);
@@ -107,6 +151,10 @@ int main(int argc, char** argv) {
   if (!rebuilt) { std::fprintf(stderr, "finalize failed\n"); return 2; }
   const bool pkt_ok = (*rebuilt == data);
   std::printf("packet re-encode: %s\n", pkt_ok ? "byte-exact" : "MISMATCH");
-  std::printf("VTARGET ROUND-TRIP: %s\n", (series_ok && pkt_ok) ? "PASS" : "FAIL");
-  return (series_ok && pkt_ok) ? 0 : 1;
+
+  // --- authoring at the default encode width (ADR 0029) ---------------------
+  const int centroid_failures = test_centroid_default_width();
+  const bool ok = series_ok && pkt_ok && centroid_failures == 0;
+  std::printf("VTARGET ROUND-TRIP: %s\n", ok ? "PASS" : "FAIL");
+  return ok ? 0 : 1;
 }

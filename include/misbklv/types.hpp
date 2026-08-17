@@ -81,8 +81,8 @@ struct ItemDescriptor {
   std::string_view name;
   std::string_view units;
   ValueKind kind;
-  bool variable;            // length is variable (else fixed_len bytes)
-  std::uint8_t fixed_len;   // meaningful iff !variable
+  bool variable;            // length is variable in the standard (else fixed_len bytes)
+  std::uint8_t fixed_len;   // encode width: the default when variable, else the fixed width
   bool is_signed;           // LinearLDS / Int
   MappingParams map;        // LinearLDS / IMAPB only
   std::span<const SpecialValue> specials;

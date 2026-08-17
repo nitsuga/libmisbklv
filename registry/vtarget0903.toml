@@ -6,10 +6,12 @@
 registry     = "VTARGET_0903"
 tag_encoding = "ber_oid"
 
-[[item]]                       # §10.2.2.1 — pixel number (row-major), variable uint
-tag  = 1
-name = "targetCentroid"
-kind = "uint"
+[[item]]                       # §10.2.2.2 — pixel number (row-major), variable uint (V6), 1..0xFFFFFFFFFFFF
+tag      = 1
+name     = "targetCentroid"
+kind     = "uint"
+length   = 6
+variable = true
 
 [[item]]                       # §10.2.2.4 — uint8
 tag    = 4

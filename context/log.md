@@ -1,5 +1,18 @@
 # Knowledge Bundle Log
 
+## 2026-08-17
+
+* **ST 0903 variable-length uints get a default encode width** (fork 26, issue
+  #5): VMTI tags 4/5/6 and VTarget tag 1 are registered at their standard
+  maximum width (`V2`/`V3`/`V6`) with `variable = true`, mirroring the 0601
+  variable-uint precedent — making `Message::set(tag, value)` author them
+  without a width argument. Rationale in
+  [ADR 0029](./decisions/0029-st0903-variable-uint-default-width.md).
+  Implemented and pinned: regenerated tables (drift-free), authoring and
+  Vmax-boundary tests in `message_test` and `vtarget_roundtrip_test`, and the
+  `fixed_len` "default encode width" semantics corrected in `types.hpp`. All
+  CTest cases green.
+
 ## 2026-08-12
 
 * **The insert path's output PMT now announces video first, KLV second**,

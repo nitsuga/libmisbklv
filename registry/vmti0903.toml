@@ -20,20 +20,26 @@ units  = "microseconds"
 kind   = "uint"
 length = 8
 
-[[item]]                       # variable-length uint (V)
-tag  = 4
-name = "VMTI LS Version Number"
-kind = "uint"
+[[item]]                       # §10.1.4 — variable-length uint (V2), values 1..65535
+tag      = 4
+name     = "VMTI LS Version Number"
+kind     = "uint"
+length   = 2
+variable = true
 
-[[item]]                       # variable-length uint (V)
-tag  = 5
-name = "Total Number of Targets Detected"
-kind = "uint"
+[[item]]                       # §10.1.5 — variable-length uint (V3), values 0..0xFFFFFF
+tag      = 5
+name     = "Total Number of Targets Detected"
+kind     = "uint"
+length   = 3
+variable = true
 
-[[item]]                       # variable-length uint (V)
-tag  = 6
-name = "Number of Reported Targets"
-kind = "uint"
+[[item]]                       # §10.1.6 — variable-length uint (V3), values 0..0xFFFFFF
+tag      = 6
+name     = "Number of Reported Targets"
+kind     = "uint"
+length   = 3
+variable = true
 
 [[item]]                       # §10.1.11 — IMAPB(0,180); e.g. 12.5° -> 0x0640
 tag    = 11
