@@ -15,7 +15,10 @@
   caller's" guarantee. (4) Dropped the dead `sei_codec_unsupported` flag (set,
   never read — the failure is already surfaced by the `g_warning` and a downstream
   `Error::Unsupported`). New `gst_video_insert_test` case pins the write-only-sink
-  scenario (verified to fail under the old probe); full CTest green.
+  scenario (verified to fail under the old probe); full CTest green. A follow-up
+  makes the ownership probe fail-safe to the letter of ADR 0022: a *stat* error
+  (e.g. a permission-denied path component) now counts as pre-existing too —
+  only a clean "does not exist" makes the sink removable on the failure path.
 
 * **The `-Wall -Wextra -Wpedantic -Werror` build is green again** (issue #8):
   three tests used partial `InsertConfig` aggregate initializers

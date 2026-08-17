@@ -161,6 +161,11 @@ Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg) {
     sink_path = cfg.sink.substr(5);
     std::error_code ec;
     sink_preexisted = std::filesystem::exists(sink_path, ec);
+    // A stat error (e.g. a permission-denied path component) makes exists()
+    // return false with ec set. Treat that as pre-existing — ADR 0022's
+    // guarantee is to *never* delete a caller's file, and on doubt we must
+    // not delete. Only a clean "does not exist" makes the sink ours to remove.
+    if (ec) sink_preexisted = true;
   }
   auto fail = [&](GstElement* pipe, Error e) {
     // Teardown must precede destruction of a prepared VideoCtx: its callbacks
