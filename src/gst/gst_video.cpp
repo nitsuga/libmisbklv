@@ -339,7 +339,6 @@ void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
     if (!ctx->linked) {
       g_warning("misbklv: Sei0604::Generate needs H.264 video; source carries %s",
                 media_type.empty() ? "an unknown codec" : media_type.c_str());
-      ctx->sei_codec_unsupported = true;
       drop_pad_to_fakesink(pad, ctx);
       ctx->cv.notify_all();
       return;
@@ -390,9 +389,14 @@ void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
   GstPadLinkReturn ret = gst_pad_link(pad, parse_sink);
   gst_object_unref(parse_sink);
   if (ret != GST_PAD_LINK_OK) {
+    // gst_pad_get_parent_element() returns a full reference; hold it in a local
+    // so the error path can name it and then drop it (GST_ELEMENT_PARENT does
+    // not add a ref). Leaving it inline leaked the demuxer on every link failure.
+    GstElement* demux_el = gst_pad_get_parent_element(pad);
     g_warning("misbklv: failed to link video pad to %s: %d (demuxer parent: %s, parser parent: %s)",
-              parser_name, ret, GST_ELEMENT_NAME(gst_pad_get_parent_element(pad)),
+              parser_name, ret, demux_el ? GST_ELEMENT_NAME(demux_el) : "(unknown)",
               GST_ELEMENT_NAME(GST_ELEMENT_PARENT(parse)));
+    if (demux_el) gst_object_unref(demux_el);
     ctx->cv.notify_all();
     return;
   }

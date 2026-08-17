@@ -80,8 +80,15 @@ void on_pad_added(GstElement*, GstPad* pad, gpointer user) {
   auto* ctx = static_cast<ExtractCtx*>(user);
   GstCaps* caps = gst_pad_get_current_caps(pad);
   if (!caps) caps = gst_pad_query_caps(pad, nullptr);
+  // Both queries can come back NULL or empty; gst_caps_get_structure would then
+  // return NULL and gst_structure_get_name dereference it. Guard as the sibling
+  // on_video_pad_added (gst_video.cpp) does before inspecting the caps.
+  if (!caps || gst_caps_is_empty(caps)) {
+    if (caps) gst_caps_unref(caps);
+    return;
+  }
   const gchar* name = gst_structure_get_name(gst_caps_get_structure(caps, 0));
-  if (std::strcmp(name, "meta/x-klv") == 0) {
+  if (name && std::strcmp(name, "meta/x-klv") == 0) {
     GstPad* sinkpad = gst_element_get_static_pad(ctx->sink, "sink");
     if (!gst_pad_is_linked(sinkpad)) gst_pad_link(pad, sinkpad);
     gst_object_unref(sinkpad);

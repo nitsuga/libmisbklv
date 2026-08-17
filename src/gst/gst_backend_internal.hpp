@@ -41,7 +41,6 @@ struct VideoCtx {
   bool linked = false;
   bool no_more_pads = false;
   int ignored_video_pads = 0;
-  bool sei_codec_unsupported = false;
   bool generate_sei = false;
 
   std::mutex timestamp_mu;
