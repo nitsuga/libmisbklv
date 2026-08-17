@@ -72,6 +72,10 @@ struct ExtractCtx {
     if (pos) {
       reassembly.erase(reassembly.begin(), reassembly.begin() + pos);
       stream_off += pos;
+      // Bound marks_ the same way reassembly is bounded: a feed whose KLV PID
+      // never frames still resyncs past garbage above, so stream_off advances
+      // even though no on_packet() call (and thus no marks.at()) ever fires.
+      marks.prune(stream_off);
     }
   }
 };

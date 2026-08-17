@@ -153,6 +153,10 @@ add_executable(hardening_test test/hardening_test.cpp)
 target_link_libraries(hardening_test PRIVATE misbklv)
 add_test(NAME hardening COMMAND hardening_test ${_first})
 
+add_executable(pts_marks_test test/pts_marks_test.cpp)  # PtsMarks::prune bound (issue #4)
+target_link_libraries(pts_marks_test PRIVATE misbklv)
+add_test(NAME pts_marks COMMAND pts_marks_test)
+
 add_executable(message_test test/message_test.cpp)  # high-level Message (ADR 0018)
 target_link_libraries(message_test PRIVATE misbklv)
 add_test(NAME message COMMAND message_test ${_first})

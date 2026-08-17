@@ -2,6 +2,18 @@
 
 ## 2026-08-17
 
+* **Bound live-path `PtsMarks` growth on a non-framing feed** (issue #4):
+  `gst_extract.cpp`'s `drain()` only consumed `PtsMarks` entries (`marks.at()`)
+  when a complete KLV frame was emitted, but resync past unmatched bytes already
+  advances `stream_off` even when no frame ever completes — so a live UDP/SRT
+  feed whose KLV PID never frames (wrong port, mislabeled stream) grew `marks_`
+  by one entry per appsink buffer forever, unlike the reassembly byte buffer
+  ADR 0026 already bounds. Added `PtsMarks::prune(stream_off)`, called from
+  `drain()` right after `stream_off` advances, dropping entries strictly behind
+  it the same way `at()` retires them, so the queue is bounded by the same
+  window as the bytes. New `pts_marks_test` (`pts_marks` CTest case) covers
+  `prune` directly — offsets ahead/behind/equal to `stream_off`, an empty
+  queue, and sustained non-framing input staying bounded. Full CTest green.
 * **gstreamer backend error-path hygiene sweep** (issue #6): four localized
   fixes on the media backend's failure paths. (1) `gst_video.cpp`'s link-failure
   `g_warning` leaked the demuxer element — `gst_pad_get_parent_element` returns a
