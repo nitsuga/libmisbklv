@@ -131,12 +131,25 @@ void imapb_put_special(Bytes& out, std::uint8_t id, int len) {
 }  // namespace
 
 std::uint64_t rd_uint(std::span<const std::byte> b) {
+  // Contract: 1..8 bytes (decode() enforces this before the internal callers
+  // reach here). A direct caller inspecting raw bytes could pass more; a >8-byte
+  // big-endian value cannot fit a uint64, so read only the least-significant 8
+  // bytes — a defined result rather than an incidental high-byte shift-out.
+  if (b.size() > 8) b = b.last(8);
   std::uint64_t v = 0;
   for (auto by : b) v = (v << 8) | std::to_integer<std::uint8_t>(by);
   return v;
 }
 
 double imapb_decode(const ItemDescriptor& d, std::span<const std::byte> raw) {
+  // Same 1..8-byte contract as rd_uint: an over-long field cannot fit the
+  // mapping's integer, so interpret only its low 8 bytes rather than letting
+  // imapb_params see a bogus width. (decode() already rejects >8 up front.)
+  if (raw.size() > 8) raw = raw.last(8);
+  // A degenerate descriptor (min >= max) has no valid IMAPB scale: b - a <= 0
+  // makes log2(b - a) non-finite in imapb_params. Surface it as NaN instead of a
+  // meaningless value — the encode side emits the +QNaN special for the same case.
+  if (!(d.map.min < d.map.max)) return std::numeric_limits<double>::quiet_NaN();
   if (!raw.empty()) {
     switch (imapb_special_of(std::to_integer<std::uint8_t>(raw[0]))) {
       case ImapSpecial::PosInf: return std::numeric_limits<double>::infinity();
@@ -158,13 +171,23 @@ void imapb_encode(const ItemDescriptor& d, double x, Bytes& out, int len) {
   if (std::isinf(x)) return imapb_put_special(out, x > 0 ? 0xC8 : 0xE8, len);
   if (x < d.map.min) return imapb_put_special(out, 0xE0, len);             // BELOW_MIN
   if (x > d.map.max) return imapb_put_special(out, 0xE1, len);             // ABOVE_MAX
+  // A degenerate descriptor (min == max) reaches here only for x == min, since
+  // any other x is caught by the BELOW_MIN/ABOVE_MAX guards above. With b - a == 0
+  // imapb_params yields sF == +inf, so yf == inf*0 == NaN and the float->int cast
+  // below would be UB. min > max is already unreachable (every finite x hits a
+  // guard); reject any non-representable descriptor here for defensive parity
+  // with linear_encode, emitting the +QNaN special (a defined, decodable output).
+  if (!(d.map.min < d.map.max)) return imapb_put_special(out, 0xD0, len);
   const ImapB p = imapb_params(d.map.min, d.map.max, len);
   double yf = p.sF * (x - p.a) + p.zoff;             // truncate; x>=a => floor
   // A decoded on-grid value re-encodes to an exact integer in real arithmetic;
   // float error can pull it just below, so floor would drop 1 LSB. Nudge up by
   // a few ULP (far below a real cell width) to keep IMAPB a stable inverse.
   yf += (std::fabs(yf) + 1.0) * 8.0 * std::numeric_limits<double>::epsilon();
-  wr_uint(out, static_cast<std::uint64_t>(std::floor(yf)), len);
+  // The descriptor guard above keeps yf finite; clamp the cast anyway so no
+  // caller-supplied descriptor can drive the float->int conversion out of range.
+  const double f = std::floor(yf);
+  wr_uint(out, std::isfinite(f) && f > 0.0 ? static_cast<std::uint64_t>(f) : 0, len);
 }
 
 bool is_imap_special(std::span<const std::byte> raw) {

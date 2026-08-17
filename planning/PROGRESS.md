@@ -8,7 +8,8 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-Between review-driven changes.
+Working through the 2026-08-17 review issues. Issue #7 (core codec/API polish)
+is done; #6 (gstreamer error-path hygiene) and #4 (live PtsMarks growth) remain.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a

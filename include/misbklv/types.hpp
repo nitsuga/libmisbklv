@@ -26,6 +26,7 @@ enum class Error : std::uint8_t {
   // Typed encode validation; appended to preserve the existing numeric codes.
   TypeMismatch,  // Value variant does not match the ItemDescriptor::kind
   ResourceLimit,  // configured parser/backend resource limit exceeded
+  ReadOnly,       // caller tried to set an auto-managed item (e.g. the checksum)
 };
 
 // Minimal Result<T> — the full map/and_then API is deferred (ADR 0007).
