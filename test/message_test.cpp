@@ -45,6 +45,85 @@ static std::vector<std::byte> unusual_source_packet() {
   return out;
 }
 
+// ST 0903 variable-uint default encode width (ADR 0029): VMTI tags 4/5/6
+// author with no length argument at their standard maximum width (V2/V3/V3),
+// and values beyond the maximum are rejected before any bytes are staged.
+static void test_vmti_variable_uint() {
+  using tags::Vmti0903;
+
+  auto msg = Message::create(RegistryId::Vmti0903);
+  check(static_cast<bool>(msg), "create(Vmti0903)");
+  if (!msg) return;
+  check(static_cast<bool>(msg->set(Vmti0903::VMTILSVersionNumber, Value{std::uint64_t{2}})),
+        "set(tag 4) at default width");
+  check(static_cast<bool>(msg->set(Vmti0903::TotalNumberOfTargetsDetected,
+                                   Value{std::uint64_t{28}})),
+        "set(tag 5) at default width");
+  check(static_cast<bool>(msg->set(Vmti0903::NumberOfReportedTargets, Value{std::uint64_t{14}})),
+        "set(tag 6) at default width");
+  auto authored = msg->encode();
+  check(static_cast<bool>(authored), "encode authored VMTI");
+  auto rp = authored ? Message::parse(*authored) : Result<Message>::err(Error::Backend);
+  check(static_cast<bool>(rp), "authored VMTI parses");
+  if (rp) {
+    auto v4 = rp->get<std::uint64_t>(Vmti0903::VMTILSVersionNumber);
+    auto v5 = rp->get<std::uint64_t>(Vmti0903::TotalNumberOfTargetsDetected);
+    auto v6 = rp->get<std::uint64_t>(Vmti0903::NumberOfReportedTargets);
+    check(v4 && *v4 == 2, "tag 4 value round-trips");
+    check(v5 && *v5 == 28, "tag 5 value round-trips");
+    check(v6 && *v6 == 14, "tag 6 value round-trips");
+    std::size_t w4 = 0, w5 = 0, w6 = 0;
+    for (const auto& it : rp->items())
+      if (it.tag == 4) w4 = it.value.size();
+      else if (it.tag == 5) w5 = it.value.size();
+      else if (it.tag == 6) w6 = it.value.size();
+    check(w4 == 2, "tag 4 emitted at 2 bytes (V2)");
+    check(w5 == 3, "tag 5 emitted at 3 bytes (V3)");
+    check(w6 == 3, "tag 6 emitted at 3 bytes (V3)");
+  }
+
+  // Vmax boundary: every value up to the standard maximum fits the default
+  // width; anything larger is rejected with RangeError.
+  auto maxed = Message::create(RegistryId::Vmti0903);
+  check(static_cast<bool>(maxed), "create(Vmti0903) for boundary");
+  if (maxed) {
+    check(static_cast<bool>(maxed->set(Vmti0903::VMTILSVersionNumber, Value{std::uint64_t{65535}})),
+          "tag 4 = 65535 fits V2");
+    check(static_cast<bool>(maxed->set(Vmti0903::TotalNumberOfTargetsDetected,
+                                       Value{std::uint64_t{0xFFFFFF}})),
+          "tag 5 = 0xFFFFFF fits V3");
+    check(static_cast<bool>(maxed->set(Vmti0903::NumberOfReportedTargets,
+                                       Value{std::uint64_t{0xFFFFFF}})),
+          "tag 6 = 0xFFFFFF fits V3");
+    check(maxed->set(Vmti0903::VMTILSVersionNumber, Value{std::uint64_t{65536}}).error() ==
+              Error::RangeError,
+          "tag 4 = 65536 rejected (RangeError)");
+    check(maxed->set(Vmti0903::TotalNumberOfTargetsDetected,
+                     Value{std::uint64_t{0x1000000}}).error() == Error::RangeError,
+          "tag 5 = 0x1000000 rejected (RangeError)");
+    check(maxed->set(Vmti0903::NumberOfReportedTargets,
+                     Value{std::uint64_t{0x1000000}}).error() == Error::RangeError,
+          "tag 6 = 0x1000000 rejected (RangeError)");
+    auto max_encoded = maxed->encode();
+    auto max_rp = max_encoded ? Message::parse(*max_encoded)
+                              : Result<Message>::err(Error::Backend);
+    check(static_cast<bool>(max_rp), "max-value VMTI parses");
+    if (max_rp) {
+      auto g4 = max_rp->get<std::uint64_t>(Vmti0903::VMTILSVersionNumber);
+      auto g5 = max_rp->get<std::uint64_t>(Vmti0903::TotalNumberOfTargetsDetected);
+      auto g6 = max_rp->get<std::uint64_t>(Vmti0903::NumberOfReportedTargets);
+      check(g4 && g5 && g6 && *g4 == 65535 && *g5 == 0xFFFFFF && *g6 == 0xFFFFFF,
+            "max values round-trip");
+      std::size_t w4 = 0, w5 = 0, w6 = 0;
+      for (const auto& it : max_rp->items())
+        if (it.tag == 4) w4 = it.value.size();
+        else if (it.tag == 5) w5 = it.value.size();
+        else if (it.tag == 6) w6 = it.value.size();
+      check(w4 == 2 && w5 == 3 && w6 == 3, "max values still emit at 2/3/3 bytes");
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   if (argc < 2) {
     std::fprintf(stderr, "usage: message_test <input.klv>\n");
@@ -158,6 +237,9 @@ int main(int argc, char** argv) {
                                        : Result<Message>::err(Error::Backend);
   check(empty_authored && !empty_authored->empty() && empty_reparsed,
         "create with no edits emits an authored packet, not empty passthrough");
+
+  // --- ST 0903 variable-uint authoring (ADR 0029) ---------------------------
+  test_vmti_variable_uint();
 
   std::printf("%s\n", failures == 0 ? "MESSAGE: all PASS" : "MESSAGE: FAIL");
   return failures == 0 ? 0 : 1;
