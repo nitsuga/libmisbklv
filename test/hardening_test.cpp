@@ -358,6 +358,28 @@ static void test_parser_boundaries() {
   auto parsed_alias = parse_items(alias_checksum);
   check(!parsed_alias && parsed_alias.error() == Error::OutOfRange,
         "parse_items tag 65537 -> OutOfRange (cannot alias checksum tag 1)");
+
+  // Public rd_uint has no error channel (issue #7 item 2): a direct caller
+  // passing > 8 bytes must get a defined value — the low 8 bytes, not an
+  // incidental shift-out wrap. Nine bytes 01 00..00 08: the leading 0x01 is
+  // dropped, leaving 0x08.
+  std::vector<std::byte> nine{B(0x01)};
+  for (int i = 0; i < 7; ++i) nine.push_back(B(0x00));
+  nine.push_back(B(0x08));
+  std::vector<std::byte> low8(nine.begin() + 1, nine.end());
+  check(codec::rd_uint(nine) == 0x08 && codec::rd_uint(nine) == codec::rd_uint(low8),
+        "rd_uint(>8 bytes) reads the low 8 bytes, not a wrap");
+
+  // Non-minimal BER long-form length is accepted, by decision (ADR 0030): a
+  // robust reader over a strict writer. 0x81 0x05 and 0x82 0x00 0x05 both mean 5.
+  const std::vector<std::byte> nonmin1{B(0x81), B(0x05)};
+  auto len1 = ber::read_length(nonmin1, 0);
+  check(len1 && len1->value == 5 && len1->consumed == 2,
+        "non-minimal BER length 0x81 0x05 -> 5 (accepted)");
+  const std::vector<std::byte> nonmin2{B(0x82), B(0x00), B(0x05)};
+  auto len2 = ber::read_length(nonmin2, 0);
+  check(len2 && len2->value == 5 && len2->consumed == 3,
+        "non-minimal BER length 0x82 0x00 0x05 -> 5 (accepted)");
 }
 
 // --- (5) bounded live-frame inspection -------------------------------------

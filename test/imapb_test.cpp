@@ -144,6 +144,31 @@ int main() {
   expect_near("dec(0xE00000)->min", dsp({0xE0, 0, 0}), 0.0);    // below -> min
   expect_near("dec(0xE10000)->max", dsp({0xE1, 0, 0}), 100.0);  // above -> max
 
+  // Degenerate descriptors (issue #7 item 1): a caller-supplied min >= max has
+  // no valid IMAPB scale — log2(b - a) is non-finite, so the unguarded float->int
+  // cast was UB (caught under -fsanitize=undefined). Encode now emits the +QNaN
+  // special and decode returns NaN; nothing crashes or wraps.
+  std::printf("degenerate descriptor guards (issue #7):\n");
+  const ItemDescriptor degen = imapb(5.0, 5.0);  // min == max
+  expect_bytes("enc(min==max) -> +QNaN", enc(degen, 5.0, 3), {0xD0, 0x00, 0x00});
+  expect_pred("dec(min==max) -> NaN",
+              std::isnan(codec::imapb_decode(degen, enc(degen, 5.0, 3))), 0.0);
+  const ItemDescriptor inv = imapb(10.0, 5.0);   // min > max
+  expect_pred("enc(min>max) -> special, no UB",
+              codec::is_imap_special(enc(inv, 7.0, 3)) && enc(inv, 7.0, 3).size() == 3, 0.0);
+
+  // Over-long field (issue #7 item 2): a direct caller could hand imapb_decode
+  // more than 8 bytes. It must clamp to the low 8 rather than let a bogus width
+  // reach imapb_params; the result is out of contract but must be finite, never
+  // UB. (The exact low-8 read is pinned on rd_uint in hardening_test.)
+  {
+    const ItemDescriptor a0 = imapb(0.0, 100.0);
+    ber::Bytes wide(9, std::byte{0});
+    wide[0] = std::byte{0xAA};  // 9-byte field: leading byte dropped by the clamp
+    expect_pred("dec(9 bytes) stays finite, no UB",
+                std::isfinite(codec::imapb_decode(a0, wide)), 0.0);
+  }
+
   std::printf("IMAPB: %s\n", failures == 0 ? "PASS" : "FAIL");
   return failures == 0 ? 0 : 1;
 }
