@@ -2,6 +2,15 @@
 
 ## 2026-08-17
 
+* **The `-Wall -Wextra -Wpedantic -Werror` build is green again** (issue #8):
+  three tests used partial `InsertConfig` aggregate initializers
+  (`mock_backend_test`, `gst_insert_test`, `gst_stream_test`), tripping
+  `-Wmissing-field-initializers` once video passthrough added `video_source`
+  and `sei_0604` (ADR 0020). All now pass the full field list, matching the
+  `gst_video_insert_test` call sites. (GCC warns on partial designated
+  initializers too, so the fix is full aggregate init, not `{.sink = ...}`.)
+  Full CTest green under `-Werror` and in the normal build.
+
 * **ST 0903 variable-length uints get a default encode width** (fork 26, issue
   #5): VMTI tags 4/5/6 and VTarget tag 1 are registered at their standard
   maximum width (`V2`/`V3`/`V6`) with `variable = true`, mirroring the 0601

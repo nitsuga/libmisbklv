@@ -58,7 +58,8 @@ int main(int argc, char** argv) {
 
   // --- sender: push each framed KLV packet, clock-paced (realtime) ------------
   auto be = make_gst_backend();
-  auto ins = be->open_insert({endpoint, /*realtime=*/true});
+  auto ins = be->open_insert({endpoint, /*realtime=*/true, /*video_source=*/"",
+                              Sei0604::Preserve});
   if (!ins) {
     std::fprintf(stderr, "open_insert failed: %d\n", static_cast<int>(ins.error()));
     rx.join();

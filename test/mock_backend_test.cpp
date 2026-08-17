@@ -58,7 +58,8 @@ int main() {
   check(got_pts == std::vector<std::int64_t>{0, 40'000'000},
         "timed stream extracts its timestamps");
 
-  auto ins = be.open_insert({"file:out.ts"});
+  auto ins = be.open_insert({"file:out.ts", /*realtime=*/false, /*video_source=*/"",
+                             Sei0604::Preserve});
   check(bool(ins), "open_insert ok");
   (void)(*ins)->push(std::span<const std::byte>(p1), 42);
   (void)(*ins)->finish();

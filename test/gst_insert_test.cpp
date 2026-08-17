@@ -94,7 +94,8 @@ int main(int argc, char** argv) {
   auto be = make_gst_backend();
 
   // --- insert: push each framed KLV packet through the mux to a .ts ---------
-  auto ins = be->open_insert({std::string("file:") + argv[2]});
+  auto ins = be->open_insert({std::string("file:") + argv[2], /*realtime=*/false,
+                              /*video_source=*/"", Sei0604::Preserve});
   if (!ins) {
     std::fprintf(stderr, "open_insert failed: %d\n", static_cast<int>(ins.error()));
     return 2;
