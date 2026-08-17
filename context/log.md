@@ -19,6 +19,26 @@
   makes the ownership probe fail-safe to the letter of ADR 0022: a *stat* error
   (e.g. a permission-denied path component) now counts as pre-existing too —
   only a clean "does not exist" makes the sink removable on the failure path.
+* **Core codec/API polish** (issue #7): five review-found hardening items landed
+  together. (1) `imapb_encode`/`imapb_decode` now reject a degenerate
+  caller-supplied descriptor (`min >= max`) before the IMAPB scale math — encode
+  emits the +QNaN special, decode returns NaN — closing a `floor(NaN)`→int UB on
+  the public codec surface; the float→int cast is also clamped for defensive
+  parity with `linear_encode`. (2) Public `rd_uint`/`imapb_decode` clamp a >8-byte
+  span to its low 8 bytes (a defined value, not an incidental wrap), with the
+  1..8-byte contract now documented in `codec.hpp`. (3) `Message::encode()`
+  enforces mandatory items on the `create()` authoring path (detected by empty
+  source bytes) — a created 0601 packet missing tag 2 or tag 65 now returns
+  `Error::MissingMandatory` instead of silently emitting a non-conformant packet;
+  the parse-then-edit path stays lenient so re-encoding a Report-on-Change capture
+  after an edit still works. (4) `Message::set(1, …)` (checksum) is rejected with
+  the new `Error::ReadOnly` on both paths, replacing the old split behavior
+  (dropped when parsed, emitted twice when created). New/updated cases in
+  `imapb_test`, `message_test`, and `hardening_test`; full CTest and the core
+  ASan/UBSan suite green.
+* **Non-minimal BER long-form length is accepted on read** (fork 27, issue #7
+  item 5): decided and documented rather than tightened —
+  [ADR 0030](./decisions/0030-non-minimal-ber-length.md).
 
 * **The `-Wall -Wextra -Wpedantic -Werror` build is green again** (issue #8):
   three tests used partial `InsertConfig` aggregate initializers

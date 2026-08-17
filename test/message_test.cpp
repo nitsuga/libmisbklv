@@ -185,6 +185,11 @@ int main(int argc, char** argv) {
   check(msg->get<double>(13) && std::fabs(*msg->get<double>(13) - newlat) < 0.01,
         "get() reflects staged edit");
 
+  // Tag 1 (checksum) is auto-managed: encode() recomputes it, so set(1, …) is
+  // rejected rather than silently dropped on a parsed message.
+  check(msg->set(1, Value{std::uint64_t{0}}).error() == Error::ReadOnly,
+        "set(1) on a parsed message -> ReadOnly");
+
   // --- named tags: enum values equal the numbers, get/set accept both -------
   using tags::Uas0601;
   check(static_cast<std::uint16_t>(Uas0601::SensorLatitude) == 13, "enum value == tag number");
@@ -197,21 +202,34 @@ int main(int argc, char** argv) {
   check(static_cast<bool>(fresh), "create(Uas0601)");
   check(!Message::create(RegistryId::Vtarget0903), "create rejects a non-standalone type");
   if (fresh) {
+    // Tag 1 (checksum) is auto-managed on the create() path too.
+    check(fresh->set(1, Value{std::uint64_t{0}}).error() == Error::ReadOnly,
+          "set(1) on a created message -> ReadOnly");
+
     check(static_cast<bool>(fresh->set(Uas0601::PrecisionTimeStamp,
                                        Value{std::uint64_t{0x0004603E4F03D2CBull}})),
           "set previously absent Precision Time Stamp");
     check(fresh->has(Uas0601::PrecisionTimeStamp),
           "has() sees an added tag before encode");
+
+    // 0601 mandates tag 2 (Precision Time Stamp) and tag 65 (Version Number).
+    // With only tag 2 staged, the authoring path reports the missing mandatory
+    // item instead of emitting a silently non-conformant packet.
+    auto missing_version = fresh->encode();
+    check(!missing_version && missing_version.error() == Error::MissingMandatory,
+          "authoring without mandatory Version Number -> MissingMandatory");
+
+    check(static_cast<bool>(fresh->set(Uas0601::UASDatalinkLSVersionNumber,
+                                       Value{std::uint64_t{19}})),
+          "set Version Number");
     auto one_added = fresh->encode();
+    check(static_cast<bool>(one_added), "encode conformant authored packet");
     auto one_added_reparsed = one_added ? Message::parse(*one_added)
                                         : Result<Message>::err(Error::Backend);
     check(one_added_reparsed &&
               one_added_reparsed->has(Uas0601::PrecisionTimeStamp),
           "added tag survives encode and re-parse");
 
-    check(static_cast<bool>(
-              fresh->set(Uas0601::PrecisionTimeStamp, Value{std::uint64_t{0x0004603E4F03D2CBull}})),
-          "set Precision Time Stamp");
     check(static_cast<bool>(fresh->set(Uas0601::SensorLatitude, Value{54.0})), "set SensorLatitude");
     check(static_cast<bool>(fresh->set(Uas0601::SensorLongitude, Value{-110.0})), "set SensorLongitude");
     auto authored = fresh->encode();
@@ -228,15 +246,14 @@ int main(int argc, char** argv) {
     }
   }
 
-  // A created-but-unedited message has no source bytes to pass through; it
-  // must use the authoring path and yield a real standalone packet.
+  // A created-but-unedited message has no items at all, so the authoring path
+  // rejects it for the mandatory items it lacks rather than passing an empty
+  // (non-conformant) packet through.
   auto empty_fresh = Message::create(RegistryId::Uas0601);
   auto empty_authored = empty_fresh ? empty_fresh->encode()
                                     : Result<ber::Bytes>::err(Error::Backend);
-  auto empty_reparsed = empty_authored ? Message::parse(*empty_authored)
-                                       : Result<Message>::err(Error::Backend);
-  check(empty_authored && !empty_authored->empty() && empty_reparsed,
-        "create with no edits emits an authored packet, not empty passthrough");
+  check(!empty_authored && empty_authored.error() == Error::MissingMandatory,
+        "create with no edits -> MissingMandatory, not empty passthrough");
 
   // --- ST 0903 variable-uint authoring (ADR 0029) ---------------------------
   test_vmti_variable_uint();

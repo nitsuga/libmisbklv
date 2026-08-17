@@ -16,6 +16,9 @@ namespace misbklv::codec {
 using ber::Bytes;
 
 // Big-endian unsigned read over `b` (exposed for callers inspecting raw bytes).
+// Contract: 1..8 bytes. A longer span cannot fit a uint64, so only its
+// least-significant 8 bytes are read (a defined value, not a wrap) — mirroring
+// decode(), which rejects numeric widths > 8 outright.
 std::uint64_t rd_uint(std::span<const std::byte> b);
 
 // Decode raw item bytes -> typed Value, per the descriptor's kind.

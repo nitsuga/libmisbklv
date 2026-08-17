@@ -50,6 +50,12 @@ std::optional<std::span<const std::byte>> Message::value_of(std::uint16_t tag) c
 }
 
 Result<std::monostate> Message::set(std::uint16_t tag, Value v) {
+  // Tag 1 is the ST 0601 §6.6 checksum: encode() always recomputes and re-emits
+  // it via finalize(). Accepting a set(1, …) had two different meanings — silently
+  // dropped on a parsed message, emitted twice on a created one — so reject it on
+  // both paths. (Tag 1 is only the checksum for this standalone packet; inside an
+  // embedded Local Set it is ordinary data, handled by LocalSetBuilder directly.)
+  if (tag == 1) return Result<std::monostate>::err(Error::ReadOnly);
   const ItemDescriptor* d = reg_->find(tag);
   if (!d) return Result<std::monostate>::err(Error::UnknownTag);
   std::size_t len = d->fixed_len;  // new tag: descriptor width
@@ -78,7 +84,12 @@ Result<ber::Bytes> Message::encode() const {
   }
   for (const auto& [tag, bytes] : edits_)  // tags added, not present in the source
     if (!in_source(tag)) b.append_raw(tag, bytes);
-  return std::move(b).finalize(reg_->ul_key, /*enforce_mandatory=*/false);
+  // Enforce mandatory items only when authoring a packet from create() (no source
+  // bytes). Editing a parsed packet must stay faithful: a stream may legitimately
+  // omit items (Report-on-Change), and forcing enforcement would reject
+  // re-encoding an already-non-conformant capture after a single edit.
+  const bool authoring = bytes_.empty();
+  return std::move(b).finalize(reg_->ul_key, /*enforce_mandatory=*/authoring);
 }
 
 }  // namespace misbklv
