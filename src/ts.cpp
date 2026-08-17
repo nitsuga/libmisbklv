@@ -2,17 +2,22 @@
 #include "misbklv/ts.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
-#include "misbklv/packet.hpp"  // packet_frame_length
+#include "misbklv/backend.hpp"  // kDefaultMaxKlvPacketBytes
+#include "misbklv/packet.hpp"   // inspect_packet_frame
 #include "pts_marks.hpp"
 
 namespace misbklv {
 namespace {
 
 constexpr std::uint8_t kSmpteUl[4] = {0x06, 0x0e, 0x2b, 0x34};
+constexpr std::array<std::byte, 4> kSmpteUlPrefix = {
+    std::byte{0x06}, std::byte{0x0e}, std::byte{0x2b}, std::byte{0x34}};
 constexpr std::size_t kPkt = 188;
 
 std::uint8_t u8(std::span<const std::byte> s, std::size_t i) {
@@ -94,34 +99,70 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
   const std::int64_t origin_90k = earliest_pts_90k(ts);
   detail::PtsMarks marks;   // PES timestamps -> KLV packet timestamps
   std::size_t stream_off = 0;  // absolute offset of reasm[0] in the KLV stream
+  std::optional<Error> frame_error;  // first framing failure, returned at the end
 
   auto flush = [&](std::uint16_t pid) {
     auto it = pes.find(pid);
     if (it == pes.end() || it->second.empty()) return;
     const auto klv = unwrap_pes(it->second);
-    if (starts_with_ul(klv)) {
-      if (klv_pid < 0) klv_pid = pid;
-      if (pid == static_cast<std::uint16_t>(klv_pid)) {
-        // ns from the start of the source's presentation; kNoPts when this PES
-        // (or the whole file) carries no PTS. 90 kHz -> ns is exact at 1e5/9.
-        const std::int64_t pts90 = pes_pts_90k(it->second);
-        marks.mark(stream_off + reasm.size(),
-                   (pts90 < 0 || origin_90k < 0)
-                       ? kNoPts
-                       : (pts90 - origin_90k) * 100'000 / 9);
-        reasm.insert(reasm.end(), klv.begin(), klv.end());
-        std::size_t pos = 0;
-        for (;;) {
-          std::span<const std::byte> rest(reasm.data() + pos, reasm.size() - pos);
-          const std::size_t n = packet_frame_length(rest);
-          if (n == 0) break;
-          on_packet(KlvPacket{rest.subspan(0, n), marks.at(stream_off + pos)});
-          pos += n;
+    if (starts_with_ul(klv) && klv_pid < 0) klv_pid = pid;
+    // `klv_pid >= 0` first: before any PID is selected, uint16_t(-1) would
+    // alias the reserved PID 0xFFFF and let a payload-bearing packet pollute
+    // the reassembly buffer ahead of PID selection.
+    if (klv_pid >= 0 && pid == static_cast<std::uint16_t>(klv_pid) && !frame_error) {
+      // ns from the start of the source's presentation; kNoPts when this PES
+      // (or the whole file) carries no PTS. 90 kHz -> ns is exact at 1e5/9.
+      //
+      // A KLV packet may span several PES packets (the 16-bit
+      // PES_packet_length ceiling, or a muxer splitting a large packet), so
+      // every KLV-PID payload is appended here regardless of whether it starts
+      // with the UL — the UL prefix only selects the PID, once, at the first
+      // payload that carries it.
+      const std::int64_t pts90 = pes_pts_90k(it->second);
+      marks.mark(stream_off + reasm.size(),
+                 (pts90 < 0 || origin_90k < 0)
+                     ? kNoPts
+                     : (pts90 - origin_90k) * 100'000 / 9);
+      reasm.insert(reasm.end(), klv.begin(), klv.end());
+      // Frame as much of `reasm` as is complete, resyncing over garbage the
+      // way the live extractor's drain() does: skip to the next SMPTE UL
+      // prefix, drop anything before it, and fail the whole extract on
+      // malformed framing or an over-cap declared length instead of stalling
+      // forever on a corrupt packet_frame_length()==0.
+      std::size_t pos = 0;
+      while (pos < reasm.size()) {
+        std::span<const std::byte> rest(reasm.data() + pos, reasm.size() - pos);
+        const auto ul = std::search(rest.begin(), rest.end(),
+                                    kSmpteUlPrefix.begin(), kSmpteUlPrefix.end());
+        if (ul == rest.end()) {
+          // Retain only the longest actual suffix (up to 3 bytes) that could
+          // complete a UL prefix in the next payload; arbitrary trailing
+          // garbage must not accumulate.
+          std::size_t suffix = 0;
+          for (std::size_t n = std::min<std::size_t>(3, rest.size()); n > 0; --n) {
+            if (std::equal(rest.end() - n, rest.end(), kSmpteUlPrefix.begin())) {
+              suffix = n;
+              break;
+            }
+          }
+          pos += rest.size() - suffix;
+          break;
         }
-        if (pos) {
-          reasm.erase(reasm.begin(), reasm.begin() + pos);
-          stream_off += pos;
+        pos += static_cast<std::size_t>(ul - rest.begin());
+        rest = std::span<const std::byte>(reasm.data() + pos, reasm.size() - pos);
+        auto frame = inspect_packet_frame(rest, kDefaultMaxKlvPacketBytes);
+        if (!frame) {  // malformed framing / over-cap declared length
+          frame_error = frame.error();
+          break;
         }
+        if (!*frame) break;  // incomplete: keep the remainder in reasm
+        const std::size_t n = **frame;
+        on_packet(KlvPacket{rest.subspan(0, n), marks.at(stream_off + pos)});
+        pos += n;
+      }
+      if (pos) {
+        reasm.erase(reasm.begin(), reasm.begin() + pos);
+        stream_off += pos;
       }
     }
     it->second.clear();
@@ -140,6 +181,7 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
     auto payload = ts.subspan(off, (i + kPkt) - off);
     if (pusi) {
       flush(pid);
+      if (frame_error) break;  // stop at the first framing failure
       pes[pid].assign(payload.begin(), payload.end());
     } else {
       auto it = pes.find(pid);
@@ -147,7 +189,10 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
         it->second.insert(it->second.end(), payload.begin(), payload.end());
     }
   }
-  for (auto& [pid, _] : pes) flush(pid);
+  if (!frame_error) {
+    for (auto& [pid, _] : pes) flush(pid);
+  }
+  if (frame_error) return Result<std::monostate>::err(*frame_error);
   return klv_pid >= 0 ? Result<std::monostate>::ok({})
                       : Result<std::monostate>::err(Error::Backend);
 }

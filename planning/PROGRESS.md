@@ -33,7 +33,8 @@ None currently.
 ## Known gaps
 
 - Report-on-Change, multi-byte BER-OID tags, and malformed-input robustness are
-  now **covered synthetically** by `hardening_test`; still worth a *real*
+  now covered synthetically by `hardening_test` — including `extract_ts_klv`'s
+  resync/cap/PES-spanning behavior; still worth a *real*
   RoC-trimmed or multi-byte-tag capture if one turns up (current coverage is
   hand-constructed, not vendor data).
 - Need a real VMTI stream (M3/M5/M6 use hand-authored fixtures; the removed

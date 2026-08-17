@@ -1,5 +1,16 @@
 # Knowledge Bundle Log
 
+## 2026-08-17
+
+* **`extract_ts_klv` now matches the gstreamer extractor's malformed-input
+  robustness** (issue #3): the gst-free batch extractor reassembles KLV packets
+  across PES boundaries, resyncs over injected garbage, enforces the shared
+  16 MiB reassembly cap (`kDefaultMaxKlvPacketBytes`), and fails terminally
+  with `BadLength` / `ResourceLimit` instead of stalling on a corrupt frame —
+  packets before the failure stay delivered. `ts.hpp` documents the new
+  semantics; `hardening_test` pins corrupt-length, over-cap, resync, PES-split,
+  and 0x15 AU-cell-split cases. Full CTest and the core ASan/UBSan suite green.
+
 ## 2026-08-12
 
 * **The insert path's output PMT now announces video first, KLV second**,

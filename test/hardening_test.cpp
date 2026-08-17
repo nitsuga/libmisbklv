@@ -6,6 +6,8 @@
 //      or invoke UB (run under -fsanitize=address,undefined via MISBKLV_SANITIZE),
 //  (4) BER parser boundaries retain valid maxima and reject overflow/aliasing.
 // argv: <input.klv>
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
@@ -420,6 +422,232 @@ static void test_bounded_frame_inspection() {
         "packet_frame_length compatibility incomplete frame");
 }
 
+// --- (6) extract_ts_klv malformed-input robustness (issue #3) ---------------
+// The gst-free extractor must match the live extractor's drain() robustness:
+// fail terminally on corrupt framing instead of stalling, resync over garbage,
+// and reassemble KLV packets that span several PES packets. The extractor is
+// content-based (the KLV PID is the first PID whose PES payload starts with
+// the SMPTE UL), so these carriers need no PAT/PMT.
+namespace {
+
+// One 188-byte TS packet carrying `payload` on `pid`. `pusi` sets the
+// payload_unit_start_indicator; `cc` is the continuity counter (low 4 bits of
+// the header's 4th byte). A payload of exactly 184 bytes fills the packet;
+// anything shorter is padded with an adaptation field.
+std::array<std::byte, 188> ts_packet(std::uint16_t pid, bool pusi, std::uint8_t cc,
+                                     std::span<const std::byte> payload) {
+  std::array<std::byte, 188> pkt{};
+  pkt[0] = B(0x47);
+  pkt[1] = B((pusi ? 0x40 : 0) | static_cast<int>((pid >> 8) & 0x1F));
+  pkt[2] = B(pid & 0xFF);
+  if (payload.size() == 184) {  // exactly fills the packet, no stuffing room
+    pkt[3] = B(0x10 | (cc & 0x0F));
+    std::copy(payload.begin(), payload.end(), pkt.begin() + 4);
+  } else {  // pad the remainder with an adaptation field
+    pkt[3] = B(0x30 | (cc & 0x0F));
+    const std::size_t adapt = 183 - payload.size();
+    pkt[4] = B(adapt);
+    if (adapt > 0) {
+      pkt[5] = B(0x00);  // adaptation flags, no PCR
+      std::fill(pkt.begin() + 6, pkt.begin() + 6 + adapt - 1, B(0xFF));
+    }
+    std::copy(payload.begin(), payload.end(), pkt.begin() + 5 + adapt);
+  }
+  return pkt;
+}
+
+// A complete PES: 00 00 01 <stream_id> <len_hi> <len_lo> + payload. stream_id
+// 0xC0 (private_stream_2) has no optional PES header, so the payload starts
+// right after the 6-byte header — see unwrap_pes() in src/ts.cpp.
+std::vector<std::byte> pes_packet(std::uint8_t stream_id,
+                                  std::span<const std::byte> payload) {
+  std::vector<std::byte> pes;
+  pes.push_back(B(0x00));
+  pes.push_back(B(0x00));
+  pes.push_back(B(0x01));
+  pes.push_back(B(stream_id));
+  pes.push_back(B(payload.size() >> 8));
+  pes.push_back(B(payload.size() & 0xFF));
+  pes.insert(pes.end(), payload.begin(), payload.end());
+  return pes;
+}
+
+// 0x15 variant: the KLV rides inside an SMPTE RP 217 metadata AU cell, whose
+// 5-byte header precedes the cell payload (service id 0, sequence number, and
+// fragmentation flags 0xDF for one complete cell) — mirroring the fixture
+// generator's construction. unwrap_pes() strips the header and trusts its
+// 16-bit length, so each fragment gets a cell header of its own.
+std::vector<std::byte> au_cell_pes(std::uint8_t seq,
+                                   std::span<const std::byte> klv_fragment) {
+  std::vector<std::byte> cell;
+  cell.push_back(B(0x00));
+  cell.push_back(B(seq));
+  cell.push_back(B(0xDF));
+  cell.push_back(B(klv_fragment.size() >> 8));
+  cell.push_back(B(klv_fragment.size() & 0xFF));
+  cell.insert(cell.end(), klv_fragment.begin(), klv_fragment.end());
+  return pes_packet(0xFC, cell);
+}
+
+// Packetize one PES into 188-byte TS packets on `pid`, advancing `cc`.
+std::vector<std::byte> packetize_pes(std::uint16_t pid,
+                                     const std::vector<std::byte>& pes,
+                                     std::uint8_t& cc) {
+  std::vector<std::byte> out;
+  std::size_t off = 0;
+  bool first = true;
+  while (off < pes.size()) {
+    const std::size_t take = std::min<std::size_t>(184, pes.size() - off);
+    auto pkt = ts_packet(pid, first, cc, std::span(pes).subspan(off, take));
+    out.insert(out.end(), pkt.begin(), pkt.end());
+    cc = static_cast<std::uint8_t>((cc + 1) & 0x0F);
+    off += take;
+    first = false;
+  }
+  return out;
+}
+
+// BER length octets (src/ber.cpp write_length semantics): short form below
+// 0x80, long form with a count byte above it.
+std::vector<std::byte> ber_length(std::size_t len) {
+  std::vector<std::byte> out;
+  if (len < 0x80) {
+    out.push_back(B(len));
+    return out;
+  }
+  std::byte tmp[8];
+  int n = 0;
+  while (len) {
+    tmp[n++] = B(len & 0xFF);
+    len >>= 8;
+  }
+  out.push_back(B(0x80 | n));
+  while (n > 0) out.push_back(tmp[--n]);
+  return out;
+}
+
+// A complete KLV packet: 16-byte UL key + BER length + TLV items.
+std::vector<std::byte> klv_packet(const std::vector<std::byte>& items) {
+  std::vector<std::byte> pkt;
+  for (std::uint8_t b : kUas0601Key) pkt.push_back(B(b));
+  auto len = ber_length(items.size());
+  pkt.insert(pkt.end(), len.begin(), len.end());
+  pkt.insert(pkt.end(), items.begin(), items.end());
+  return pkt;
+}
+
+// Run the extractor, collecting delivered packets.
+Result<std::monostate> run_extract(const std::vector<std::byte>& ts,
+                                   std::vector<std::vector<std::byte>>& out) {
+  return extract_ts_klv(ts, [&](const KlvPacket& kp) {
+    out.emplace_back(kp.bytes.begin(), kp.bytes.end());
+  });
+}
+
+}  // namespace
+
+static void test_ts_klv_robustness() {
+  std::printf("(6) extract_ts_klv malformed-input robustness\n");
+  constexpr std::uint16_t kPid = 0x0101;
+  std::uint8_t cc = 0;
+  auto append_pes = [&](std::vector<std::byte>& stream,
+                        const std::vector<std::byte>& pes) {
+    auto packets = packetize_pes(kPid, pes, cc);
+    stream.insert(stream.end(), packets.begin(), packets.end());
+  };
+
+  // Two distinguishable, well-formed local sets (tags 2 + 5 TLVs).
+  const std::vector<std::byte> items_a = {
+      B(0x02), B(0x04), B(0x00), B(0x00), B(0x00), B(0x2A),  // Precision Time Stamp
+      B(0x05), B(0x01), B(0x7F),                              // Frame Center Elevation
+  };
+  const std::vector<std::byte> items_b = {
+      B(0x02), B(0x04), B(0x00), B(0x00), B(0x00), B(0x3C),
+      B(0x05), B(0x01), B(0x55),
+  };
+  const auto pkt_a = klv_packet(items_a);
+  const auto pkt_b = klv_packet(items_b);
+
+  // (1) Corrupt declared BER length after a valid UL: the old
+  // packet_frame_length() framer returned 0 for both "incomplete" and
+  // "malformed", stalling forever with no error; now the extract must fail
+  // terminally with BadLength, keeping the valid packet already delivered.
+  std::vector<std::byte> ts1;
+  append_pes(ts1, pes_packet(0xC0, pkt_a));
+  {
+    std::vector<std::byte> corrupt;
+    for (std::uint8_t b : kUas0601Key) corrupt.push_back(B(b));
+    corrupt.push_back(B(0x89));  // long form, 9 length octets — illegal (max 8)
+    append_pes(ts1, pes_packet(0xC0, corrupt));
+  }
+  std::vector<std::vector<std::byte>> out1;
+  auto r1 = run_extract(ts1, out1);
+  check(!r1 && r1.error() == Error::BadLength,
+        "extract_ts_klv corrupt declared BER length -> BadLength");
+  check(out1.size() == 1 && out1[0] == pkt_a,
+        "packet before the corruption stays delivered");
+
+  // (2) Declared frame over the 16 MiB reassembly cap: a tiny buffer with a
+  // huge declared length must fail with ResourceLimit, not wait forever.
+  std::vector<std::byte> over_cap;
+  for (std::uint8_t b : kUas0601Key) over_cap.push_back(B(b));
+  over_cap.push_back(B(0x83));  // long form, 3 length octets
+  over_cap.push_back(B(0xFF));
+  over_cap.push_back(B(0xFF));
+  over_cap.push_back(B(0xFF));  // declared value length 16,777,215 > 16 MiB
+  std::vector<std::byte> ts2;
+  append_pes(ts2, pes_packet(0xC0, over_cap));
+  std::vector<std::vector<std::byte>> out2;
+  auto r2 = run_extract(ts2, out2);
+  check(!r2 && r2.error() == Error::ResourceLimit,
+        "extract_ts_klv declared frame over 16 MiB cap -> ResourceLimit");
+  check(out2.empty(), "over-cap frame delivers nothing");
+
+  // (3) Garbage injected after packet A (same PES) with packet B in the next
+  // PES: resync must skip the garbage and deliver both packets byte-exact.
+  std::vector<std::byte> payload3 = pkt_a;
+  payload3.insert(payload3.end(), {B(0xDE), B(0xAD), B(0xBE), B(0xEF), B(0x00), B(0x01)});
+  std::vector<std::byte> ts3;
+  append_pes(ts3, pes_packet(0xC0, payload3));
+  append_pes(ts3, pes_packet(0xC0, pkt_b));
+  std::vector<std::vector<std::byte>> out3;
+  auto r3 = run_extract(ts3, out3);
+  check(static_cast<bool>(r3), "extract_ts_klv garbage between packets succeeds");
+  check(out3.size() == 2 && out3[0] == pkt_a && out3[1] == pkt_b,
+        "both packets extracted byte-exact, garbage skipped");
+
+  // (4) One KLV packet split across two consecutive PES packets on the KLV
+  // PID: the second PES payload does not start with the UL, but reassembly
+  // joins the fragments and extracts the single packet byte-exact.
+  const std::size_t split = 20;  // inside pkt_a, past the UL + length byte
+  std::vector<std::byte> head(pkt_a.begin(), pkt_a.begin() + split);
+  std::vector<std::byte> tail(pkt_a.begin() + split, pkt_a.end());
+  std::vector<std::byte> ts4;
+  append_pes(ts4, pes_packet(0xC0, head));
+  append_pes(ts4, pes_packet(0xC0, tail));
+  std::vector<std::vector<std::byte>> out4;
+  auto r4 = run_extract(ts4, out4);
+  check(static_cast<bool>(r4), "extract_ts_klv packet split across PES succeeds");
+  check(out4.size() == 1 && out4[0] == pkt_a,
+        "split KLV packet reassembled byte-exact");
+
+  // 0x15 variant of (4): each fragment rides in its own RP 217 AU cell, so
+  // each PES payload has a cell header and only the first starts with the UL.
+  std::vector<std::byte> ts6;
+  {
+    const std::size_t split15 = 18;
+    std::vector<std::byte> chead(pkt_a.begin(), pkt_a.begin() + split15);
+    std::vector<std::byte> ctail(pkt_a.begin() + split15, pkt_a.end());
+    append_pes(ts6, au_cell_pes(0, chead));
+    append_pes(ts6, au_cell_pes(1, ctail));
+  }
+  std::vector<std::vector<std::byte>> out6;
+  auto r6 = run_extract(ts6, out6);
+  check(static_cast<bool>(r6), "extract_ts_klv 0x15 AU cell split across PES succeeds");
+  check(out6.size() == 1 && out6[0] == pkt_a,
+        "split 0x15 KLV packet reassembled byte-exact");
+}
+
 int main(int argc, char** argv) {
   if (argc < 2) {
     std::fprintf(stderr, "usage: hardening_test <input.klv>\n");
@@ -437,6 +665,7 @@ int main(int argc, char** argv) {
   test_malformed();
   test_parser_boundaries();
   test_bounded_frame_inspection();
+  test_ts_klv_robustness();
   std::printf("%s\n", failures == 0 ? "HARDENING: all PASS" : "HARDENING: FAIL");
   return failures == 0 ? 0 : 1;
 }
