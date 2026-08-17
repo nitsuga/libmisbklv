@@ -153,6 +153,10 @@ add_executable(hardening_test test/hardening_test.cpp)
 target_link_libraries(hardening_test PRIVATE misbklv)
 add_test(NAME hardening COMMAND hardening_test ${_first})
 
+add_executable(pts_marks_test test/pts_marks_test.cpp)  # PtsMarks::prune bound (issue #4)
+target_link_libraries(pts_marks_test PRIVATE misbklv)
+add_test(NAME pts_marks COMMAND pts_marks_test)
+
 add_executable(message_test test/message_test.cpp)  # high-level Message (ADR 0018)
 target_link_libraries(message_test PRIVATE misbklv)
 add_test(NAME message COMMAND message_test ${_first})
@@ -185,6 +189,12 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
   add_executable(gst_stream_test test/gst_stream_test.cpp)  # B4 real-time udp round-trip
   target_link_libraries(gst_stream_test PRIVATE misbklv-gst Threads::Threads)
   add_test(NAME gst_stream COMMAND gst_stream_test ${_basic})
+
+  # Live non-framing feed (issue #4): a KLV PID that never carries a UL must
+  # still end cleanly, exercising PtsMarks::prune over a real pipeline.
+  add_executable(gst_stream_nonframing_test test/gst_stream_nonframing_test.cpp)
+  target_link_libraries(gst_stream_nonframing_test PRIVATE misbklv-gst Threads::Threads)
+  add_test(NAME gst_stream_nonframing COMMAND gst_stream_nonframing_test 15005)
 
   add_executable(api_test test/api_test.cpp)  # high-level facade end-to-end (ADR 0018)
   target_link_libraries(api_test PRIVATE misbklv-gst)

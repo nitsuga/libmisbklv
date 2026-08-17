@@ -8,9 +8,8 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-Working through the 2026-08-17 review issues. Issues #6 (gstreamer error-path
-hygiene) and #7 (core codec/API polish) are done; #4 (live PtsMarks growth)
-remains.
+Working through the 2026-08-17 review issues. Issues #4 (live PtsMarks growth),
+#6 (gstreamer error-path hygiene), and #7 (core codec/API polish) are done.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a

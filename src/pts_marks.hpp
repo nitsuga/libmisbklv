@@ -37,6 +37,24 @@ class PtsMarks {
     return cur_;
   }
 
+  // Drop marks whose offset falls behind `stream_off` — their bytes have
+  // already left the caller's reassembly buffer, so no future `at()` call can
+  // land on them. Unlike `at()`, this does not require a completed frame: a
+  // feed that never frames still advances `stream_off` via resync (dropping
+  // unmatched bytes), and without this the queue would grow one entry per
+  // input unit forever. `stream_off` itself is still live, so the bound is
+  // strict: only entries strictly behind it are dropped.
+  void prune(std::size_t stream_off) {
+    while (!marks_.empty() && marks_.front().off < stream_off) {
+      cur_ = marks_.front().pts;
+      marks_.pop_front();
+    }
+  }
+
+  // Pending mark count. Testing/introspection only — no extraction logic
+  // depends on the queue's size, only on at()/prune() keeping it bounded.
+  std::size_t pending() const { return marks_.size(); }
+
  private:
   struct Mark {
     std::size_t off;
