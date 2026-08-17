@@ -26,7 +26,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
+#include <system_error>
 #include <span>
 #include <string>
 #include <tuple>
@@ -752,6 +754,24 @@ int main(int argc, char** argv) {
     { std::ofstream f(p, std::ios::binary); f << "not ours to delete"; }
     auto r = be->open_insert({"file:" + p, false, argv[2]});
     check("pre-existing output not deleted", !r && file_exists(p));
+    std::remove(p.c_str());
+  }
+  {
+    // (c2) the same guarantee for a pre-existing *write-only* file (issue #6):
+    //      classification must probe existence, not readability. The old
+    //      fopen("rb") probe fails to open a write-only file, misclassifies it
+    //      as "created by us", and deletes the caller's file on the failure
+    //      path. Note file_exists() is itself readability-based, so this case
+    //      must check existence with std::filesystem instead.
+    namespace fs = std::filesystem;
+    const std::string p = out_path + ".writeonly.ts";
+    { std::ofstream f(p, std::ios::binary); f << "write-only, not ours"; }
+    std::error_code ec;
+    fs::permissions(p, fs::perms::owner_write, fs::perm_options::replace, ec);
+    auto r = be->open_insert({"file:" + p, false, argv[2]});  // videoless -> fails
+    const bool survived = fs::exists(p, ec);
+    fs::permissions(p, fs::perms::owner_all, fs::perm_options::replace, ec);
+    check("pre-existing write-only output not deleted", !r && survived);
     std::remove(p.c_str());
   }
   {

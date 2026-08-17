@@ -2,6 +2,21 @@
 
 ## 2026-08-17
 
+* **gstreamer backend error-path hygiene sweep** (issue #6): four localized
+  fixes on the media backend's failure paths. (1) `gst_video.cpp`'s link-failure
+  `g_warning` leaked the demuxer element — `gst_pad_get_parent_element` returns a
+  full reference that is now held in a local and unref'd. (2) `on_pad_added`
+  (`gst_extract.cpp`) guards NULL/empty caps before `gst_structure_get_name`,
+  mirroring the sibling `on_video_pad_added`, so a pad with no caps can't
+  NULL-deref. (3) `open_insert` (`gst_insert.cpp`) probes sink pre-existence with
+  `std::filesystem::exists` instead of `fopen(path, "rb")`: a pre-existing
+  *write-only* sink was misclassified as "created by us" and deleted on the
+  failure path, violating the ADR 0022 "a file already at that path is the
+  caller's" guarantee. (4) Dropped the dead `sei_codec_unsupported` flag (set,
+  never read — the failure is already surfaced by the `g_warning` and a downstream
+  `Error::Unsupported`). New `gst_video_insert_test` case pins the write-only-sink
+  scenario (verified to fail under the old probe); full CTest green.
+
 * **The `-Wall -Wextra -Wpedantic -Werror` build is green again** (issue #8):
   three tests used partial `InsertConfig` aggregate initializers
   (`mock_backend_test`, `gst_insert_test`, `gst_stream_test`), tripping

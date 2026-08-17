@@ -5,6 +5,8 @@
 
 #include <cstdlib>
 #include <cstdio>
+#include <filesystem>
+#include <system_error>
 #include <memory>
 #include <string>
 #include <utility>
@@ -152,10 +154,13 @@ Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg) {
   bool sink_preexisted = true;
   if (cfg.sink.rfind("file:", 0) == 0) {
     // Keep enough ownership state to remove only files this session created.
+    // Probe *existence*, not readability: a pre-existing write-only file makes a
+    // read-mode fopen fail, which would misclassify it as "created by us" and let
+    // the failure path std::remove() a file that was the caller's — the exact
+    // deletion ADR 0022 forbids. std::filesystem::exists asks the right question.
     sink_path = cfg.sink.substr(5);
-    std::FILE* f = std::fopen(sink_path.c_str(), "rb");
-    sink_preexisted = (f != nullptr);
-    if (f) std::fclose(f);
+    std::error_code ec;
+    sink_preexisted = std::filesystem::exists(sink_path, ec);
   }
   auto fail = [&](GstElement* pipe, Error e) {
     // Teardown must precede destruction of a prepared VideoCtx: its callbacks
