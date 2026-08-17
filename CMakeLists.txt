@@ -190,6 +190,12 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
   target_link_libraries(gst_stream_test PRIVATE misbklv-gst Threads::Threads)
   add_test(NAME gst_stream COMMAND gst_stream_test ${_basic})
 
+  # Live non-framing feed (issue #4): a KLV PID that never carries a UL must
+  # still end cleanly, exercising PtsMarks::prune over a real pipeline.
+  add_executable(gst_stream_nonframing_test test/gst_stream_nonframing_test.cpp)
+  target_link_libraries(gst_stream_nonframing_test PRIVATE misbklv-gst Threads::Threads)
+  add_test(NAME gst_stream_nonframing COMMAND gst_stream_nonframing_test 15005)
+
   add_executable(api_test test/api_test.cpp)  # high-level facade end-to-end (ADR 0018)
   target_link_libraries(api_test PRIVATE misbklv-gst)
   add_test(NAME api_stream COMMAND api_test
