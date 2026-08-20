@@ -190,6 +190,14 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
   target_link_libraries(gst_stream_test PRIVATE misbklv-gst Threads::Threads)
   add_test(NAME gst_stream COMMAND gst_stream_test ${_basic})
 
+  # Multicast/broadcast knobs on udp: sinks (ADR 0031). Uses the internal
+  # make_sink seam to inspect udpsink properties without a full pipeline.
+  add_executable(udp_multicast_test test/udp_multicast_test.cpp)
+  target_link_libraries(udp_multicast_test PRIVATE misbklv-gst)
+  target_include_directories(udp_multicast_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gst)
+  add_test(NAME udp_multicast COMMAND udp_multicast_test)
+
   # Live non-framing feed (issue #4): a KLV PID that never carries a UL must
   # still end cleanly, exercising PtsMarks::prune over a real pipeline.
   add_executable(gst_stream_nonframing_test test/gst_stream_nonframing_test.cpp)
