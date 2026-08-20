@@ -111,6 +111,17 @@ struct InsertConfig {
   // What to do about ST 0604 Precision Time Stamp SEI in the passthrough video
   // (ADR 0024). Only meaningful with `video_source` set.
   Sei0604 sei_0604 = Sei0604::Preserve;
+
+  // Multicast/broadcast knobs for `udp:` sinks (ADR 0031). Each maps to
+  // `udpsink` `ttl-mc` / `multicast-iface` / `loop`, with `auto-multicast`
+  // forced on for every `udp:` sink. Defaults reproduce today's exact behavior
+  // (ttl 1, no pinned interface, loop and auto-multicast on) so existing
+  // callers are unchanged. Ignored by `file:` and `srt:` sinks.
+  int udp_ttl_mcast = 1;  // udpsink ttl-mc, multicast TTL (0..255; 1 = GStreamer default)
+  // udpsink multicast-iface; "" (default) = let the network stack choose. An
+  // interface name set here (e.g. "lo", "eth0") must be a valid egress.
+  std::string udp_mcast_iface;
+  bool udp_loop = true;  // udpsink loop: multicast loopback to the local host
 };
 
 // Real-time push session (ADR 0013). push() blocks on sink backpressure.

@@ -8,7 +8,7 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-Between review-driven changes.
+Part 1 of ADR 0031 (fork 28) landed — `udp:` multicast knobs (`ttl-mc`/`multicast-iface`/`loop` + `auto-multicast`) in `InsertConfig`/`make_sink` with 25/25 CTest (including `udp_multicast_test` 10×) and `gst_stream` loopback still green. Part 2 (live `video_source` URI + `realtime+video` lift) is next.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
@@ -19,6 +19,8 @@ Between review-driven changes.
 None currently.
 
 ## Next
+
+- **Live video source + realtime lift (ADR 0031, fork 28, part 2 of 2)**: `video_source` accepts `file:`/`rtsp[s]:`/`pipeline:` URI, `realtime+video_source` no longer rejected — file source replay on pipeline clock, live source normal mode — with live preroll/timebase pinning and hermetic loopback-multicast + live-video-pacing test under load (ADR 0020 lesson).
 
 - **Registry breadth — 0903 side**: the remaining VMTI/VTarget items, as data
   needs them. (0601 is complete.)

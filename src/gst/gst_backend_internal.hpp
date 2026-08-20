@@ -25,6 +25,12 @@ Result<std::monostate> extract(std::string_view source,
                                std::stop_token stop, ExtractOptions options);
 Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg);
 
+// Builds the pipeline sink element for a sink spec string ("file:PATH",
+// "udp:host:port", "srt:uri"). Returns null on a malformed spec. Non-static so
+// the unit tests can construct a sink and inspect its udpsink properties
+// without spinning up a full pipeline; not part of the installed API.
+GstElement* make_sink(const std::string& spec, const InsertConfig& cfg);
+
 struct SensorTime {
   std::uint64_t timestamp_us = 0;
   std::uint8_t status = 0;
