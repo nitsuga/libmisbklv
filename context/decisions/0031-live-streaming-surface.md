@@ -16,7 +16,7 @@ The insert path (`KlvSink` / `open_insert`) is file-shaped today:
 - `InsertConfig::video_source` is a **file path** → `filesrc ! demuxer ! parser`,
   where the demuxer/parser come from a container sniff (ADR 0025).
 - `realtime + video_source` is **rejected** (`Error::Unsupported`,
-  [`gst_insert.cpp`](../../src/gst/gst_insert.cpp) — see ADR 0020 § liveliness),
+  [`gst_insert.cpp`](../../src/gst/gst_insert.cpp) — see ADR 0020 § Decision ("realtime + video_source is rejected")),
   so even a *file* source cannot be played out on a live clock against a UDP/SRT
   sink.
 - The `udp:` sink is built with `host` + `port` only
