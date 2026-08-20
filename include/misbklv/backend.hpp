@@ -84,7 +84,7 @@ struct InsertConfig {
   // - "file:PATH" or bare path that exists: file source via filesrc ! demuxer ! parser (container sniff ADR 0025).
   //   Bare path is backward compatible; prefer "file:" prefix (may be deprecated).
   // - "rtsp[s]://...": live RTSP source via rtspsrc ! rtph264depay/265 ! h264parse/h265parse.
-  // - "pipeline:<gst-launch desc>": explicit GstBin escape hatch (e.g., udpsrc mpegts, test fixtures), built via gst_parse_bin_from_description with ghost src pad linked to reserved mux pad.
+  // - "pipeline:<gst-launch desc>": explicit GstBin escape hatch built via gst_parse_bin_from_description with ghost src pad; the bin must expose a static src pad immediately (no dynamic demuxers like tsdemux requiring pad-added). Use for videotestsrc, udpsrc without demux, or test fixtures.
   // Empty keeps KLV-only pipeline. See ADR 0031.
   //
   // ABNF: video_source = "" / file-path / "file:" path / "rtsp:" uri / "rtsps:" uri / "pipeline:" gst-desc

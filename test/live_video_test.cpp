@@ -137,6 +137,64 @@ int main(int argc, char** argv) {
     std::remove(p.c_str());
   }
 
+  std::printf("== Generate rejected for live sources ==\n");
+  {
+    std::string enc = pick_h264_encoder();
+    if (enc.empty()) {
+      std::printf("  SKIP Generate live: no encoder\n");
+    } else {
+      std::string pipe = pipeline_desc_for(enc);
+      auto r = be->open_insert({"file:" + tmpdir + "/err-gen-pipeline.ts", true, pipe, Sei0604::Generate});
+      check(!r && r.error() == Error::Unsupported, "pipeline: Generate -> Unsupported");
+      // RTSP Generate should also be rejected before network wait
+      auto t0 = std::chrono::steady_clock::now();
+      auto r2 = be->open_insert({"file:" + tmpdir + "/err-gen-rtsp.ts", true, "rtsp://127.0.0.1:9/unreachable", Sei0604::Generate});
+      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+      check(!r2 && r2.error() == Error::Unsupported, "rtsp Generate -> Unsupported");
+      check(elapsed < 2000, "rtsp Generate rejected quickly (not 5s wait)");
+      std::printf("  rtsp Generate elapsed %lld ms\n", (long long)elapsed);
+    }
+  }
+  std::printf("== pipeline grammar narrowed: tsdemux rejected ==\n");
+  {
+    auto r = be->open_insert({"file:" + tmpdir + "/err-tsdemux.ts", true, "pipeline:udpsrc port=5000 ! tsdemux ! h264parse", Sei0604::Preserve});
+    check(!r && r.error() == Error::Unsupported, "pipeline:udpsrc ! tsdemux -> Unsupported (dynamic pad not supported)");
+  }
+  std::printf("== unbounded live finish (no num-buffers) must drain quickly ==\n");
+  {
+    std::string enc = pick_h264_encoder();
+    if (enc.empty()) {
+      std::printf("  SKIP unbounded: no encoder\n");
+    } else {
+      std::string desc = "pipeline:videotestsrc is-live=true ! videoconvert ! video/x-raw,width=320,height=240,framerate=30/1 ! " + enc + " ! h264parse";
+      std::string out = tmpdir + "/pipeline-unbounded.ts";
+      std::remove(out.c_str());
+      auto r = be->open_insert({"file:" + out, true, desc, Sei0604::Preserve});
+      check(static_cast<bool>(r), "unbounded pipeline live open succeeds");
+      if (r) {
+        auto t0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < 3; ++i) {
+          size_t n = packet_frame_length(klv);
+          int64_t pts = 1'000'000'000LL + static_cast<int64_t>(i * 100'000'000LL);
+          auto pr = (*r)->push(klv.subspan(0, n), pts);
+          check(static_cast<bool>(pr), "unbounded push ok");
+          if (!pr) break;
+        }
+        auto fr = (*r)->finish();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+        check(static_cast<bool>(fr), "unbounded live finish ok (not 5min timeout)");
+        check(elapsed < 2000, "unbounded live finish within 2s");
+        std::printf("  unbounded finish elapsed %lld ms err=%d\n", (long long)elapsed, fr ? 0 : (int)fr.error());
+        check(file_exists_p(out), "unbounded output exists");
+        if (file_exists_p(out)) {
+          auto sz = std::filesystem::file_size(out);
+          check(sz > 1000, "unbounded output non-empty");
+        }
+        std::remove(out.c_str());
+      }
+    }
+  }
+
   std::printf("== file + realtime lift ==\n");
   {
     std::string out = tmpdir + "/file-realtime.ts";

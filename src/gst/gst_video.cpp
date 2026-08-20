@@ -775,7 +775,7 @@ VideoSource parse_video_source(const std::string& raw) {
 }
 
 static Result<std::monostate> prepare_file_branch(
-    GstElement* pipeline, GstPad* reserved_video_pad,
+    GstElement* pipeline, GstPad* reserved_video_pad, GstElement* mux,
     const std::string& video_path, Sei0604 sei_0604,
     std::unique_ptr<VideoCtx>& video) {
   const std::string container = sniff_container(video_path);
@@ -798,6 +798,8 @@ static Result<std::monostate> prepare_file_branch(
   video = std::make_unique<VideoCtx>();
   video->pipeline = pipeline;
   video->reserved_video_pad = reserved_video_pad;
+  video->mux_element = mux;
+  video->is_live = false;
   video->generate_sei = sei_0604 == Sei0604::Generate;
   if (video->generate_sei) video->h264_parser = gst_h264_nal_parser_new();
   g_signal_connect(parse, "pad-added", G_CALLBACK(on_video_pad_added), video.get());
@@ -857,9 +859,13 @@ static Result<std::monostate> prepare_file_branch(
 }
 
 static Result<std::monostate> prepare_rtsp_branch(
-    GstElement* pipeline, GstPad* reserved_video_pad,
+    GstElement* pipeline, GstPad* reserved_video_pad, GstElement* mux,
     const std::string& uri, Sei0604 sei_0604,
     std::unique_ptr<VideoCtx>& video) {
+  if (sei_0604 == Sei0604::Generate) {
+    g_warning("misbklv: Sei0604::Generate not supported for RTSP live sources");
+    return Result<std::monostate>::err(Error::Unsupported);
+  }
   GstElement* rtspsrc = gst_element_factory_make("rtspsrc", "rtspsrc");
   if (!rtspsrc) {
     g_warning("misbklv: rtspsrc element not available");
@@ -869,6 +875,10 @@ static Result<std::monostate> prepare_rtsp_branch(
   video = std::make_unique<VideoCtx>();
   video->pipeline = pipeline;
   video->reserved_video_pad = reserved_video_pad;
+  video->mux_element = mux;
+  video->is_live = true;
+  video->is_live_unbounded = true; // RTSP is always unbounded
+  video->video_bin = rtspsrc;
   video->generate_sei = sei_0604 == Sei0604::Generate;
   if (video->generate_sei) video->h264_parser = gst_h264_nal_parser_new();
   g_signal_connect(rtspsrc, "pad-added", G_CALLBACK(on_rtspsrc_pad_added), video.get());
@@ -918,9 +928,20 @@ static Result<std::monostate> prepare_rtsp_branch(
 // appsrc EOS and drains. File branch propagates demuxer EOS.
 // prepare_pipeline_branch covers pipeline: live sources (is-live=true).
 static Result<std::monostate> prepare_pipeline_branch(
-    GstElement* pipeline, GstPad* reserved_video_pad,
+    GstElement* pipeline, GstPad* reserved_video_pad, GstElement* mux,
     const std::string& desc, Sei0604 sei_0604,
     std::unique_ptr<VideoCtx>& video) {
+  if (sei_0604 == Sei0604::Generate) {
+    g_warning("misbklv: Sei0604::Generate not supported for pipeline: live sources");
+    return Result<std::monostate>::err(Error::Unsupported);
+  }
+  // Narrowed grammar: pipeline: bin must expose a static src pad immediately.
+  // Dynamic demuxers (tsdemux, qtdemux, matroskademux) expose pads only after
+  // state changes and are not supported here.
+  if (desc.find("demux") != std::string::npos) {
+    g_warning("misbklv: pipeline: with demuxer not supported (needs static src pad)");
+    return Result<std::monostate>::err(Error::Unsupported);
+  }
   GError* err = nullptr;
   GstElement* bin = gst_parse_bin_from_description(desc.c_str(), TRUE, &err);
   if (!bin) {
@@ -932,6 +953,10 @@ static Result<std::monostate> prepare_pipeline_branch(
   video = std::make_unique<VideoCtx>();
   video->pipeline = pipeline;
   video->reserved_video_pad = reserved_video_pad;
+  video->mux_element = mux;
+  video->is_live = true;
+  video->is_live_unbounded = (desc.find("num-buffers") == std::string::npos);
+  video->video_bin = bin;
   video->generate_sei = sei_0604 == Sei0604::Generate;
   if (video->generate_sei) video->h264_parser = gst_h264_nal_parser_new();
   gst_bin_add(GST_BIN(pipeline), bin);
@@ -1048,16 +1073,24 @@ static Result<std::monostate> prepare_pipeline_branch(
 }
 
 Result<std::monostate> prepare_video_branch(
-    GstElement* pipeline, GstPad* reserved_video_pad,
+    GstElement* pipeline, GstPad* reserved_video_pad, GstElement* mux,
     const VideoSource& src, Sei0604 sei_0604,
     std::unique_ptr<VideoCtx>& video) {
+  // Live sources do not support SEI generation yet: codec is not negotiated
+  // for pipeline: and the RTSP depay/parser chain has no SEI probe. Reject
+  // until the probe is wired rather than silently producing no timestamps.
+  if (sei_0604 == Sei0604::Generate &&
+      (src.kind == VideoSourceKind::Pipeline || src.kind == VideoSourceKind::Rtsp)) {
+    g_warning("misbklv: Sei0604::Generate not supported for live video sources");
+    return Result<std::monostate>::err(Error::Unsupported);
+  }
   switch (src.kind) {
     case VideoSourceKind::File:
-      return prepare_file_branch(pipeline, reserved_video_pad, src.spec, sei_0604, video);
+      return prepare_file_branch(pipeline, reserved_video_pad, mux, src.spec, sei_0604, video);
     case VideoSourceKind::Rtsp:
-      return prepare_rtsp_branch(pipeline, reserved_video_pad, src.spec, sei_0604, video);
+      return prepare_rtsp_branch(pipeline, reserved_video_pad, mux, src.spec, sei_0604, video);
     case VideoSourceKind::Pipeline:
-      return prepare_pipeline_branch(pipeline, reserved_video_pad, src.spec, sei_0604, video);
+      return prepare_pipeline_branch(pipeline, reserved_video_pad, mux, src.spec, sei_0604, video);
     case VideoSourceKind::None:
       return Result<std::monostate>::ok({});
     case VideoSourceKind::Unsupported:
