@@ -140,6 +140,9 @@ class GstInserter : public Inserter {
                               : Result<std::monostate>::err(Error::Backend);
   }
 
+  // Live sources never EOS; finish() sends EOS to the muxer after appsrc
+  // EOS and drains; file sources propagate demuxer EOS. In both cases the
+  // pipeline drains through mpegtsmux until EOS or kFinishDrainTimeout.
   Result<std::monostate> finish() override {
     gst_app_src_end_of_stream(GST_APP_SRC(appsrc_));
     GstBus* bus = gst_element_get_bus(pipeline_);

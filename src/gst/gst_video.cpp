@@ -914,6 +914,9 @@ static Result<std::monostate> prepare_rtsp_branch(
   return Result<std::monostate>::ok({});
 }
 
+// Live branch: source never EOS; finish() sends EOS to the muxer after
+// appsrc EOS and drains. File branch propagates demuxer EOS.
+// prepare_pipeline_branch covers pipeline: live sources (is-live=true).
 static Result<std::monostate> prepare_pipeline_branch(
     GstElement* pipeline, GstPad* reserved_video_pad,
     const std::string& desc, Sei0604 sei_0604,

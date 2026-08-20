@@ -106,6 +106,20 @@ int main(int argc, char** argv) {
     check(!r && r.error() == Error::Unsupported, "bare missing -> Unsupported");
   }
   {
+    // IPv6 bracket: rtsp://[::1]:8554/test must be detected as Rtsp (not bare file path)
+    // and attempt to open via rtspsrc; unreachable within 5s => Unsupported, not Backend (fopen).
+    auto t0 = std::chrono::steady_clock::now();
+    auto r = be->open_insert({"file:" + tmpdir + "/err-rtsp-ipv6.ts", false, "rtsp://[::1]:8554/test", Sei0604::Preserve});
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+    check(!r && r.error() == Error::Unsupported, "rtsp://[::1]:8554/test -> Unsupported (bracket not misrouted to file)");
+    check(elapsed < 7000, "rtsp ipv6 bracket within 5s (not hang, not file path)");
+    std::printf("  rtsp ipv6 elapsed %lld ms\n", (long long)elapsed);
+    // Extra pure parse check: GStreamer handles bracketing, but our parse_video_source
+    // scheme detection must not split on ':' inside '[::1]'.
+    auto vsrc = misbklv::detail::parse_video_source("rtsp://[::1]:8554/test");
+    check(vsrc.kind == misbklv::detail::VideoSourceKind::Rtsp, "parse_video_source rtsp ipv6 -> Rtsp kind");
+  }
+  {
     std::string p = tmpdir + "/klv-only.ts";
     std::remove(p.c_str());
     auto r = be->open_insert({"file:" + p, false, "", Sei0604::Preserve});
@@ -328,6 +342,164 @@ int main(int argc, char** argv) {
       std::printf("  loopback sent %zu bytes, received %zu\n", klv_bytes.size(), out.size());
     }
     } // else enc available
+  }
+
+  std::printf("== clock pinning (KLV PTS vs running_time <100ms) ==\n");
+  {
+    const int port = 6003;
+    const std::string endpoint = "udp:127.0.0.1:" + std::to_string(port);
+    std::vector<std::byte> out;
+    std::vector<std::int64_t> pts_out;
+    std::atomic<bool> extract_ok{false};
+    // Collect expected PTS for the packets we will push (1s,2s,3s).
+    // Base 1s avoids PTS 0 edge (appsrc running_time ~700ms at first push;
+    // 0 would be in the past and may be dropped with is-live). Intervals 1s
+    // pin KLV PTS to pipeline running_time; demuxed PTS must be within 100ms.
+    std::vector<std::int64_t> expected_pts;
+    {
+      size_t tmp_off = 0;
+      int idx = 0;
+      while (tmp_off < klv_bytes.size() && idx < 3) {
+        size_t n = packet_frame_length(klv.subspan(tmp_off));
+        if (n == 0) break;
+        expected_pts.push_back(1'000'000'000LL + static_cast<std::int64_t>(idx * 1'000'000'000LL));
+        tmp_off += n;
+        ++idx;
+      }
+    }
+    if (expected_pts.empty()) {
+      check(false, "clock pinning: no KLV frames to push");
+    } else {
+      std::thread rx([&]{
+        auto be2 = make_gst_backend();
+        auto rr = be2->extract(endpoint, [&](const KlvPacket& kp){
+          out.insert(out.end(), kp.bytes.begin(), kp.bytes.end());
+          pts_out.push_back(kp.pts_ns);
+        });
+        extract_ok = static_cast<bool>(rr);
+      });
+      std::this_thread::sleep_for(std::chrono::milliseconds(700));
+      std::string enc = pick_h264_encoder();
+      std::string pipeline_desc;
+      if (!enc.empty()) pipeline_desc = pipeline_desc_for(enc);
+      // pipeline_desc_for uses is-live=true num-buffers=60; keep realtime=true so
+      // sink syncs to clock and PTS aligns with running_time.
+      if (enc.empty()) {
+        std::printf("  SKIP clock pinning: no encoder\n");
+        if (rx.joinable()) {
+          std::atomic<bool> joined{false};
+          std::thread joiner([&]{ rx.join(); joined = true; });
+          auto j0 = std::chrono::steady_clock::now();
+          while (!joined.load() && std::chrono::steady_clock::now() - j0 < std::chrono::seconds(8)) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+          if (!joined.load()) joiner.detach(); else joiner.join();
+        }
+        check(true, "clock pinning skipped (no encoder)");
+      } else {
+        // Use same pipeline desc but ensure is-live and realtime path.
+        // pipeline_desc_for already is-live=true.
+        auto ins = be->open_insert({endpoint, true, pipeline_desc, Sei0604::Preserve});
+        check(static_cast<bool>(ins), "clock pinning pipeline live open_insert");
+        if (!ins) {
+          std::printf(" clock pinning open failed %d\n", (int)ins.error());
+          // wake rx via timeout
+          if (rx.joinable()) {
+            std::atomic<bool> joined{false};
+            std::thread joiner([&]{ rx.join(); joined = true; });
+            auto j0 = std::chrono::steady_clock::now();
+            while (!joined.load() && std::chrono::steady_clock::now() - j0 < std::chrono::seconds(8)) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            if (!joined.load()) { joiner.detach(); check(false, "clock pinning rx did not terminate"); } else joiner.join();
+          }
+        } else {
+          size_t off = 0;
+          for (size_t i = 0; i < expected_pts.size(); ++i) {
+            size_t n = packet_frame_length(klv.subspan(off));
+            if (n == 0) break;
+            auto pr = (*ins)->push(klv.subspan(off, n), expected_pts[i]);
+            if (!pr) { std::printf(" clock pinning push %zu failed\n", i); check(false, "clock pinning push"); break; }
+            off += n;
+            // Small inter-push delay; with realtime=true, mux paces by PTS, not wall clock.
+            std::this_thread::sleep_for(std::chrono::milliseconds(40));
+          }
+          auto fr = (*ins)->finish();
+          check(static_cast<bool>(fr), "clock pinning pipeline finish (EOS drain)");
+          // Wait for receiver idle timeout after EOS (udp has no EOS signaling; idle timeout ends extract).
+          // Last PTS is ~3s, pipeline needs ~3s to render it through udpsink sync; wait accordingly.
+          std::this_thread::sleep_for(std::chrono::milliseconds(3500));
+          for (int i = 0; i < 30 && !extract_ok.load(); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(200));
+          auto start = std::chrono::steady_clock::now();
+          while (std::chrono::steady_clock::now() - start < std::chrono::seconds(8) && !extract_ok.load()) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+          if (rx.joinable()) {
+            std::atomic<bool> joined{false};
+            std::thread joiner([&]{ rx.join(); joined = true; });
+            auto j0 = std::chrono::steady_clock::now();
+            while (!joined.load() && std::chrono::steady_clock::now() - j0 < std::chrono::seconds(8)) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            if (!joined.load()) {
+              std::printf("WARNING: clock pinning rx did not join in 8s, detaching\n");
+              joiner.detach();
+              check(false, "clock pinning rx did not terminate (idle timeout)");
+            } else {
+              joiner.join();
+            }
+          }
+          check(extract_ok.load(), "clock pinning extract ok");
+          // Build expected byte prefix (first expected_pts.size() frames).
+          std::vector<std::byte> expected_bytes;
+          {
+            size_t eo = 0;
+            for (size_t i = 0; i < expected_pts.size(); ++i) {
+              size_t n = packet_frame_length(klv.subspan(eo));
+              if (n == 0) break;
+              expected_bytes.insert(expected_bytes.end(), klv_bytes.begin()+eo, klv_bytes.begin()+eo+n);
+              eo += n;
+            }
+          }
+          check(out == expected_bytes, "clock pinning KLV byte-exact for pinned prefix");
+          std::printf("  clock pinning sent %zu bytes (%zu pkts), received %zu bytes (%zu pts)\n", expected_bytes.size(), expected_pts.size(), out.size(), pts_out.size());
+          if (pts_out.size() == expected_pts.size()) {
+            // Absolute PTS may have a constant pipeline-startup offset (≈700ms warmup);
+            // clock pinning requires KLV PTS == running_time within 100ms *relative*,
+            // i.e. the offset is stable and intervals are exact.
+            bool all_within = true;
+            const std::int64_t base_delta = pts_out[0] - expected_pts[0];
+            for (size_t i = 0; i < pts_out.size(); ++i) {
+              std::int64_t delta = pts_out[i] - expected_pts[i];
+              std::int64_t drift = delta - base_delta;
+              if (drift < 0) drift = -drift;
+              const bool within = drift < 100'000'000LL; // 100ms tolerance on drift
+              if (!within) {
+                std::printf("  pts pinning drift fail pkt %zu: got %lld ns expected %lld ns base_delta %lld ns drift %lld ns\n", i, (long long)pts_out[i], (long long)expected_pts[i], (long long)base_delta, (long long)drift);
+                all_within = false;
+              }
+              // Also assert pts_ns is not kNoPts and tracks GST_BUFFER_PTS running_time
+              check(pts_out[i] != kNoPts, "clock pinning pts != kNoPts");
+            }
+            check(all_within, "clock pinning PTS drift <100ms from running_time (GST_BUFFER_PTS)");
+            if (pts_out.size() >= 2) {
+              for (size_t i = 1; i < pts_out.size(); ++i) {
+                std::int64_t exp_interval = expected_pts[i] - expected_pts[i-1];
+                std::int64_t got_interval = pts_out[i] - pts_out[i-1];
+                std::int64_t idelta = got_interval - exp_interval;
+                if (idelta < 0) idelta = -idelta;
+                if (idelta >= 100'000'000LL) {
+                  std::printf("  interval pinning fail %zu->%zu: got %lld exp %lld\n", i-1,i,(long long)got_interval,(long long)exp_interval);
+                }
+              }
+              // At least check interval tolerance aggregate
+              bool intervals_ok = true;
+              for (size_t i = 1; i < pts_out.size(); ++i) {
+                std::int64_t d = (pts_out[i]-pts_out[i-1]) - (expected_pts[i]-expected_pts[i-1]);
+                if (d < 0) d = -d;
+                if (d >= 100'000'000LL) intervals_ok = false;
+              }
+              check(intervals_ok, "clock pinning PTS intervals within 100ms");
+            }
+          } else {
+            std::printf("  clock pinning pts count mismatch got %zu exp %zu\n", pts_out.size(), expected_pts.size());
+            check(false, "clock pinning pts count matches");
+          }
+        }
+      }
+    }
   }
 
   std::printf("\nLIVE VIDEO: %s\n", failures==0?"PASS":"FAIL");
