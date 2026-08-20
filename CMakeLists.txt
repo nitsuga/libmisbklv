@@ -216,6 +216,11 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
   add_executable(stop_test test/stop_test.cpp)  # cooperative cancellation (ADR 0019)
   target_link_libraries(stop_test PRIVATE misbklv-gst Threads::Threads)
   add_test(NAME stream_stop COMMAND stop_test ${_first})
+
+  add_executable(live_video_test test/live_video_test.cpp)  # live video_source + realtime lift (ADR 0031 part 2)
+  target_link_libraries(live_video_test PRIVATE misbklv-gst Threads::Threads)
+  target_include_directories(live_video_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/gst)
+  add_test(NAME live_video COMMAND live_video_test ${_video} ${_basic} "${CMAKE_CURRENT_BINARY_DIR}/live_tmp")
 endif()
 
 # --- gst-free MPEG-TS KLV extractor (fork 12 / B3): 0x06 + 0x15 --------------

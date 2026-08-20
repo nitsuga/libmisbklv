@@ -8,7 +8,7 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-Part 1 of ADR 0031 (fork 28) landed — `udp:` multicast knobs (`ttl-mc`/`multicast-iface`/`loop` + `auto-multicast`) in `InsertConfig`/`make_sink` with 25/25 CTest (including `udp_multicast_test` 10×) and `gst_stream` loopback still green. Part 2 (live `video_source` URI + `realtime+video` lift) is next.
+ADR 0031 (fork 28) landed — Part 2 live `video_source` URI (`file:`/`rtsp[s]:`/`pipeline:`) and `realtime+video` lift (file replay on clock, live normal mode, kNoPts still rejected) with file PAUSED preroll vs live PLAYING + 5 s async pad watch, dynamic rtspsrc depay and pipeline bin via gst_parse_bin_from_description. 26/26 CTest green (including `live_video_test` + `udp_multicast_test` 5× and full suite 2×), hermetic pipeline live loopback byte-exact.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
@@ -19,8 +19,6 @@ Part 1 of ADR 0031 (fork 28) landed — `udp:` multicast knobs (`ttl-mc`/`multic
 None currently.
 
 ## Next
-
-- **Live video source + realtime lift (ADR 0031, fork 28, part 2 of 2)**: `video_source` accepts `file:`/`rtsp[s]:`/`pipeline:` URI, `realtime+video_source` no longer rejected — file source replay on pipeline clock, live source normal mode — with live preroll/timebase pinning and hermetic loopback-multicast + live-video-pacing test under load (ADR 0020 lesson).
 
 - **Registry breadth — 0903 side**: the remaining VMTI/VTarget items, as data
   needs them. (0601 is complete.)

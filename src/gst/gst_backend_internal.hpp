@@ -36,6 +36,15 @@ struct SensorTime {
   std::uint8_t status = 0;
 };
 
+enum class VideoSourceKind { None, File, Rtsp, Pipeline, Unsupported };
+
+struct VideoSource {
+  VideoSourceKind kind = VideoSourceKind::None;
+  std::string spec;  // File: stripped path; Rtsp: full URI; Pipeline: desc after "pipeline:"
+};
+
+VideoSource parse_video_source(const std::string& raw);
+
 struct VideoCtx {
   GstElement* pipeline = nullptr;  // for creating fakesinks
   // The muxer sink pad reserved for video while the pipeline was still NULL,
@@ -67,7 +76,7 @@ struct VideoCtx {
 // onto it once the demuxer exposes its pad, keeping video first in the PMT.
 Result<std::monostate> prepare_video_branch(
     GstElement* pipeline, GstPad* reserved_video_pad,
-    const std::string& video_path, Sei0604 sei_0604,
+    const VideoSource& src, Sei0604 sei_0604,
     std::unique_ptr<VideoCtx>& video);
 
 void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt,

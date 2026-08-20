@@ -184,16 +184,20 @@ class GstInserter : public Inserter {
 
 Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg) {
   using R = Result<std::unique_ptr<Inserter>>;
-  std::string video_path;
-  if (!cfg.video_source.empty()) {
+  VideoSource vsrc = parse_video_source(cfg.video_source);
+  if (vsrc.kind == VideoSourceKind::Unsupported)
+    return R::err(Error::Unsupported);
+  if (vsrc.kind == VideoSourceKind::File) {
+    if (vsrc.spec.empty()) return R::err(Error::Unsupported);
     // Validate before building: filesink creates a file as soon as the pipeline
     // leaves NULL, and a failed open must not leave a partial output behind.
-    if (cfg.realtime) return R::err(Error::Unsupported);
-    video_path = cfg.video_source;
-    if (video_path.rfind("file:", 0) == 0) video_path.erase(0, 5);
-    std::FILE* f = std::fopen(video_path.c_str(), "rb");
+    std::FILE* f = std::fopen(vsrc.spec.c_str(), "rb");
     if (!f) return R::err(Error::Backend);
     std::fclose(f);
+  } else if (vsrc.kind == VideoSourceKind::Pipeline) {
+    if (vsrc.spec.empty()) return R::err(Error::Unsupported);
+  } else if (vsrc.kind == VideoSourceKind::Rtsp) {
+    if (vsrc.spec.empty()) return R::err(Error::Unsupported);
   }
   std::string sink_path;
   bool sink_preexisted = true;
@@ -249,7 +253,8 @@ Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg) {
   // (ADR 0020 § stream order — the deferral that previously destabilized
   // ST 0604 SEI timing). Borrowed after the unref: the muxer owns the pad.
   GstPad* reserved_video_pad = nullptr;
-  if (!video_path.empty()) {
+  const bool have_video = vsrc.kind != VideoSourceKind::None;
+  if (have_video) {
     reserved_video_pad = gst_element_request_pad_simple(mux, "sink_%d");
     if (!reserved_video_pad) return fail(pipeline, Error::Backend);
     gst_object_unref(reserved_video_pad);
@@ -274,11 +279,11 @@ Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg) {
   }
 
   std::unique_ptr<VideoCtx> video;
-  if (!video_path.empty()) {
+  if (have_video) {
     // Dynamic pads are linked by the video unit through parsers where required;
     // nothing is decoded, preserving codec passthrough.
     auto prepared =
-        prepare_video_branch(pipeline, reserved_video_pad, video_path,
+        prepare_video_branch(pipeline, reserved_video_pad, vsrc,
                              cfg.sei_0604, video);
     if (!prepared) return fail(pipeline, prepared.error());
   }
