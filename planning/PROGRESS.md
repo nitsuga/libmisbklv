@@ -8,7 +8,7 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-ADR 0031 (fork 28) landed — Part 2 live `video_source` URI (`file:`/`rtsp[s]:`/`pipeline:`) and `realtime+video` lift (file replay on clock, live normal mode, kNoPts still rejected) with file PAUSED preroll vs live PLAYING + 5 s async pad watch, dynamic rtspsrc depay and pipeline bin via gst_parse_bin_from_description. 26/26 CTest green (including `live_video_test` + `udp_multicast_test` 5× and full suite 2×), hermetic pipeline live loopback byte-exact.
+ADR 0031 (fork 28) landed — Part 2 live `video_source` URI (`file:`/`rtsp[s]:`/`pipeline:`) and `realtime+video` lift, plus live Generate SEI probe for H.264 (RTSP depay `h264parse` src and pipeline bin ghost src pad wired to `on_h264_buffer_inject_sei`; pipeline Generate now succeeds). 26/26 CTest green (including updated `live_video_test` + `udp_multicast_test` 5× and full suite 2×), hermetic pipeline live loopback byte-exact.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a

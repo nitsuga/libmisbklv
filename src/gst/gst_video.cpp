@@ -862,10 +862,6 @@ static Result<std::monostate> prepare_rtsp_branch(
     GstElement* pipeline, GstPad* reserved_video_pad, GstElement* mux,
     const std::string& uri, Sei0604 sei_0604,
     std::unique_ptr<VideoCtx>& video) {
-  if (sei_0604 == Sei0604::Generate) {
-    g_warning("misbklv: Sei0604::Generate not supported for RTSP live sources");
-    return Result<std::monostate>::err(Error::Unsupported);
-  }
   GstElement* rtspsrc = gst_element_factory_make("rtspsrc", "rtspsrc");
   if (!rtspsrc) {
     g_warning("misbklv: rtspsrc element not available");
@@ -931,10 +927,6 @@ static Result<std::monostate> prepare_pipeline_branch(
     GstElement* pipeline, GstPad* reserved_video_pad, GstElement* mux,
     const std::string& desc, Sei0604 sei_0604,
     std::unique_ptr<VideoCtx>& video) {
-  if (sei_0604 == Sei0604::Generate) {
-    g_warning("misbklv: Sei0604::Generate not supported for pipeline: live sources");
-    return Result<std::monostate>::err(Error::Unsupported);
-  }
   // Narrowed grammar: pipeline: bin must expose a static src pad immediately.
   // Dynamic demuxers (tsdemux, qtdemux, matroskademux) expose pads only after
   // state changes and are not supported here.
@@ -1036,6 +1028,10 @@ static Result<std::monostate> prepare_pipeline_branch(
       }
       if (!linked) g_warning("misbklv: failed to link pipeline bin to muxer: %d", ret);
     }
+    if (linked && video->generate_sei && srcpad) {
+      gst_pad_add_probe(srcpad, GST_PAD_PROBE_TYPE_BUFFER,
+                        on_h264_buffer_inject_sei, video.get(), nullptr);
+    }
     gst_object_unref(srcpad);
   } else {
     g_warning("misbklv: pipeline bin has no src ghost pad");
@@ -1076,14 +1072,6 @@ Result<std::monostate> prepare_video_branch(
     GstElement* pipeline, GstPad* reserved_video_pad, GstElement* mux,
     const VideoSource& src, Sei0604 sei_0604,
     std::unique_ptr<VideoCtx>& video) {
-  // Live sources do not support SEI generation yet: codec is not negotiated
-  // for pipeline: and the RTSP depay/parser chain has no SEI probe. Reject
-  // until the probe is wired rather than silently producing no timestamps.
-  if (sei_0604 == Sei0604::Generate &&
-      (src.kind == VideoSourceKind::Pipeline || src.kind == VideoSourceKind::Rtsp)) {
-    g_warning("misbklv: Sei0604::Generate not supported for live video sources");
-    return Result<std::monostate>::err(Error::Unsupported);
-  }
   switch (src.kind) {
     case VideoSourceKind::File:
       return prepare_file_branch(pipeline, reserved_video_pad, mux, src.spec, sei_0604, video);

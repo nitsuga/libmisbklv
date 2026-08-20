@@ -137,21 +137,31 @@ int main(int argc, char** argv) {
     std::remove(p.c_str());
   }
 
-  std::printf("== Generate rejected for live sources ==\n");
+  std::printf("== Generate for live sources (H.264) ==\n");
   {
     std::string enc = pick_h264_encoder();
     if (enc.empty()) {
       std::printf("  SKIP Generate live: no encoder\n");
     } else {
       std::string pipe = pipeline_desc_for(enc);
+      // H.264 pipeline live now supports Generate via SEI probe (ADR 0031 follow-up)
       auto r = be->open_insert({"file:" + tmpdir + "/err-gen-pipeline.ts", true, pipe, Sei0604::Generate});
-      check(!r && r.error() == Error::Unsupported, "pipeline: Generate -> Unsupported");
-      // RTSP Generate should also be rejected before network wait
+      check(static_cast<bool>(r), "pipeline: Generate now succeeds for H.264 live");
+      if (r) {
+        size_t n = packet_frame_length(klv);
+        // Push one KLV to trigger SEI path and verify pipeline accepts Generate
+        auto pr = (*r)->push(klv.subspan(0, n), 1'000'000'000LL);
+        check(static_cast<bool>(pr), "pipeline Generate push ok");
+        check(static_cast<bool>((*r)->finish()), "pipeline Generate finish ok");
+        std::remove((tmpdir + "/err-gen-pipeline.ts").c_str());
+      }
+      // RTSP Generate now goes to rtspsrc; unreachable still ends as Unsupported but after 5s wait, not fast reject
       auto t0 = std::chrono::steady_clock::now();
       auto r2 = be->open_insert({"file:" + tmpdir + "/err-gen-rtsp.ts", true, "rtsp://127.0.0.1:9/unreachable", Sei0604::Generate});
       auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
-      check(!r2 && r2.error() == Error::Unsupported, "rtsp Generate -> Unsupported");
-      check(elapsed < 2000, "rtsp Generate rejected quickly (not 5s wait)");
+      check(!r2 && r2.error() == Error::Unsupported, "rtsp Generate unreachable -> Unsupported");
+      check(elapsed < 7000, "rtsp Generate unreachable within 5s (not hang)");
+      check(elapsed >= 40, "rtsp Generate went to network (not fast reject)");
       std::printf("  rtsp Generate elapsed %lld ms\n", (long long)elapsed);
     }
   }
