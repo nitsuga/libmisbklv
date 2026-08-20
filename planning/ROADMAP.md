@@ -67,7 +67,16 @@ Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 `decision_status: proposed`) · `DECIDED` / `DEFERRED` (has an ADR — see the
 register).
 
-**No open forks** — all design decisions resolved. See the decided register
+- **Fork 28 — live streaming surface** `PROPOSED`
+  ([ADR 0031](../context/decisions/0031-live-streaming-surface.md)): make the
+  insert path live-capable and vendor-neutral — `video_source` accepts a
+  GStreamer URI/description (file, `rtsp[s]:`, or `pipeline:`), `udp:` sinks
+  gain multicast/broadcast knobs (`ttl-mc`, `multicast-iface`, `loop`), and
+  `realtime` + a video source is no longer rejected. Vendor metadata extraction
+  (Parrot/DJI RTP) stays in the consumers; this is the shared
+  mux/pacing/multicast surface only.
+
+All other design decisions resolved — see the decided register
 ([`../context/decisions/index.md`](../context/decisions/index.md)) for fork → ADR mapping.
 
 **Candidate future forks** (not yet opened), mostly downstream of
