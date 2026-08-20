@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <cctype>
 #include <span>
 #include <string>
 #include <thread>
@@ -62,6 +63,161 @@ static std::string pipeline_desc_for(const std::string& enc) {
   // openh264enc and x264enc both output h264
   return "pipeline:videotestsrc is-live=true num-buffers=60 ! videoconvert ! video/x-raw,width=320,height=240,framerate=30/1 ! " + enc + " ! h264parse";
 }
+
+// --- HEVC regression helpers: validate video ES, not just KLV + size ---------
+namespace {
+constexpr std::size_t kTsPkt = 188;
+struct EsInfoHevc {
+  unsigned pid = 0;
+  unsigned stream_type = 0;
+  bool klva = false;
+};
+inline unsigned u8_hevc(std::span<const std::byte> b, std::size_t i) {
+  return static_cast<unsigned>(b[i]);
+}
+std::vector<EsInfoHevc> read_pmt_hevc(std::span<const std::byte> ts) {
+  std::vector<EsInfoHevc> out;
+  unsigned pmt_pid = 0;
+  for (std::size_t off = 0; off + kTsPkt <= ts.size(); off += kTsPkt) {
+    auto p = ts.subspan(off, kTsPkt);
+    if (u8_hevc(p, 0) != 0x47) continue;
+    const bool pusi = (u8_hevc(p, 1) & 0x40) != 0;
+    const unsigned pid = ((u8_hevc(p, 1) & 0x1f) << 8) | u8_hevc(p, 2);
+    const unsigned afc = (u8_hevc(p, 3) >> 4) & 0x3;
+    if (!(afc & 0x1) || !pusi) continue;
+    std::size_t i = 4;
+    if (afc & 0x2) i += 1 + u8_hevc(p, 4);
+    if (i >= kTsPkt) continue;
+    i += 1 + u8_hevc(p, i);
+    if (i + 8 >= kTsPkt) continue;
+    const unsigned table_id = u8_hevc(p, i);
+    const std::size_t seclen = ((u8_hevc(p, i + 1) & 0x0f) << 8) | u8_hevc(p, i + 2);
+    const std::size_t end = i + 3 + seclen - 4;
+    if (end > kTsPkt) continue;
+    if (table_id == 0x00 && pmt_pid == 0) {
+      for (std::size_t j = i + 8; j + 4 <= end; j += 4) {
+        const unsigned prog = (u8_hevc(p, j) << 8) | u8_hevc(p, j + 1);
+        if (prog != 0) { pmt_pid = ((u8_hevc(p, j + 2) & 0x1f) << 8) | u8_hevc(p, j + 3); break; }
+      }
+    } else if (table_id == 0x02 && pid == pmt_pid && out.empty()) {
+      std::size_t j = i + 8 + 2;
+      const std::size_t pil = ((u8_hevc(p, j) & 0x0f) << 8) | u8_hevc(p, j + 1);
+      j += 2 + pil;
+      while (j + 5 <= end) {
+        EsInfoHevc es; es.stream_type = u8_hevc(p, j); es.pid = ((u8_hevc(p, j + 1) & 0x1f) << 8) | u8_hevc(p, j + 2);
+        const std::size_t esil = ((u8_hevc(p, j + 3) & 0x0f) << 8) | u8_hevc(p, j + 4);
+        for (std::size_t d = j + 5; d + 2 <= j + 5 + esil;) {
+          const unsigned tag = u8_hevc(p, d), len = u8_hevc(p, d + 1);
+          if (tag == 0x05 && len >= 4 && u8_hevc(p, d + 2) == 'K' && u8_hevc(p, d + 3) == 'L' && u8_hevc(p, d + 4) == 'V' && u8_hevc(p, d + 5) == 'A') es.klva = true;
+          d += 2 + len;
+        }
+        out.push_back(es);
+        j += 5 + esil;
+      }
+    }
+    if (pmt_pid && !out.empty()) break;
+  }
+  return out;
+}
+
+static void handoff_count(GstElement*, GstBuffer*, GstPad*, gpointer ud) {
+  (*static_cast<std::atomic<int>*>(ud))++;
+}
+
+// Try to decode the HEVC video ES in `path` via tsdemux -> h265parse -> decodebin -> fakesink.
+// Returns true on EOS with frames>0. Sets `skipped` if no decoder is available.
+// On error returns false with `err_msg` describing the failure (corrupt stream).
+static bool decode_hevc_frames(const std::string& path, int* out_frames, bool* skipped, std::string* err_msg) {
+  *out_frames = 0;
+  *skipped = false;
+  if (err_msg) err_msg->clear();
+  GstElementFactory* df = gst_element_factory_find("decodebin");
+  if (!df) { *skipped = true; return true; }
+  gst_object_unref(df);
+  // If no HEVC decoder is installed, decode will fail with "missing a plug-in".
+  // Check proactively so we can skip gracefully on minimal installs.
+  {
+    const char* decs[] = {"avdec_h265", "openh265dec", "libde265dec", "vah265dec", "x265dec", "h265parse"};
+    bool have_hevc_decoder = false;
+    for (auto* n : decs) {
+      // h265parse alone is not a decoder, but if none of the decoders exist we still skip.
+      // Only consider actual decoders.
+      if (std::string(n) == "h265parse") continue;
+      GstElementFactory* f = gst_element_factory_find(n);
+      if (f) { have_hevc_decoder = true; gst_object_unref(f); break; }
+    }
+    if (!have_hevc_decoder) {
+      if (err_msg) *err_msg = "no HEVC decoder (avdec_h265 etc.)";
+      *skipped = true;
+      return true;
+    }
+  }
+  // Prefer explicit h265parse before decodebin so a corrupted H.264 SEI is caught as a parse error.
+  const std::string desc = "filesrc location=\"" + path + "\" ! tsdemux name=demux demux. ! queue ! h265parse ! decodebin ! fakesink name=sink";
+  GError* perr = nullptr;
+  GstElement* pipe = gst_parse_launch(desc.c_str(), &perr);
+  if (perr) {
+    if (err_msg) *err_msg = perr->message;
+    g_error_free(perr);
+  }
+  if (!pipe) {
+    // Missing elements (e.g. no h265parse) -> skip, not fail
+    *skipped = true;
+    return true;
+  }
+  GstElement* sink = gst_bin_get_by_name(GST_BIN(pipe), "sink");
+  if (!sink) {
+    gst_object_unref(pipe);
+    *skipped = true;
+    return true;
+  }
+  std::atomic<int> count{0};
+  g_object_set(sink, "signal-handoffs", TRUE, nullptr);
+  g_signal_connect(sink, "handoff", G_CALLBACK(handoff_count), &count);
+  GstStateChangeReturn sret = gst_element_set_state(pipe, GST_STATE_PLAYING);
+  if (sret == GST_STATE_CHANGE_FAILURE) {
+    if (err_msg) *err_msg = "PLAYING failed (missing decoder?)";
+    gst_object_unref(sink);
+    gst_object_unref(pipe);
+    *skipped = true;
+    return true;
+  }
+  GstBus* bus = gst_element_get_bus(pipe);
+  GstMessage* msg = gst_bus_timed_pop_filtered(bus, 10 * GST_SECOND, static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
+  bool is_eos = msg && GST_MESSAGE_TYPE(msg) == GST_MESSAGE_EOS;
+  bool is_err = msg && GST_MESSAGE_TYPE(msg) == GST_MESSAGE_ERROR;
+  std::string bus_err;
+  if (is_err) {
+    GError* e = nullptr; gchar* dbg = nullptr;
+    gst_message_parse_error(msg, &e, &dbg);
+    bus_err = e ? e->message : "pipeline error";
+    if (e) g_error_free(e);
+    if (dbg) g_free(dbg);
+    if (err_msg) *err_msg = bus_err;
+  }
+  if (msg) gst_message_unref(msg);
+  gst_object_unref(bus);
+  gst_element_set_state(pipe, GST_STATE_NULL);
+  *out_frames = count.load();
+  gst_object_unref(sink);
+  gst_object_unref(pipe);
+  if (is_eos) {
+    return true;
+  }
+  if (is_err) {
+    // Missing decoder manifests as a decodebin error mentioning decoder or missing plug-in.
+    std::string low = bus_err;
+    for (auto& c : low) c = static_cast<char>(::tolower(static_cast<unsigned char>(c)));
+    if (low.find("decoder") != std::string::npos || low.find("could not decode") != std::string::npos || low.find("no available") != std::string::npos || low.find("missing") != std::string::npos || low.find("plug-in") != std::string::npos || low.find("plugin") != std::string::npos) {
+      *skipped = true;
+      return true;
+    }
+    return false;
+  }
+  if (err_msg) *err_msg = "no EOS (timeout)";
+  return false;
+}
+} // namespace
 
 int main(int argc, char** argv) {
   gst_init(nullptr, nullptr);
@@ -180,7 +336,7 @@ int main(int argc, char** argv) {
     } else {
       gst_object_unref(f265);
       gst_object_unref(f265parse);
-      const std::string pipe = "pipeline:videotestsrc is-live=true num-buffers=30 ! videoconvert ! video/x-raw,width=320,height=240,framerate=30/1 ! x265enc ! h265parse";
+      const std::string pipe = "pipeline:videotestsrc is-live=true num-buffers=30 ! videoconvert ! video/x-raw,format=I420,width=320,height=240,framerate=30/1 ! x265enc ! h265parse";
       const std::string out = tmpdir + "/pipeline-h265-generate.ts";
       std::remove(out.c_str());
       auto r = be->open_insert({"file:" + out, true, pipe, Sei0604::Generate});
@@ -222,12 +378,38 @@ int main(int argc, char** argv) {
             auto rr = be->extract(out, [&](const KlvPacket& kp){ back.insert(back.end(), kp.bytes.begin(), kp.bytes.end()); });
             check(static_cast<bool>(rr), "pipeline H.265 Generate extract ok");
             check(back == sent, "pipeline H.265 Generate KLV byte-exact (unstamped, not corrupted)");
-            // Best-effort HEVC hint: ffprobe-style sanity — output must not
-            // have been rewritten as H.264. The file is a TS, so sniff its
-            // bytes for H.265 vs H.264 markers is noisy; we rely on the fact
-            // that H.265 output with H.264 SEI injected would be un-decodable
-            // and our pipeline would have produced a broken TS. Success here
-            // plus byte-exact KLV proves the regression is guarded.
+            // Validate video ES: PMT must announce HEVC (0x24) not H.264 (0x1B),
+            // and the stream must decode to >0 frames. KLV alone would pass even
+            // with corrupted video because it rides a separate mux pad.
+            {
+              auto bytes = read_file_bytes(out.c_str());
+              auto es = read_pmt_hevc(bytes);
+              unsigned vtype = 0, nvideo = 0, nklv = 0;
+              for (auto &e : es) {
+                if (e.stream_type == 0x1B || e.stream_type == 0x24) { vtype = e.stream_type; ++nvideo; }
+                if (e.stream_type == 0x06 && e.klva) ++nklv;
+                std::printf("  H.265 ES pid=0x%04x type=0x%02x%s\n", e.pid, e.stream_type, e.klva ? " KLVA" : "");
+              }
+              check(es.size() == 2 && nvideo == 1 && nklv == 1, "pipeline H.265 Generate PMT video+KLV");
+              check(vtype == 0x24, "pipeline H.265 Generate PMT video stream_type is HEVC (0x24)");
+              check(vtype != 0x1B, "pipeline H.265 Generate PMT not H.264 (0x1B)");
+              if (vtype != 0x24) {
+                std::printf("  FAIL: expected HEVC (0x24) got 0x%02x — H.264 SEI injection would flip this\n", vtype);
+              }
+              int frames = 0; bool skipped = false; std::string derr;
+              bool ok = decode_hevc_frames(out, &frames, &skipped, &derr);
+              if (skipped) {
+                std::printf("  SKIP HEVC decode validation: no decoder (%s)\n", derr.c_str());
+                check(true, "pipeline H.265 Generate video decode skipped (no decoder)");
+              } else {
+                std::printf("  HEVC decode: %d frames, ok=%d err='%s'\n", frames, (int)ok, derr.c_str());
+                check(ok, "pipeline H.265 Generate video decode reaches EOS without error");
+                check(frames > 0, "pipeline H.265 Generate video decode produced frames (>0)");
+                if (!ok || frames == 0) {
+                  std::printf("  FAIL: HEVC decode failed — corrupted H.265 would error or produce 0 frames\n");
+                }
+              }
+            }
           }
           std::remove(out.c_str());
         }
