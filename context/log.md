@@ -2,6 +2,8 @@
 
 ## 2026-08-20
 
+* **udp multicast knobs landed (ADR 0031, fork 28, part 1 of 2)**: `InsertConfig` now has `udp_ttl_mcast` (default 1), `udp_mcast_iface` (default ""), and `udp_loop` (default true) mapped to `udpsink` `ttl-mc`/`multicast-iface`/`loop` (+ `auto-multicast` TRUE). Defaults reproduce today's `udp:127.0.0.1:port` behavior; `make_sink` validates TTL 0–255 and correctly handles bracketed `udp:[<IPv6>]:port`. `file:`/`srt:` ignored. New `udp_multicast_test` (25/25 CTest, 10×) verifies the mapping; existing `gst_stream` loopback still green.
+
 * **Accepted the vendor-neutral live streaming surface** (fork 28 —
   [ADR 0031](./decisions/0031-live-streaming-surface.md)): decision is now
   `accepted` and the decided register updated; ROADMAP no longer lists an open
