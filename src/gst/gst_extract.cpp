@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
-#include <cstdlib>
 #include <cstring>
 #include <optional>
 #include <span>
@@ -146,15 +145,41 @@ GstElement* make_src(const std::string& spec, bool* udp) {
       (colon == std::string::npos) ? std::string() : spec.substr(0, colon);
   if (scheme == "udp") {
     const std::string rest = spec.substr(colon + 1);
-    const auto p = rest.rfind(':');
-    if (p == std::string::npos) return nullptr;
+    std::string host;
+    std::string port_str;
+    if (!rest.empty() && rest[0] == '[') {
+      // Bracketed IPv6: [::1]:5000 or [ff02::1%eth0]:5000.
+      auto close = rest.find(']');
+      if (close == std::string::npos) return nullptr;
+      if (close + 1 >= rest.size() || rest[close + 1] != ':') return nullptr;
+      host = rest.substr(1, close - 1);
+      port_str = rest.substr(close + 2);
+    } else {
+      auto p = rest.rfind(':');
+      if (p == std::string::npos) return nullptr;
+      // Reject a bare IPv6 literal without brackets: its colons make the
+      // last-colon split ambiguous, so refuse rather than mis-parse.
+      const std::string host_part = rest.substr(0, p);
+      if (host_part.find(':') != std::string::npos) return nullptr;
+      host = host_part;
+      port_str = rest.substr(p + 1);
+    }
+    if (host.empty() || port_str.empty()) return nullptr;
+    // Validate the port is a positive in-range integer before configuring.
+    int port = 0;
+    try {
+      size_t idx = 0;
+      port = std::stoi(port_str, &idx);
+      if (idx != port_str.size() || port <= 0 || port > 65535) return nullptr;
+    } catch (...) {
+      return nullptr;
+    }
     GstElement* s = gst_element_factory_make("udpsrc", "src");
     if (s) {
       GstCaps* caps = gst_caps_from_string(
           "video/mpegts, systemstream=(boolean)true, packetsize=(int)188");
-      g_object_set(s, "address", rest.substr(0, p).c_str(), "port",
-                   std::atoi(rest.substr(p + 1).c_str()), "caps", caps, "timeout",
-                   kIdleTimeoutNs, nullptr);
+      g_object_set(s, "address", host.c_str(), "port", port, "caps", caps,
+                   "timeout", kIdleTimeoutNs, nullptr);
       gst_caps_unref(caps);
       *udp = true;
     }
