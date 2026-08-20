@@ -64,14 +64,14 @@ GstElement* make_sink(const std::string& spec, const InsertConfig& cfg) {
     } catch (...) {
       return nullptr;
     }
+    // Validate multicast TTL before creating the element so an invalid TTL
+    // cleanly returns an insertion error even when the udpsink factory is
+    // unavailable (s == nullptr) — otherwise gst_object_unref(nullptr) would
+    // emit a GLib critical.
+    if (cfg.udp_ttl_mcast < 0 || cfg.udp_ttl_mcast > 255) return nullptr;
     GstElement* s = gst_element_factory_make("udpsink", "sink");
-    if (s) g_object_set(s, "host", host.c_str(), "port", port, nullptr);
-    // Multicast/broadcast knobs (ADR 0031). udpsink's ttl-mc range is 0..255;
-    // refuse anything outside it rather than let GStreamer silently drop the set.
-    if (cfg.udp_ttl_mcast < 0 || cfg.udp_ttl_mcast > 255) {
-      gst_object_unref(s);
-      return nullptr;
-    }
+    if (!s) return nullptr;
+    g_object_set(s, "host", host.c_str(), "port", port, nullptr);
     g_object_set(s, "auto-multicast", TRUE, "ttl-mc", cfg.udp_ttl_mcast,
                  "loop", cfg.udp_loop ? TRUE : FALSE, nullptr);
     // Only pin the egress interface when asked; "" keeps the stack default.
