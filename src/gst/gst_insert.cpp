@@ -19,7 +19,12 @@ namespace {
 // a video file after the caller's final KLV packet.
 inline constexpr GstClockTime kFinishDrainTimeout = 300 * GST_SECOND;
 
-GstElement* make_sink(const std::string& spec) {
+}  // namespace
+
+// NOTE: make_sink intentionally lives at misbklv::detail scope (not in the
+// anonymous namespace below) so the unit tests can construct and inspect a sink.
+
+GstElement* make_sink(const std::string& spec, const InsertConfig& cfg) {
   const auto colon = spec.find(':');
   if (colon == std::string::npos) return nullptr;
   const std::string scheme = spec.substr(0, colon);
@@ -61,6 +66,19 @@ GstElement* make_sink(const std::string& spec) {
     }
     GstElement* s = gst_element_factory_make("udpsink", "sink");
     if (s) g_object_set(s, "host", host.c_str(), "port", port, nullptr);
+    // Multicast/broadcast knobs (ADR 0031). udpsink's ttl-mc range is 0..255;
+    // refuse anything outside it rather than let GStreamer silently drop the set.
+    if (cfg.udp_ttl_mcast < 0 || cfg.udp_ttl_mcast > 255) {
+      gst_object_unref(s);
+      return nullptr;
+    }
+    g_object_set(s, "auto-multicast", TRUE, "ttl-mc", cfg.udp_ttl_mcast,
+                 "loop", cfg.udp_loop ? TRUE : FALSE, nullptr);
+    // Only pin the egress interface when asked; "" keeps the stack default.
+    // udpsink's multicast-iface is null by default, and GStreamer treats "" as
+    // a set-but-empty value, so leave it unset unless the caller gave a name.
+    if (!cfg.udp_mcast_iface.empty())
+      g_object_set(s, "multicast-iface", cfg.udp_mcast_iface.c_str(), nullptr);
     return s;
   }
   if (scheme == "srt") {
@@ -70,6 +88,8 @@ GstElement* make_sink(const std::string& spec) {
   }
   return nullptr;
 }
+
+namespace {
 
 // appsrc(meta/x-klv) ! mpegtsmux ! sink. push() observes appsrc backpressure;
 // finish() sends EOS and waits for the whole pipeline to drain.
@@ -204,7 +224,7 @@ Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg) {
   GstElement* pipeline = gst_pipeline_new("misbklv-insert");
   GstElement* appsrc = gst_element_factory_make("appsrc", "src");
   GstElement* mux = gst_element_factory_make("mpegtsmux", "mux");
-  GstElement* sink = make_sink(cfg.sink);
+  GstElement* sink = make_sink(cfg.sink, cfg);
   if (!pipeline || !appsrc || !mux || !sink) {
     if (sink) gst_object_unref(sink);
     if (mux) gst_object_unref(mux);
