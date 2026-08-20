@@ -44,3 +44,4 @@ diverge — e.g. fork 7 → ADR 0004; one fork can span several ADRs — fork 4 
 | —  | [0028 — Hermetic synthetic fixtures replace third-party media](./0028-hermetic-synthetic-fixtures.md) | accepted |
 | 26 | [0029 — ST 0903 variable-length uint default encode width](./0029-st0903-variable-uint-default-width.md) | accepted |
 | 27 | [0030 — Non-minimal BER long-form length accepted on read](./0030-non-minimal-ber-length.md) | accepted |
+| 28 | [0031 — Vendor-neutral live streaming surface — file-or-live video source and multicast sink](./0031-live-streaming-surface.md) | accepted |

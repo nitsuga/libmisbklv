@@ -1,11 +1,11 @@
 ---
 type: Decision
 title: Vendor-neutral live streaming surface — file-or-live video source and multicast sink
-decision_status: proposed
+decision_status: accepted
 tags: [decision, streaming, gstreamer, backend, phase-3]
 generated:
   by: claude/opus-5
-  at: 2026-08-20T00:00:00Z
+  at: 2026-08-20T18:45:00Z
 fork: 28
 ---
 
@@ -124,9 +124,8 @@ What is **deliberately not** in scope:
 
 # Assumptions / open questions
 
-- This ADR is `proposed`; it records the shape and the placement. Implementation
-  is separate work, gated on acceptance and on a consumer (parrot-to-klv)
-  confirming the surface.
+- This ADR is `accepted`; it records the shape and the placement. Implementation
+  is separate work, now unblocked.
 - Whether a "TS-in → TS-out with KLV inserted" remux API is wanted at all is a
   different fork (adjacent to the ROADMAP live-0x15 streaming-demux item), not
   decided here.
@@ -141,5 +140,5 @@ What is **deliberately not** in scope:
   defines live KLV PTS.
 - [ADR 0025](./0025-explicit-demuxer-passthrough.md) — the container-sniff
   table the `file:` path keeps.
-- [`../../planning/ROADMAP.md`](../../planning/ROADMAP.md) — where fork 28 lives
-  while proposed.
+- [`../../planning/ROADMAP.md`](../../planning/ROADMAP.md) — where fork 28 is
+  decided.

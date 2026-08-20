@@ -2,6 +2,11 @@
 
 ## 2026-08-20
 
+* **Accepted the vendor-neutral live streaming surface** (fork 28 —
+  [ADR 0031](./decisions/0031-live-streaming-surface.md)): decision is now
+  `accepted` and the decided register updated; ROADMAP no longer lists an open
+  fork. Implementation (live video source, multicast knobs, realtime + video)
+  is now unblocked.
 * **Proposed a vendor-neutral live streaming surface** (fork 28 —
   [ADR 0031](./decisions/0031-live-streaming-surface.md)): `video_source`
   accepts a GStreamer URI/description (file, `rtsp[s]:`, `pipeline:`), `udp:`
