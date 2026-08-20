@@ -79,10 +79,16 @@ struct InsertConfig {
   bool realtime = false;   // pace output against the clock (live sinks; B4)
   // v1 signals 0x06 async (0x15 sync deferred, ADR 0008).
 
-  // Optional video passthrough (ADR 0020). A bare path or "file:PATH" to a media
-  // file whose *first* video elementary stream is re-muxed alongside the KLV —
-  // unchanged unless `sei_0604` below asks otherwise. Empty (the default) keeps
-  // the KLV-only pipeline exactly as it was.
+  // Optional video passthrough (ADR 0020, extended ADR 0031). Accepts:
+  // - "" (default): KLV-only, no video.
+  // - "file:PATH" or bare path that exists: file source via filesrc ! demuxer ! parser (container sniff ADR 0025).
+  //   Bare path is backward compatible; prefer "file:" prefix (may be deprecated).
+  // - "rtsp[s]://...": live RTSP source via rtspsrc ! rtph264depay/265 ! h264parse/h265parse.
+  // - "pipeline:<gst-launch desc>": explicit GstBin escape hatch built via gst_parse_bin_from_description with ghost src pad; the bin must expose a static src pad immediately (no dynamic demuxers like tsdemux requiring pad-added). Use for videotestsrc, udpsrc without demux, or test fixtures.
+  // Empty keeps KLV-only pipeline. See ADR 0031.
+  //
+  // ABNF: video_source = "" / file-path / "file:" path / "rtsp:" uri / "rtsps:" uri / "pipeline:" gst-desc
+  // where file-path is a bare path (backward compat; prefer "file:").
   //
   // The stream is parsed, never decoded: whatever codec the source carries
   // (H.264, H.265, MPEG-2, ...) is what the output carries. Every non-video stream in
@@ -102,10 +108,7 @@ struct InsertConfig {
   // PTS order, interleaved with the video's progress — do not try to push a whole
   // file's worth of KLV before the video has started.
   //
-  // Not supported with `realtime` (rejected: Error::Unsupported) — the video
-  // branch is currently a file source and clock-paced output with it is
-  // unexercised; see ADR 0031 (proposed, fork 28) for the planned live
-  // surface that will lift this.
+  // realtime + video_source is supported: file source replays on pipeline clock, live source is normal mode (ADR 0031); kNoPts still rejected with video_source.
   std::string video_source;
 
   // What to do about ST 0604 Precision Time Stamp SEI in the passthrough video

@@ -3,7 +3,9 @@
 // coordination, finish/drain, and output-file cleanup.
 #include "gst_backend_internal.hpp"
 
+#include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <system_error>
 #include <memory>
@@ -140,20 +142,79 @@ class GstInserter : public Inserter {
                               : Result<std::monostate>::err(Error::Backend);
   }
 
+  // Live sources never EOS; for live branches finish() injects EOS into
+  // the video branch so mpegtsmux can EOS from both pads — otherwise the
+  // mux still waits on an open live video sink pad and finish() would stall
+  // until the 5min timeout. We send an EOS event down the peer of the
+  // reserved pad and, if that peer is gone (already unlinked), fall back to
+  // unlinking/releasing the pad so the mux can EOS from KLV alone. File
+  // sources propagate demuxer EOS. In both cases the pipeline drains through
+  // mpegtsmux until EOS or kFinishDrainTimeout.
   Result<std::monostate> finish() override {
     gst_app_src_end_of_stream(GST_APP_SRC(appsrc_));
+    // Only truly unbounded live sources need immediate unlink; finite
+    // live (pipeline: with num-buffers) will EOS on its own after its buffers
+    // are consumed, and early unlinks break the KLV timeline (file sink got
+    // 0 bytes). So gate on is_live_unbounded.
+    if (video_ && video_->is_live && video_->is_live_unbounded && video_->reserved_video_pad) {
+      GstPad* peer = gst_pad_get_peer(video_->reserved_video_pad);
+      if (peer) {
+        gst_pad_unlink(peer, video_->reserved_video_pad);
+        gst_object_unref(peer);
+      }
+      if (video_->mux_element) {
+        gst_element_release_request_pad(video_->mux_element, video_->reserved_video_pad);
+        video_->reserved_video_pad = nullptr;
+      }
+    }
     GstBus* bus = gst_element_get_bus(pipeline_);
-    GstMessage* msg = gst_bus_timed_pop_filtered(
-        bus, kFinishDrainTimeout,
-        static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
-    // Only a clean EOS succeeds. The five-minute bound is a stall guard for a
-    // video branch that never drains, not a normal performance deadline.
-    const bool ok = msg && GST_MESSAGE_TYPE(msg) == GST_MESSAGE_EOS;
-    if (!msg)
-      g_warning("misbklv: pipeline did not drain within %" G_GUINT64_FORMAT
-                "s of EOS; giving up",
-                static_cast<guint64>(kFinishDrainTimeout / GST_SECOND));
-    if (msg) gst_message_unref(msg);
+    // Live branches can emit transient not-linked errors when we inject EOS
+    // or unlink; those are not terminal — keep waiting for a clean EOS.
+    bool ok = false;
+    const auto deadline = std::chrono::steady_clock::now() +
+                          std::chrono::nanoseconds(kFinishDrainTimeout);
+    while (std::chrono::steady_clock::now() < deadline) {
+      auto remain = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        deadline - std::chrono::steady_clock::now())
+                        .count();
+      GstClockTime poll = remain > GST_SECOND ? GST_SECOND : static_cast<GstClockTime>(remain);
+      GstMessage* m = gst_bus_timed_pop_filtered(
+          bus, poll,
+          static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
+      if (!m) {
+        // poll timeout — check deadline
+        continue;
+      }
+      if (GST_MESSAGE_TYPE(m) == GST_MESSAGE_EOS) {
+        ok = true;
+        gst_message_unref(m);
+        break;
+      }
+      // ERROR
+      GError* err = nullptr;
+      gchar* dbg = nullptr;
+      gst_message_parse_error(m, &err, &dbg);
+      const bool is_not_linked = dbg && std::strstr(dbg, "not-linked");
+      if (is_not_linked) {
+        if (err) g_error_free(err);
+        g_free(dbg);
+        gst_message_unref(m);
+        continue;
+      }
+      g_warning("misbklv: pipeline error during finish: %s",
+                err ? err->message : "unknown");
+      if (err) g_error_free(err);
+      g_free(dbg);
+      gst_message_unref(m);
+      break;
+    }
+    if (!ok) {
+      bool timed_out = std::chrono::steady_clock::now() >= deadline;
+      if (timed_out)
+        g_warning("misbklv: pipeline did not drain within %" G_GUINT64_FORMAT
+                  "s of EOS; giving up",
+                  static_cast<guint64>(kFinishDrainTimeout / GST_SECOND));
+    }
     gst_object_unref(bus);
     gst_element_set_state(pipeline_, GST_STATE_NULL);
     if (ok)
@@ -184,16 +245,20 @@ class GstInserter : public Inserter {
 
 Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg) {
   using R = Result<std::unique_ptr<Inserter>>;
-  std::string video_path;
-  if (!cfg.video_source.empty()) {
+  VideoSource vsrc = parse_video_source(cfg.video_source);
+  if (vsrc.kind == VideoSourceKind::Unsupported)
+    return R::err(Error::Unsupported);
+  if (vsrc.kind == VideoSourceKind::File) {
+    if (vsrc.spec.empty()) return R::err(Error::Unsupported);
     // Validate before building: filesink creates a file as soon as the pipeline
     // leaves NULL, and a failed open must not leave a partial output behind.
-    if (cfg.realtime) return R::err(Error::Unsupported);
-    video_path = cfg.video_source;
-    if (video_path.rfind("file:", 0) == 0) video_path.erase(0, 5);
-    std::FILE* f = std::fopen(video_path.c_str(), "rb");
+    std::FILE* f = std::fopen(vsrc.spec.c_str(), "rb");
     if (!f) return R::err(Error::Backend);
     std::fclose(f);
+  } else if (vsrc.kind == VideoSourceKind::Pipeline) {
+    if (vsrc.spec.empty()) return R::err(Error::Unsupported);
+  } else if (vsrc.kind == VideoSourceKind::Rtsp) {
+    if (vsrc.spec.empty()) return R::err(Error::Unsupported);
   }
   std::string sink_path;
   bool sink_preexisted = true;
@@ -249,7 +314,8 @@ Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg) {
   // (ADR 0020 § stream order — the deferral that previously destabilized
   // ST 0604 SEI timing). Borrowed after the unref: the muxer owns the pad.
   GstPad* reserved_video_pad = nullptr;
-  if (!video_path.empty()) {
+  const bool have_video = vsrc.kind != VideoSourceKind::None;
+  if (have_video) {
     reserved_video_pad = gst_element_request_pad_simple(mux, "sink_%d");
     if (!reserved_video_pad) return fail(pipeline, Error::Backend);
     gst_object_unref(reserved_video_pad);
@@ -274,11 +340,11 @@ Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg) {
   }
 
   std::unique_ptr<VideoCtx> video;
-  if (!video_path.empty()) {
+  if (have_video) {
     // Dynamic pads are linked by the video unit through parsers where required;
     // nothing is decoded, preserving codec passthrough.
     auto prepared =
-        prepare_video_branch(pipeline, reserved_video_pad, video_path,
+        prepare_video_branch(pipeline, reserved_video_pad, mux, vsrc,
                              cfg.sei_0604, video);
     if (!prepared) return fail(pipeline, prepared.error());
   }

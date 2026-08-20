@@ -2,10 +2,13 @@
 #include "gst_backend_internal.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <string>
 #include <vector>
 
 #include <gst/base/gsttypefindhelper.h>
@@ -16,6 +19,7 @@ namespace misbklv::detail {
 namespace {
 
 inline constexpr std::chrono::seconds kVideoPadTimeout{10};
+inline constexpr std::chrono::seconds kLivePadTimeout{5};
 inline constexpr std::uint64_t kPtsMatchToleranceNs = 200'000'000;
 inline constexpr std::uint8_t kTimeStatusReserved = 0b0001'1111;
 inline constexpr std::uint8_t kTimeStatusLockUnknown = 0b1000'0000;
@@ -101,7 +105,7 @@ const char* mux_caps_for_media_type(const std::string& type) {
 }
 
 std::vector<std::byte> generate_0604_sei_payload(std::uint64_t timestamp_microsec,
-                                                  std::uint8_t time_status) {
+                                                   std::uint8_t time_status) {
   // ST 0604.6 §7: User Unregistered type 5, UUID "MISPmicrosectime", status,
   // and the modified timestamp with its prescribed 0xFF separators.
   std::vector<std::byte> payload;
@@ -186,7 +190,7 @@ bool sei_nal_is_replaced(GstH264NalParser* parser, GstH264NalUnit* nalu) {
 }
 
 GstPadProbeReturn on_h264_buffer_inject_sei(GstPad*, GstPadProbeInfo* info,
-                                             gpointer user) {
+                                              gpointer user) {
   auto* ctx = static_cast<VideoCtx*>(user);
   if (!ctx->generate_sei || !ctx->h264_parser) return GST_PAD_PROBE_OK;
   GstBuffer* buffer = GST_PAD_PROBE_INFO_BUFFER(info);
@@ -463,6 +467,245 @@ void on_video_no_more_pads(GstElement*, gpointer user) {
   ctx->cv.notify_all();
 }
 
+void on_rtspsrc_pad_added(GstElement*, GstPad* pad, gpointer user) {
+  auto* ctx = static_cast<VideoCtx*>(user);
+  GstCaps* caps = gst_pad_get_current_caps(pad);
+  if (!caps) caps = gst_pad_query_caps(pad, nullptr);
+  const std::string media_type = caps ? caps_media_type(caps) : std::string();
+  std::string encoding;
+  if (caps && !gst_caps_is_empty(caps)) {
+    GstStructure* s = gst_caps_get_structure(caps, 0);
+    if (gst_structure_has_name(s, "application/x-rtp")) {
+      const gchar* enc = gst_structure_get_string(s, "encoding-name");
+      if (enc) encoding = enc;
+    }
+  }
+  // Decide if this pad is video we care about. RTSP audio pads are dropped.
+  bool is_video_pad = false;
+  const char* depay_name = nullptr;
+  const char* parser_name = nullptr;
+  std::string video_type;  // for mux caps lookup (video/x-h264 etc.)
+  if (media_type == "application/x-rtp") {
+    std::string enc_low = encoding;
+    std::transform(enc_low.begin(), enc_low.end(), enc_low.begin(),
+                   [](unsigned char c){ return std::tolower(c); });
+    if (enc_low == "h264") {
+      depay_name = "rtph264depay";
+      parser_name = "h264parse";
+      video_type = "video/x-h264";
+      is_video_pad = true;
+    } else if (enc_low == "h265" || enc_low == "h264" || enc_low == "hevc") {
+      // Normalize: H265 may arrive as H265 or HEVC.
+      if (enc_low == "h265" || enc_low == "hevc") {
+        depay_name = "rtph265depay";
+        parser_name = "h265parse";
+        video_type = "video/x-h265";
+        is_video_pad = true;
+      }
+    }
+  } else if (media_type == "video/x-h264") {
+    parser_name = "h264parse";
+    video_type = "video/x-h264";
+    is_video_pad = true;
+  } else if (media_type == "video/x-h265") {
+    parser_name = "h265parse";
+    video_type = "video/x-h265";
+    is_video_pad = true;
+  }
+  if (caps) gst_caps_unref(caps);
+
+  if (!is_video_pad) {
+    // Unknown or non-video (audio, application) — drop to avoid not-linked.
+    // If caps were unknown video type, this also ends as Unsupported via timeout
+    // (no pad ever links), but we still drop the pad to keep the pipeline sane.
+    drop_pad_to_fakesink(pad, ctx);
+    if (!media_type.empty() && media_type.rfind("video/",0)==0) {
+      std::lock_guard<std::mutex> lk(ctx->mu);
+      // No linked video yet and this video caps is not H264/H265 -> future will be Unsupported
+      // but we can't signal error synchronously; the 5s watch will handle it.
+      g_warning("misbklv: RTSP video caps %s not supported", media_type.c_str());
+    } else if (media_type == "application/x-rtp" && !encoding.empty()) {
+      g_warning("misbklv: RTSP encoding %s not supported", encoding.c_str());
+    }
+    return;
+  }
+
+  // If Generate requested but codec is not H.264, we must not silently carry it;
+  // the file branch handles this in on_video_pad_added, the RTSP path does same.
+  if (ctx->generate_sei && video_type != "video/x-h264") {
+    std::lock_guard<std::mutex> lk(ctx->mu);
+    if (!ctx->linked) {
+      g_warning("misbklv: Sei0604::Generate needs H.264 video; RTSP source carries %s",
+                video_type.c_str());
+      drop_pad_to_fakesink(pad, ctx);
+      ctx->cv.notify_all();
+      return;
+    }
+  }
+
+  {
+    std::lock_guard<std::mutex> lk(ctx->mu);
+    if (ctx->linked) {
+      ++ctx->ignored_video_pads;
+      drop_pad_to_fakesink(pad, ctx);
+      return;
+    }
+  }
+
+  GstElement* depay = nullptr;
+  GstElement* parse = nullptr;
+  GstElement* queue = nullptr;
+  GstElement* capsfilter = nullptr;
+
+  if (depay_name) {
+    depay = gst_element_factory_make(depay_name, nullptr);
+    if (!depay) {
+      g_warning("misbklv: failed to create %s", depay_name);
+      drop_pad_to_fakesink(pad, ctx);
+      std::lock_guard<std::mutex> lk(ctx->mu);
+      ctx->cv.notify_all();
+      return;
+    }
+  }
+  if (parser_name) {
+    parse = gst_element_factory_make(parser_name, nullptr);
+    if (!parse) {
+      g_warning("misbklv: failed to create %s", parser_name);
+      if (depay) gst_object_unref(depay);
+      drop_pad_to_fakesink(pad, ctx);
+      std::lock_guard<std::mutex> lk(ctx->mu);
+      ctx->cv.notify_all();
+      return;
+    }
+    if (ctx->generate_sei) g_object_set(parse, "config-interval", -1, nullptr);
+  }
+  queue = gst_element_factory_make("queue", nullptr);
+  if (!queue) {
+    g_warning("misbklv: failed to create queue for RTSP branch");
+    if (depay) gst_object_unref(depay);
+    if (parse) gst_object_unref(parse);
+    drop_pad_to_fakesink(pad, ctx);
+    std::lock_guard<std::mutex> lk(ctx->mu);
+    ctx->cv.notify_all();
+    return;
+  }
+
+  // Capsfilter for the muxer byte-stream requirement, if applicable.
+  const char* mux_caps_str = mux_caps_for_media_type(video_type);
+  if (mux_caps_str) {
+    capsfilter = gst_element_factory_make("capsfilter", nullptr);
+    if (!capsfilter) {
+      g_warning("misbklv: failed to create capsfilter for %s", video_type.c_str());
+    } else {
+      GstCaps* fcaps = gst_caps_from_string(mux_caps_str);
+      g_object_set(capsfilter, "caps", fcaps, nullptr);
+      gst_caps_unref(fcaps);
+    }
+  }
+
+  // Add all to pipeline
+  if (depay) gst_bin_add(GST_BIN(ctx->pipeline), depay);
+  if (parse) gst_bin_add(GST_BIN(ctx->pipeline), parse);
+  gst_bin_add(GST_BIN(ctx->pipeline), queue);
+  if (capsfilter) gst_bin_add(GST_BIN(ctx->pipeline), capsfilter);
+  if (depay) gst_element_sync_state_with_parent(depay);
+  if (parse) gst_element_sync_state_with_parent(parse);
+  gst_element_sync_state_with_parent(queue);
+  if (capsfilter) gst_element_sync_state_with_parent(capsfilter);
+
+  // Link pad -> first element
+  GstElement* first = depay ? depay : (parse ? parse : queue);
+  GstPad* first_sink = gst_element_get_static_pad(first, "sink");
+  if (!first_sink) {
+    g_warning("misbklv: failed to get sink pad for RTSP chain");
+    {
+      std::lock_guard<std::mutex> lk(ctx->mu);
+      ctx->cv.notify_all();
+    }
+    return;
+  }
+  GstPadLinkReturn ret = gst_pad_link(pad, first_sink);
+  gst_object_unref(first_sink);
+  if (ret != GST_PAD_LINK_OK) {
+    g_warning("misbklv: failed to link RTSP pad to %s: %d", first ? GST_ELEMENT_NAME(first) : "queue", ret);
+    std::lock_guard<std::mutex> lk(ctx->mu);
+    ctx->cv.notify_all();
+    return;
+  }
+
+  // Link internal chain
+  bool chain_ok = true;
+  if (depay && parse) chain_ok = gst_element_link(depay, parse);
+  if (!chain_ok) {
+    g_warning("misbklv: failed to link %s to %s", depay_name ? depay_name : "", parser_name ? parser_name : "");
+    std::lock_guard<std::mutex> lk(ctx->mu);
+    ctx->cv.notify_all();
+    return;
+  }
+  GstElement* after_parse = parse ? parse : depay;
+  if (after_parse) {
+    if (!gst_element_link(after_parse, queue)) {
+      g_warning("misbklv: failed to link %s to queue", GST_ELEMENT_NAME(after_parse));
+      std::lock_guard<std::mutex> lk(ctx->mu);
+      ctx->cv.notify_all();
+      return;
+    }
+  }
+  // Queue -> capsfilter or directly to mux
+  GstElement* before_mux = queue;
+  if (capsfilter) {
+    if (!gst_element_link(queue, capsfilter)) {
+      g_warning("misbklv: failed to link queue to capsfilter");
+      std::lock_guard<std::mutex> lk(ctx->mu);
+      ctx->cv.notify_all();
+      return;
+    }
+    before_mux = capsfilter;
+  }
+
+  GstPad* srcpad = gst_element_get_static_pad(before_mux, "src");
+  if (!srcpad) {
+    g_warning("misbklv: failed to get src pad for RTSP chain before mux");
+    std::lock_guard<std::mutex> lk(ctx->mu);
+    ctx->cv.notify_all();
+    return;
+  }
+  bool linked = ctx->reserved_video_pad &&
+                gst_pad_link(srcpad, ctx->reserved_video_pad) == GST_PAD_LINK_OK;
+  GstPad* probe_pad = nullptr;
+  if (linked && parse) {
+    // Probe on parser src for SEI injection if needed. Use parser src pad before capsfilter if present.
+    GstPad* parse_src = gst_element_get_static_pad(parse, "src");
+    if (parse_src) {
+      probe_pad = parse_src; // will unref after probe add
+    }
+  } else if (linked) {
+    probe_pad = srcpad;
+    gst_object_ref(probe_pad);
+  }
+  gst_object_unref(srcpad);
+  if (!linked) {
+    g_warning("misbklv: failed to link RTSP chain to reserved muxer pad");
+    if (probe_pad) gst_object_unref(probe_pad);
+    std::lock_guard<std::mutex> lk(ctx->mu);
+    ctx->cv.notify_all();
+    return;
+  }
+  {
+    std::lock_guard<std::mutex> lk(ctx->mu);
+    ctx->linked = true;
+  }
+  if (ctx->generate_sei && probe_pad) {
+    gst_pad_add_probe(probe_pad, GST_PAD_PROBE_TYPE_BUFFER,
+                      on_h264_buffer_inject_sei, ctx, nullptr);
+  }
+  if (probe_pad) gst_object_unref(probe_pad);
+  {
+    std::lock_guard<std::mutex> lk(ctx->mu);
+  }
+  ctx->cv.notify_all();
+}
+
 }  // namespace
 
 VideoCtx::~VideoCtx() {
@@ -497,8 +740,42 @@ void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt,
   video.pts_to_sensor_timestamp[pts] = entry;
 }
 
-Result<std::monostate> prepare_video_branch(
-    GstElement* pipeline, GstPad* reserved_video_pad,
+VideoSource parse_video_source(const std::string& raw) {
+  if (raw.empty()) return {VideoSourceKind::None, {}};
+  if (raw.rfind("pipeline:", 0) == 0) {
+    std::string desc = raw.substr(9);
+    if (desc.empty()) return {VideoSourceKind::Unsupported, raw};
+    return {VideoSourceKind::Pipeline, desc};
+  }
+  if (raw.rfind("file:", 0) == 0) {
+    return {VideoSourceKind::File, raw.substr(5)};
+  }
+  auto colon = raw.find(':');
+  if (colon != std::string::npos) {
+    std::string scheme = raw.substr(0, colon);
+    bool valid = !scheme.empty() && std::isalpha(static_cast<unsigned char>(scheme[0]));
+    for (size_t i = 1; i < scheme.size() && valid; ++i) {
+      char c = scheme[i];
+      if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '+' || c == '-' || c == '.'))
+        valid = false;
+    }
+    if (valid) {
+      std::string low = scheme;
+      std::transform(low.begin(), low.end(), low.begin(),
+                     [](unsigned char c){ return std::tolower(c); });
+      if (low == "rtsp" || low == "rtsps") return {VideoSourceKind::Rtsp, raw};
+      return {VideoSourceKind::Unsupported, raw};
+    }
+  }
+  // Bare path
+  std::error_code ec;
+  bool exists = std::filesystem::exists(raw, ec);
+  if (!ec && exists) return {VideoSourceKind::File, raw};
+  return {VideoSourceKind::Unsupported, raw};
+}
+
+static Result<std::monostate> prepare_file_branch(
+    GstElement* pipeline, GstPad* reserved_video_pad, GstElement* mux,
     const std::string& video_path, Sei0604 sei_0604,
     std::unique_ptr<VideoCtx>& video) {
   const std::string container = sniff_container(video_path);
@@ -521,6 +798,8 @@ Result<std::monostate> prepare_video_branch(
   video = std::make_unique<VideoCtx>();
   video->pipeline = pipeline;
   video->reserved_video_pad = reserved_video_pad;
+  video->mux_element = mux;
+  video->is_live = false;
   video->generate_sei = sei_0604 == Sei0604::Generate;
   if (video->generate_sei) video->h264_parser = gst_h264_nal_parser_new();
   g_signal_connect(parse, "pad-added", G_CALLBACK(on_video_pad_added), video.get());
@@ -577,6 +856,247 @@ Result<std::monostate> prepare_video_branch(
     g_warning("misbklv: %d extra video stream(s) in '%s' not carried",
               ignored, video_path.c_str());
   return Result<std::monostate>::ok({});
+}
+
+static Result<std::monostate> prepare_rtsp_branch(
+    GstElement* pipeline, GstPad* reserved_video_pad, GstElement* mux,
+    const std::string& uri, Sei0604 sei_0604,
+    std::unique_ptr<VideoCtx>& video) {
+  if (sei_0604 == Sei0604::Generate) {
+    g_warning("misbklv: Sei0604::Generate not supported for RTSP live sources");
+    return Result<std::monostate>::err(Error::Unsupported);
+  }
+  GstElement* rtspsrc = gst_element_factory_make("rtspsrc", "rtspsrc");
+  if (!rtspsrc) {
+    g_warning("misbklv: rtspsrc element not available");
+    return Result<std::monostate>::err(Error::Backend);
+  }
+  g_object_set(rtspsrc, "location", uri.c_str(), "latency", 0, "protocols", 0x07, nullptr);
+  video = std::make_unique<VideoCtx>();
+  video->pipeline = pipeline;
+  video->reserved_video_pad = reserved_video_pad;
+  video->mux_element = mux;
+  video->is_live = true;
+  video->is_live_unbounded = true; // RTSP is always unbounded
+  video->video_bin = rtspsrc;
+  video->generate_sei = sei_0604 == Sei0604::Generate;
+  if (video->generate_sei) video->h264_parser = gst_h264_nal_parser_new();
+  g_signal_connect(rtspsrc, "pad-added", G_CALLBACK(on_rtspsrc_pad_added), video.get());
+  // rtspsrc also emits no-more-pads, but for live we rely on async watch.
+  gst_bin_add(GST_BIN(pipeline), rtspsrc);
+  // For live, skip PAUSED wait. Set PAUSED then immediately PLAYING and watch 5s.
+  if (gst_element_set_state(pipeline, GST_STATE_PAUSED) == GST_STATE_CHANGE_FAILURE) {
+    return Result<std::monostate>::err(Error::Backend);
+  }
+  if (gst_element_set_state(pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE) {
+    return Result<std::monostate>::err(Error::Backend);
+  }
+  GstBus* bus = gst_element_get_bus(pipeline);
+  const auto deadline = std::chrono::steady_clock::now() + kLivePadTimeout;
+  bool linked = false;
+  for (;;) {
+    {
+      std::unique_lock<std::mutex> lk(video->mu);
+      if (video->cv.wait_for(lk, std::chrono::milliseconds(50), [&] { return video->linked; })) {
+        linked = video->linked;
+        break;
+      }
+    }
+    GstMessage* msg = gst_bus_pop_filtered(bus, GST_MESSAGE_ERROR);
+    if (msg) {
+      GError* err = nullptr;
+      gchar* dbg = nullptr;
+      gst_message_parse_error(msg, &err, &dbg);
+      g_warning("misbklv: RTSP source '%s': %s", uri.c_str(), err ? err->message : "pipeline error");
+      if (err) g_error_free(err);
+      g_free(dbg);
+      gst_message_unref(msg);
+      gst_object_unref(bus);
+      return Result<std::monostate>::err(Error::Unsupported);
+    }
+    if (std::chrono::steady_clock::now() > deadline) break;
+  }
+  gst_object_unref(bus);
+  if (!linked) {
+    g_warning("misbklv: RTSP source '%s' produced no video pad within %lld s", uri.c_str(), static_cast<long long>(kLivePadTimeout.count()));
+    return Result<std::monostate>::err(Error::Unsupported);
+  }
+  return Result<std::monostate>::ok({});
+}
+
+// Live branch: source never EOS; finish() sends EOS to the muxer after
+// appsrc EOS and drains. File branch propagates demuxer EOS.
+// prepare_pipeline_branch covers pipeline: live sources (is-live=true).
+static Result<std::monostate> prepare_pipeline_branch(
+    GstElement* pipeline, GstPad* reserved_video_pad, GstElement* mux,
+    const std::string& desc, Sei0604 sei_0604,
+    std::unique_ptr<VideoCtx>& video) {
+  if (sei_0604 == Sei0604::Generate) {
+    g_warning("misbklv: Sei0604::Generate not supported for pipeline: live sources");
+    return Result<std::monostate>::err(Error::Unsupported);
+  }
+  // Narrowed grammar: pipeline: bin must expose a static src pad immediately.
+  // Dynamic demuxers (tsdemux, qtdemux, matroskademux) expose pads only after
+  // state changes and are not supported here.
+  if (desc.find("demux") != std::string::npos) {
+    g_warning("misbklv: pipeline: with demuxer not supported (needs static src pad)");
+    return Result<std::monostate>::err(Error::Unsupported);
+  }
+  GError* err = nullptr;
+  GstElement* bin = gst_parse_bin_from_description(desc.c_str(), TRUE, &err);
+  if (!bin) {
+    g_warning("misbklv: pipeline video_source failed to parse: %s", err ? err->message : "unknown error");
+    if (err) g_error_free(err);
+    return Result<std::monostate>::err(Error::Unsupported);
+  }
+  if (err) g_error_free(err);
+  video = std::make_unique<VideoCtx>();
+  video->pipeline = pipeline;
+  video->reserved_video_pad = reserved_video_pad;
+  video->mux_element = mux;
+  video->is_live = true;
+  video->is_live_unbounded = (desc.find("num-buffers") == std::string::npos);
+  video->video_bin = bin;
+  video->generate_sei = sei_0604 == Sei0604::Generate;
+  if (video->generate_sei) video->h264_parser = gst_h264_nal_parser_new();
+  gst_bin_add(GST_BIN(pipeline), bin);
+  // The bin's ghost src pad (created by parse_bin TRUE) is linked to reserved pad.
+  // It may not be negotiated yet, but ghost pad exists immediately.
+  GstPad* srcpad = gst_element_get_static_pad(bin, "src");
+  if (!srcpad) {
+    // Fallback: try to find any src ghost pad
+    GstIterator* it = gst_element_iterate_src_pads(bin);
+    gboolean done = FALSE;
+    GValue val = G_VALUE_INIT;
+    while (!done) {
+      switch (gst_iterator_next(it, &val)) {
+        case GST_ITERATOR_OK: {
+          GstPad* p = static_cast<GstPad*>(g_value_get_object(&val));
+          if (p && !srcpad) srcpad = static_cast<GstPad*>(gst_object_ref(p));
+          g_value_reset(&val);
+          break;
+        }
+        case GST_ITERATOR_DONE:
+          done = TRUE;
+          break;
+        default:
+          done = TRUE;
+          break;
+      }
+    }
+    g_value_unset(&val);
+    gst_iterator_free(it);
+  }
+  bool linked = false;
+  if (srcpad) {
+    // If SEI generate requested, we need to know codec; attempt to inspect bin caps?
+    // For pipeline, we don't know media type until caps negotiate. But we can still
+    // set up probe for H264 later if needed; for now link directly. If Generate
+    // needs H264 and source is not, open_insert will succeed but fail to generate;
+    // that matches file branch where we check at pad-added. For pipeline we cannot
+    // check until runtime — accept and let probe be added if parser present.
+    // However pipeline may contain x264enc -> h264parse already, so direct link is fine.
+    // Try direct pad link; no capsfilter needed as pipeline description should already
+    // produce byte-stream parsers.
+    GstPadLinkReturn ret = gst_pad_link(srcpad, reserved_video_pad);
+    linked = (ret == GST_PAD_LINK_OK);
+    if (!linked) {
+      // Try through a queue + capsfilter if direct fails (caps negotiation)
+      GstElement* queue = gst_element_factory_make("queue", nullptr);
+      GstElement* cf = gst_element_factory_make("capsfilter", nullptr);
+      if (queue) {
+        gst_bin_add(GST_BIN(pipeline), queue);
+        gst_element_sync_state_with_parent(queue);
+        GstPad* qsink = gst_element_get_static_pad(queue, "sink");
+        if (qsink && gst_pad_link(srcpad, qsink) == GST_PAD_LINK_OK) {
+          GstPad* qsrc = gst_element_get_static_pad(queue, "src");
+          if (qsrc) {
+            if (cf) {
+              GstCaps* fcaps = gst_caps_from_string("video/x-h264, stream-format=byte-stream");
+              g_object_set(cf, "caps", fcaps, nullptr);
+              gst_caps_unref(fcaps);
+              gst_bin_add(GST_BIN(pipeline), cf);
+              gst_element_sync_state_with_parent(cf);
+              if (gst_element_link(queue, cf)) {
+                GstPad* csrc = gst_element_get_static_pad(cf, "src");
+                if (csrc) {
+                  linked = gst_pad_link(csrc, reserved_video_pad) == GST_PAD_LINK_OK;
+                  gst_object_unref(csrc);
+                }
+              }
+            } else {
+              linked = gst_pad_link(qsrc, reserved_video_pad) == GST_PAD_LINK_OK;
+            }
+            gst_object_unref(qsrc);
+          }
+          gst_object_unref(qsink);
+        } else {
+          if (qsink) gst_object_unref(qsink);
+        }
+      }
+      if (!linked) g_warning("misbklv: failed to link pipeline bin to muxer: %d", ret);
+    }
+    gst_object_unref(srcpad);
+  } else {
+    g_warning("misbklv: pipeline bin has no src ghost pad");
+  }
+  if (!linked) {
+    // Pipeline bin linking failed — treat as Unsupported
+    return Result<std::monostate>::err(Error::Unsupported);
+  }
+  // Mark as linked; no async wait needed since ghost pad is static.
+  video->linked = true;
+  // For live pipeline, also set PAUSED->PLAYING immediately without wait, similar to RTSP,
+  // but we have already linked, so just advance states and return ok.
+  // The caller (open_insert) will still set PLAYING, but we pre-set here to prime.
+  // To avoid double state change, we set PAUSED then PLAYING now.
+  if (gst_element_set_state(pipeline, GST_STATE_PAUSED) == GST_STATE_CHANGE_FAILURE)
+    return Result<std::monostate>::err(Error::Backend);
+  if (gst_element_set_state(pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
+    return Result<std::monostate>::err(Error::Backend);
+  // Brief watch for bus ERROR to surface parse errors quickly, but not required for timeout.
+  GstBus* bus = gst_element_get_bus(pipeline);
+  GstMessage* msg = gst_bus_pop_filtered(bus, GST_MESSAGE_ERROR);
+  if (msg) {
+    GError* gerr = nullptr;
+    gchar* dbg = nullptr;
+    gst_message_parse_error(msg, &gerr, &dbg);
+    g_warning("misbklv: pipeline video_source error: %s", gerr ? gerr->message : "unknown");
+    if (gerr) g_error_free(gerr);
+    g_free(dbg);
+    gst_message_unref(msg);
+    gst_object_unref(bus);
+    return Result<std::monostate>::err(Error::Unsupported);
+  }
+  gst_object_unref(bus);
+  return Result<std::monostate>::ok({});
+}
+
+Result<std::monostate> prepare_video_branch(
+    GstElement* pipeline, GstPad* reserved_video_pad, GstElement* mux,
+    const VideoSource& src, Sei0604 sei_0604,
+    std::unique_ptr<VideoCtx>& video) {
+  // Live sources do not support SEI generation yet: codec is not negotiated
+  // for pipeline: and the RTSP depay/parser chain has no SEI probe. Reject
+  // until the probe is wired rather than silently producing no timestamps.
+  if (sei_0604 == Sei0604::Generate &&
+      (src.kind == VideoSourceKind::Pipeline || src.kind == VideoSourceKind::Rtsp)) {
+    g_warning("misbklv: Sei0604::Generate not supported for live video sources");
+    return Result<std::monostate>::err(Error::Unsupported);
+  }
+  switch (src.kind) {
+    case VideoSourceKind::File:
+      return prepare_file_branch(pipeline, reserved_video_pad, mux, src.spec, sei_0604, video);
+    case VideoSourceKind::Rtsp:
+      return prepare_rtsp_branch(pipeline, reserved_video_pad, mux, src.spec, sei_0604, video);
+    case VideoSourceKind::Pipeline:
+      return prepare_pipeline_branch(pipeline, reserved_video_pad, mux, src.spec, sei_0604, video);
+    case VideoSourceKind::None:
+      return Result<std::monostate>::ok({});
+    case VideoSourceKind::Unsupported:
+    default:
+      return Result<std::monostate>::err(Error::Unsupported);
+  }
 }
 
 }  // namespace misbklv::detail

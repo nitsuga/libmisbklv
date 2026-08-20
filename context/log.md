@@ -2,6 +2,8 @@
 
 ## 2026-08-20
 
+* **Live video source and realtime lift (ADR 0031, fork 28, part 2 of 2)**: `video_source` now accepts `file:`/bare path (file via filesrc ! demuxer ! parser, sniff ADR 0025), `rtsp[s]://` (live via rtspsrc latency 0 protocols 0x07 with dynamic rtph264depay/h265 ! parse ! queue linked on pad-added), and `pipeline:<desc>` (explicit GstBin via gst_parse_bin_from_description with ghost src pad). `realtime+video_source` no longer rejected: file replays on pipeline clock, live is normal mode; kNoPts still rejected with video. File branch keeps 10 s PAUSED preroll; live skips PAUSED wait and goes PLAYING with 5 s async pad watch (bus ERROR or timeout → Unsupported) and NULL cleanup on failure. `make_sink` still maps multicast knobs. New `live_video_test` (26/26 CTest) verifies file+realtime, pipeline live via file sink, error cases (pipeline:invalid, http://, rtsp unreachable within 5 s, bare missing), empty→KLV-only, and hermetic UDP loopback with pipeline live video (videotestsrc is-live ! openh264/x265 ! mpegtsmux ! udpsink loopback, KLV byte-exact, 5× green).
+
 * **udp multicast knobs landed (ADR 0031, fork 28, part 1 of 2)**: `InsertConfig` now has `udp_ttl_mcast` (default 1), `udp_mcast_iface` (default ""), and `udp_loop` (default true) mapped to `udpsink` `ttl-mc`/`multicast-iface`/`loop` (+ `auto-multicast` TRUE). Defaults reproduce today's `udp:127.0.0.1:port` behavior; `make_sink` validates TTL 0–255 and correctly handles bracketed `udp:[<IPv6>]:port`. `file:`/`srt:` ignored. New `udp_multicast_test` (25/25 CTest, 10×) verifies the mapping; existing `gst_stream` loopback still green.
 
 * **Accepted the vendor-neutral live streaming surface** (fork 28 —
