@@ -20,6 +20,11 @@ None currently.
 
 ## Next
 
+- **Review the proposed live streaming surface** (fork 28 /
+  [ADR 0031](../context/decisions/0031-live-streaming-surface.md)): the insert
+  path becomes live-capable and vendor-neutral — `video_source` takes a
+  GStreamer URI/description, `udp:` sinks get multicast/broadcast knobs, and
+  `realtime` + a video source is unblocked. Proposed only; nothing implemented.
 - **Registry breadth — 0903 side**: the remaining VMTI/VTarget items, as data
   needs them. (0601 is complete.)
 - **An SRT-specific hermetic streaming test** — the udp live path is covered,

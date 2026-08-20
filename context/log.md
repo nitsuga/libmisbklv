@@ -1,5 +1,14 @@
 # Knowledge Bundle Log
 
+## 2026-08-20
+
+* **Proposed a vendor-neutral live streaming surface** (fork 28 —
+  [ADR 0031](./decisions/0031-live-streaming-surface.md)): `video_source`
+  accepts a GStreamer URI/description (file, `rtsp[s]:`, `pipeline:`), `udp:`
+  sinks grow multicast/broadcast knobs, and `realtime` + a video source stops
+  being rejected. Vendor metadata extraction (Parrot/DJI RTP) deliberately stays
+  out of the library.
+
 ## 2026-08-17
 
 * **Bound live-path `PtsMarks` growth on a non-framing feed** (issue #4):
