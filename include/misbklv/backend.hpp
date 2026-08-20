@@ -103,7 +103,9 @@ struct InsertConfig {
   // file's worth of KLV before the video has started.
   //
   // Not supported with `realtime` (rejected: Error::Unsupported) — the video
-  // branch is a file source and clock-paced output with it is unexercised.
+  // branch is currently a file source and clock-paced output with it is
+  // unexercised; see ADR 0031 (proposed, fork 28) for the planned live
+  // surface that will lift this.
   std::string video_source;
 
   // What to do about ST 0604 Precision Time Stamp SEI in the passthrough video

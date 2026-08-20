@@ -83,8 +83,8 @@ What is **deliberately not** in scope:
   vendor's proprietary transport and format, forces a `protobuf` dependency into
   the core, and is a forcing function to add every other vendor the same way —
   the library becomes drone-vendor-compat. It is the exact move ADR 0020 warns
-  about ("if this API ever grows a vendor/codec option, the feature has moved
-  into the wrong repository").
+  about ("if this API ever grows a codec or encoder option, the feature has
+  moved into the wrong repository").
 - **A new shared repo (`drone-live-klv`) parameterized by a `VendorDecoder`**:
   rejected for now. Premature abstraction before either consumer has shipped a
   live path; a three-repo version matrix with nothing proven against it. The
