@@ -8,9 +8,7 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-Insert-drain cancellation landed ([ADR 0032](../context/decisions/0032-cancellable-insert-drain.md)): `Inserter::finish()` / `KlvSink::close()` take a defaulted `std::stop_token`, so a realtime file replay's wall-clock video drain is interruptible instead of blocking until EOS — the read-path stop token of [ADR 0019](../context/decisions/0019-extract-cancellation.md) now has a write-path twin. Existing callers unchanged (default token never signals). Suite green except the pre-existing `generate_path` OpenH264 SEI-generation failure, which reproduces on clean `main` and is environment, not this change.
-
-Before it, perf fix #27 (KlvStream/KlvSink redundant copies) landed — `Message::adopt` moves frame bytes into the Message without copying, `KlvSink` fast path bypasses `encode` for unedited messages via `original_bytes()`, and `GstInserter` wraps encoded vector storage with `gst_buffer_new_wrapped` to avoid the fill copy. ADR 0022 untouched, byte-exact re-encode preserved; builds on #26 latch/bounded-map.
+Generate-path encoder fix landed ([ADR 0033](../context/decisions/0033-generate-sei-encoder-timeline-shift.md), #33): `x264enc`/`avenc_h264` shift their output timeline by 1000 h (GStreamer `set_min_pts` DTS headroom), which silently produced 0 SEI under `Sei0604::Generate`; the matcher now detects and absorbs the constant shift, the hermetic Generate test runs every installed encoder, and CI installs plugins-ugly. Before it, insert-drain cancellation ([ADR 0032](../context/decisions/0032-cancellable-insert-drain.md)) gave `finish()`/`close()` a defaulted stop token, and perf fix #27 removed two per-packet copies (`Message::adopt`, `KlvSink` fast path, wrapped buffer push) — byte-exact passthrough preserved throughout.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a

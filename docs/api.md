@@ -128,6 +128,12 @@ one — and under `Generate` the source's is removed there too, so provenance
 doesn't silently vary frame to frame. If your KLV covers the video, as it
 normally does, every frame gets one.
 
+Matching assumes your KLV PTS and the video source share one timeline. When the
+video branch contains an encoder that shifts its output onto a DTS-headroom
+timeline (`x264enc`, `avenc_h264` — GStreamer's `gst_video_encoder_set_min_pts`),
+the matcher detects and absorbs the constant shift, so `Generate` works with any
+H.264 encoder (ADR 0033).
+
 `Generate` is **H.264 only**: on any other codec `open_insert` / the `KlvSink`
 constructor fails with `Error::Unsupported` rather than handing you a file whose
 video quietly has no timestamps. `Preserve` carries every codec.

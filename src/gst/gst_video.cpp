@@ -23,6 +23,17 @@ namespace {
 inline constexpr std::chrono::seconds kVideoPadTimeout{10};
 inline constexpr std::chrono::seconds kLivePadTimeout{5};
 inline constexpr std::uint64_t kPtsMatchToleranceNs = 200'000'000;
+// DTS-headroom shift some H.264 encoders apply to their whole output timeline
+// via gst_video_encoder_set_min_pts(GST_SECOND * 60 * 60 * 1000) so the first
+// DTS stays non-negative — x264enc and avenc_h264, unconditionally, since
+// GStreamer 1.6 (bug 731351 / commits 698714fc, 43d6ca85; openh264enc does not
+// opt in). The matcher absorbs it when detected — see ADR 0033.
+inline constexpr std::uint64_t kEncoderDtsHeadroomNs = 1000ULL * 60 * 60 *
+                                                        GST_SECOND;
+// A direct-space miss must exceed this before the shifted space is even
+// tried: far above any legitimate KLV-vs-video timing skew (the match
+// tolerance is two orders smaller), far below the headroom shift itself.
+inline constexpr std::uint64_t kPtsShiftDetectThresholdNs = 10ULL * GST_SECOND;
 inline constexpr std::uint8_t kTimeStatusReserved = 0b0001'1111;
 inline constexpr std::uint8_t kTimeStatusLockUnknown = 0b1000'0000;
 inline constexpr std::uint8_t kTimeStatusDiscontinuity = 0b0100'0000;
@@ -258,27 +269,65 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad* pad, GstPadProbeInfo* info,
   // no match within tolerance writes no replacement. An unmatched frame is
   // still scanned: Generate makes KLV the sole timestamp authority, so source
   // ST 0604 must not survive intermittently based on provenance.
+  //
+  // The caller's KLV PTS and the video branch's raw buffer PTS are expected to
+  // share one timeline. Encoders that opt into gst_video_encoder_set_min_pts()
+  // (x264enc, avenc_h264 — since GStreamer 1.6) shift their whole output
+  // timeline forward by kEncoderDtsHeadroomNs so the first DTS stays non-
+  // negative, which silently breaks that shared-timeline assumption (every
+  // frame misses, and the eviction below then wipes the map). On a miss too
+  // large to be a timing skew, retry in the shifted space; once it matches,
+  // latch the shifted space for the session — match and eviction below both
+  // read `key_ns` thereafter. A direct hit never latches, and every candidate
+  // obeys the same backward-only tolerance window, so pipelines whose
+  // timelines already agree behave exactly as before (ADR 0033).
   const std::uint64_t pts_ns = GST_BUFFER_PTS(buffer);
   SensorTime sensor_time;
   bool matched = false;
   {
     std::lock_guard<std::mutex> lock(ctx->timestamp_mu);
-    auto it = ctx->pts_to_sensor_timestamp.upper_bound(pts_ns);
-    if (it != ctx->pts_to_sensor_timestamp.begin()) {
-      --it;
-      if (pts_ns - it->first <= kPtsMatchToleranceNs) {
-        sensor_time = it->second;
-        matched = true;
+    const auto match_at = [&](std::uint64_t key_ns) {
+      auto it = ctx->pts_to_sensor_timestamp.upper_bound(key_ns);
+      if (it != ctx->pts_to_sensor_timestamp.begin()) {
+        --it;
+        if (key_ns - it->first <= kPtsMatchToleranceNs) {
+          sensor_time = it->second;
+          return true;
+        }
+      }
+      return false;
+    };
+    std::uint64_t key_ns = pts_ns;
+    if (ctx->encoder_pts_shift) {
+      key_ns = pts_ns - kEncoderDtsHeadroomNs;
+      matched = match_at(key_ns);
+    } else if (match_at(pts_ns)) {
+      matched = true;
+    } else {
+      // Direct space missed. Only entertain the shifted space when the miss
+      // is far beyond any legitimate tolerance skew (two orders above it) —
+      // otherwise this is an ordinary unmatched frame.
+      auto nearest = ctx->pts_to_sensor_timestamp.upper_bound(pts_ns);
+      const std::uint64_t dist =
+          nearest == ctx->pts_to_sensor_timestamp.begin()
+              ? UINT64_MAX
+              : pts_ns - std::prev(nearest)->first;
+      if (dist > kPtsShiftDetectThresholdNs &&
+          pts_ns >= kEncoderDtsHeadroomNs) {
+        key_ns = pts_ns - kEncoderDtsHeadroomNs;
+        matched = match_at(key_ns);
+        ctx->encoder_pts_shift = matched;
       }
     }
-    // Consumer-side eviction: entries older than pts_ns - tolerance can never
+    // Consumer-side eviction: entries older than key_ns - tolerance can never
     // match a future frame under monotonic video PTS, so they are safe to
     // discard. This bounds the map by the actual KLV-vs-video lead, not by a
     // wall-clock guess. If Generate is on and KLV is pushed far ahead with
     // video never arriving, entries accumulate until consumed — inherent, as
-    // the data may still be needed.
-    if (pts_ns >= kPtsMatchToleranceNs) {
-      const std::uint64_t threshold = pts_ns - kPtsMatchToleranceNs;
+    // the data may still be needed. (key_ns, not raw pts_ns: on a shift-
+    // detected branch the map lives on the caller's unshifted timeline.)
+    if (key_ns >= kPtsMatchToleranceNs) {
+      const std::uint64_t threshold = key_ns - kPtsMatchToleranceNs;
       auto eit = ctx->pts_to_sensor_timestamp.begin();
       while (eit != ctx->pts_to_sensor_timestamp.end() && eit->first < threshold)
         eit = ctx->pts_to_sensor_timestamp.erase(eit);

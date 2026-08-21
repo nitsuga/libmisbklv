@@ -74,6 +74,12 @@ struct VideoCtx {
   std::uint64_t prev_push_ts_us = 0;
   GstH264NalParser* h264_parser = nullptr;
   std::atomic<CodecLatch> codec_latch{CodecLatch::Unknown};
+  // True once the video branch is known to run on the DTS-headroom timeline
+  // some encoders shift onto their output (gst_video_encoder_set_min_pts —
+  // x264enc, avenc_h264; ADR 0033). Buffer PTS are then read in that shifted
+  // space and translated back to the caller's KLV PTS timeline before
+  // matching. Latched under timestamp_mu on first detection.
+  bool encoder_pts_shift = false;
 
   ~VideoCtx();
 };
