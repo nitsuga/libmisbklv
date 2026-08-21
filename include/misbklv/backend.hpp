@@ -143,6 +143,14 @@ class Inserter {
   // the config has a `video_source` (ADR 0020).
   virtual Result<std::monostate> push(std::span<const std::byte> klv_packet,
                                       std::int64_t pts_ns) = 0;
+  // Ownership-transferring overload for zero-copy emit: by default forwards to
+  // the span overload. GStreamer backend overrides to wrap the vector storage
+  // without copying (gst_buffer_new_wrapped).
+  virtual Result<std::monostate> push(std::vector<std::byte>&& klv_packet,
+                                      std::int64_t pts_ns) {
+    return push(std::span<const std::byte>(klv_packet.data(), klv_packet.size()),
+                pts_ns);
+  }
   virtual Result<std::monostate> finish() = 0;  // EOS + flush + close
   virtual ~Inserter() = default;
 };

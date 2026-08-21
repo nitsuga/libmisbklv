@@ -8,7 +8,7 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-Perf fix #26 (Generate-mode latch + bounded timestamp map, all CTest cases green) landed — codec latch via `CodecLatch` CAPS event probe so the SEI buffer probe avoids per-frame caps/string churn, and `pts_to_sensor_timestamp` now bounded by consumer-side eviction following video consumption rather than a wall-clock guess. ADR 0024 preserved; building on #25 zero-copy tag-2 read. Follow-up addresses review findings: producer prune removed, latch primed from negotiated caps, caps helpers factored, and lagging-video regression covered.
+Perf fix #27 (KlvStream/KlvSink redundant copies, all CTest cases green) landed — `Message::adopt` moves frame bytes into the Message without copying, `KlvSink` fast path bypasses `encode` for unedited messages via `original_bytes()`, and `GstInserter` wraps encoded vector storage with `gst_buffer_new_wrapped` to avoid the fill copy. ADR 0022 untouched, byte-exact re-encode preserved; builds on #26 latch/bounded-map.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
