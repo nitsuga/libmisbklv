@@ -151,7 +151,16 @@ class Inserter {
     return push(std::span<const std::byte>(klv_packet.data(), klv_packet.size()),
                 pts_ns);
   }
-  virtual Result<std::monostate> finish() = 0;  // EOS + flush + close
+  // EOS + flush + close. `stop` cancels the post-EOS drain early (cooperative,
+  // polled from the calling thread — e.g. a SIGINT handler that flips a flag a
+  // watcher forwards to a stop_source). A realtime file replay drains its video
+  // at wall-clock speed, so without this a Ctrl-C arriving after the KLV is
+  // emitted is ignored until the source reaches EOS (or the drain timeout) —
+  // see ADR 0032. A default token is never signaled, so finish() runs to the
+  // natural EOS, unchanged for every existing caller. On cancellation any
+  // partial sink file is discarded (ADR 0022) and finish() returns ok, matching
+  // extract()'s cooperative-stop convention (ADR 0019).
+  virtual Result<std::monostate> finish(std::stop_token stop = {}) = 0;
   virtual ~Inserter() = default;
 };
 

@@ -112,7 +112,10 @@ class KlvSink {
   KlvSink(std::unique_ptr<MediaBackend> backend, InsertConfig cfg);
 
   Result<std::monostate> emit(const Message& m);  // m.encode() -> push
-  Result<std::monostate> close();                 // drain + finish
+  // drain + finish. `stop` cancels the post-EOS drain early — a realtime file
+  // replay otherwise drains its video at wall-clock speed and ignores a Ctrl-C
+  // that lands after the KLV is emitted (ADR 0032). Default token never signals.
+  Result<std::monostate> close(std::stop_token stop = {});
 
   // Failure from open_insert(), if any. Runtime emit()/close() failures remain
   // reported by their Result values and do not change this accessor.
