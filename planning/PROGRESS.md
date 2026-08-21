@@ -8,7 +8,7 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-ADR 0031 (fork 28) landed — Part 2 live `video_source` URI (`file:`/`rtsp[s]:`/`pipeline:`) and `realtime+video` lift, plus live Generate SEI probe for H.264 (RTSP depay `h264parse` src and pipeline bin ghost src pad wired to `on_h264_buffer_inject_sei`; pipeline Generate now succeeds). 26/26 CTest green (including updated `live_video_test` + `udp_multicast_test` 5× and full suite 2×), hermetic pipeline live loopback byte-exact.
+ADR 0031 (fork 28) landed — Part 2 live `video_source` URI (`file:`/`rtsp[s]:`/`pipeline:`) and `realtime+video` lift, plus live Generate SEI probe for H.264 (RTSP depay `h264parse` src and pipeline bin ghost src pad wired to `on_h264_buffer_inject_sei`; pipeline Generate now succeeds). Perf fix #25 (zero-copy tag-2 read in `record_sensor_timestamp`, `parse_packet` + `codec::decode`) landed on `perf/zero-copy-record-sensor-timestamp`, 26/26 CTest green, awaiting merge. Full suite 2× and hermetic pipeline live loopback byte-exact.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a

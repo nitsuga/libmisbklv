@@ -1,5 +1,9 @@
 # Knowledge Bundle Log
 
+## 2026-08-21
+
+* **perf: zero-copy tag-2 read in record_sensor_timestamp (#25)**: replaced `Message::parse` heap allocation and full payload copy with `parse_packet` borrowed spans and `codec::decode` for tag 2, mirroring `Message::get<std::uint64_t>(2)` semantics exactly (registry lookup via `registry_by_key`, length validation, kind check). Live insert path now avoids per-packet copy. 26/26 CTest green.
+
 ## 2026-08-20
 
 * **Wire Generate probe for live branches (RTSP and pipeline)**: `prepare_rtsp_branch` and `prepare_pipeline_branch` no longer reject `Sei0604::Generate` for live sources; RTSP now attaches the same `h264parse` SEI probe (`on_h264_buffer_inject_sei` on `h264parse` src) that the file path uses, and pipeline live attaches the probe to the bin's ghost src pad so H.264 live also carries ST 0604. `prepare_video_branch` early Generate rejection for live removed. `live_video_test` updated: pipeline Generate now succeeds with push/finish, RTSP Generate unreachable still returns Unsupported but via 5 s network path not fast reject. 26/26 CTest green.
