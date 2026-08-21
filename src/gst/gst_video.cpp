@@ -13,7 +13,9 @@
 
 #include <gst/base/gsttypefindhelper.h>
 
-#include "misbklv/message.hpp"
+#include "misbklv/codec.hpp"
+#include "misbklv/packet.hpp"
+#include "misbklv/registries.hpp"
 
 namespace misbklv::detail {
 namespace {
@@ -733,13 +735,28 @@ VideoCtx::~VideoCtx() {
 
 void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt,
                              std::int64_t pts_ns) {
-  auto msg_result = Message::parse(pkt);
-  if (!msg_result) return;
-  auto& msg = *msg_result;
-  if (!msg.has(2)) return;
-  auto ts_result = msg.get<std::uint64_t>(2);
-  if (!ts_result) return;
-  const std::uint64_t sensor_timestamp_us = *ts_result;
+  auto pkt_result = parse_packet(pkt);
+  if (!pkt_result) return;
+  const Packet& parsed = *pkt_result;
+  std::span<const std::byte> raw;
+  bool found = false;
+  for (const auto& it : parsed.items) {
+    if (it.tag == 2) {
+      raw = it.value;
+      found = true;
+      break;
+    }
+  }
+  if (!found) return;
+  const Registry* reg = registry_by_key(parsed.ul_key);
+  if (!reg) return;
+  const ItemDescriptor* desc = reg->find(2);
+  if (!desc) return;
+  auto decoded = codec::decode(*desc, raw);
+  if (!decoded) return;
+  const std::uint64_t* p = std::get_if<std::uint64_t>(&*decoded);
+  if (!p) return;
+  const std::uint64_t sensor_timestamp_us = *p;
   const auto pts = static_cast<std::uint64_t>(pts_ns);
   std::lock_guard<std::mutex> lock(video.timestamp_mu);
   // Derive ST 0603 Time Status from absolute time against the media timeline.
