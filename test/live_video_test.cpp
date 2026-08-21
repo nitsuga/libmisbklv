@@ -22,6 +22,7 @@
 
 #include "misbklv/backend.hpp"
 #include "misbklv/gst_backend.hpp"
+#include "misbklv/message.hpp"
 #include "misbklv/packet.hpp"
 #include "gst_backend_internal.hpp"
 
@@ -122,6 +123,91 @@ std::vector<EsInfoHevc> read_pmt_hevc(std::span<const std::byte> ts) {
 
 static void handoff_count(GstElement*, GstBuffer*, GstPad*, gpointer ud) {
   (*static_cast<std::atomic<int>*>(ud))++;
+}
+
+// Extract reassembled PES payload for `want_pid` (video ES) from a TS file.
+// Used to detect H.264 SEI injection in the HEVC bitstream: the MISP string
+// is contiguous in PES but split by TS headers in the raw file, so searching
+// the raw file would miss it.
+static std::vector<std::byte> extract_pes_payload(std::span<const std::byte> ts, unsigned want_pid) {
+  std::vector<std::byte> out;
+  std::vector<std::byte> cur;
+  auto flush = [&] {
+    if (cur.size() < 9) { cur.clear(); return; }
+    // PES header: 0x00 0x00 0x01 + stream_id + length
+    // PTS present if byte 7 bit 7 set; header length at byte 8
+    const std::size_t hdr = 9 + u8_hevc(cur, 8);
+    if (hdr <= cur.size()) out.insert(out.end(), cur.begin() + hdr, cur.end());
+    cur.clear();
+  };
+  for (std::size_t off = 0; off + kTsPkt <= ts.size(); off += kTsPkt) {
+    auto p = ts.subspan(off, kTsPkt);
+    if (u8_hevc(p, 0) != 0x47) continue;
+    const unsigned pid = ((u8_hevc(p, 1) & 0x1f) << 8) | u8_hevc(p, 2);
+    if (pid != want_pid) continue;
+    const unsigned afc = (u8_hevc(p, 3) >> 4) & 0x3;
+    if (!(afc & 0x1)) continue;
+    std::size_t i = 4;
+    if (afc & 0x2) i += 1 + u8_hevc(p, 4);
+    if (i >= kTsPkt) continue;
+    if (u8_hevc(p, 1) & 0x40) flush(); // PUSI starts new PES
+    out.reserve(out.size() + (kTsPkt - i));
+    cur.insert(cur.end(), p.begin() + i, p.end());
+    // The PES may be split across many TS packets; we accumulate until next PUSI.
+    // cur grows unbounded for the last PES until flush at end, so we keep it.
+    // But we also need to handle that PES header spans packets: the first packet
+    // of a PES contains the header, later packets are pure payload. Our flush
+    // logic above handles header only for the first packet's cur.
+    // To avoid mixing header bytes from later packets, we flush only at PUSI.
+  }
+  // Flush last PES (if file ended without next PUSI)
+  if (!cur.empty()) {
+    const std::size_t hdr = cur.size() >= 9 ? 9 + u8_hevc(cur, 8) : cur.size();
+    if (hdr < cur.size()) {
+      // Check that cur starts with PES start code
+      if (cur.size() >= 4 && u8_hevc(cur, 0)==0x00 && u8_hevc(cur,1)==0x00 && u8_hevc(cur,2)==0x01) {
+        out.insert(out.end(), cur.begin()+hdr, cur.end());
+      } else {
+        // Payload without clean header (should not happen for video)
+        out.insert(out.end(), cur.begin(), cur.end());
+      }
+    }
+  }
+  return out;
+}
+static bool payload_contains(const std::vector<std::byte>& payload, const std::string& needle) {
+  if (payload.size() < needle.size()) return false;
+  for (size_t i = 0; i + needle.size() <= payload.size(); ++i) {
+    bool hit = true;
+    for (size_t k = 0; k < needle.size() && hit; ++k) hit = static_cast<char>(payload[i+k]) == needle[k];
+    if (hit) return true;
+  }
+  return false;
+}
+static bool ts_video_payload_contains(std::span<const std::byte> ts, unsigned want_pid, const std::string& needle) {
+  // Scan each TS packet's payload directly (no PES reassembly) – catches MISP
+  // even if PES reassembly is flawed. MISP is 16 bytes, so it will be within a
+  // single packet's payload (PES header + ES at start of packet).
+  for (std::size_t off = 0; off + kTsPkt <= ts.size(); off += kTsPkt) {
+    auto p = ts.subspan(off, kTsPkt);
+    if (u8_hevc(p, 0) != 0x47) continue;
+    const unsigned pid = ((u8_hevc(p, 1) & 0x1f) << 8) | u8_hevc(p, 2);
+    if (pid != want_pid) continue;
+    const unsigned afc = (u8_hevc(p, 3) >> 4) & 0x3;
+    if (!(afc & 0x1)) continue;
+    std::size_t i = 4;
+    if (afc & 0x2) i += 1 + u8_hevc(p, 4);
+    if (i >= kTsPkt) continue;
+    std::size_t avail = kTsPkt - i;
+    if (avail < needle.size()) continue;
+    // Search within this packet's payload only (not across packets)
+    for (std::size_t j = 0; j + needle.size() <= avail; ++j) {
+      bool hit = true;
+      for (std::size_t k = 0; k < needle.size() && hit; ++k) hit = static_cast<char>(p[i+j+k]) == needle[k];
+      if (hit) return true;
+    }
+  }
+  return false;
 }
 
 // Try to decode the HEVC video ES in `path` via tsdemux -> h265parse -> decodebin -> fakesink.
@@ -336,7 +422,12 @@ int main(int argc, char** argv) {
     } else {
       gst_object_unref(f265);
       gst_object_unref(f265parse);
-      const std::string pipe = "pipeline:videotestsrc is-live=true num-buffers=30 ! videoconvert ! video/x-raw,format=I420,width=320,height=240,framerate=30/1 ! x265enc ! h265parse";
+      // 90 frames at 30 fps = 3 s. KLV at 1.00 s, 1.033 s, 1.066 s
+      // lands mid-stream, ahead of many video buffers, and after the
+      // pipeline's initial preroll (running_time ~5 ms). Within 200 ms
+      // tolerance of upcoming video. Use queue at end so ghost pad is
+      // queue src, which correctly propagates probe replacement.
+      const std::string pipe = "pipeline:videotestsrc is-live=true num-buffers=90 ! videoconvert ! video/x-raw,format=I420,width=320,height=240,framerate=30/1 ! x265enc ! h265parse ! queue";
       const std::string out = tmpdir + "/pipeline-h265-generate.ts";
       std::remove(out.c_str());
       auto r = be->open_insert({"file:" + out, true, pipe, Sei0604::Generate});
@@ -348,20 +439,49 @@ int main(int argc, char** argv) {
       } else {
         check(static_cast<bool>(r), "pipeline H.265 Generate open succeeds (unstamped)");
         if (r) {
-          // Push 3 KLV frames; before the fix this would rewrite the H.265
-          // bitstream as H.264 NALs and corrupt the output.
-          size_t off = 0;
+          // Genuine guard: KLV PTS is aligned to video frame times within the
+          // 200 ms tolerance so on_h264_buffer_inject_sei's matched=true on
+          // pre-fix (4ac014a). Pre-fix attached the H.264 probe to H.265 and
+          // would parse the HEVC bitstream as H.264, injecting an H.264 SEI
+          // (or stripping a misidentified one) and corrupting HEVC. Fixed
+          // code gates the probe on H.264 caps, so no rewrite occurs.
+          // Use frame-aligned PTS: 1.000 s, 1.033 s, 1.066 s (33.333 ms steps
+          // at 30 fps). Each KLV's Item 2 (sensor timestamp) is set to
+          // base + pts so the SEI payload would be valid if injected, and
+          // the map entry is within tolerance of upcoming video buffers.
+          constexpr std::uint64_t kBaseUs = 1'700'000'000'000'000ULL;
           std::vector<std::byte> sent;
+          // Use first synthetic packet as a template; re-stamp Item 2 per PTS.
+          size_t tmpl_n = 0;
+          if (!klv_bytes.empty()) tmpl_n = packet_frame_length(klv);
+          std::span<const std::byte> tmpl = tmpl_n ? klv_bytes : std::span<const std::byte>{};
+          // Fallback template if klv empty (should not happen): synthesize minimal.
+          auto make_minimal = [&](std::uint64_t ts_us) -> std::vector<std::byte> {
+            auto m = Message::create(RegistryId::Uas0601);
+            if (m) {
+              (void)m->set(2, Value{ts_us});
+              (void)m->set(65, Value{std::uint64_t{19}});
+              if (auto enc = m->encode()) return std::vector<std::byte>(enc->begin(), enc->end());
+            }
+            return {};
+          };
           for (int i = 0; i < 3; ++i) {
-            if (off >= klv_bytes.size()) break;
-            size_t n = packet_frame_length(klv.subspan(off));
-            if (n == 0) break;
-            int64_t pts = 1'000'000'000LL + static_cast<int64_t>(i * 100'000'000LL);
-            auto pr = (*r)->push(klv.subspan(off, n), pts);
+            int64_t pts = 3600000000000000LL + static_cast<int64_t>(i * 33'333'333LL);
+            std::uint64_t ts_us = kBaseUs + static_cast<std::uint64_t>(pts / 1000);
+            std::vector<std::byte> pkt;
+            if (tmpl_n) {
+              auto m = Message::parse(tmpl);
+              if (m) {
+                (void)m->set(2, Value{ts_us});
+                if (auto enc = m->encode()) pkt.assign(enc->begin(), enc->end());
+              }
+            }
+            if (pkt.empty()) pkt = make_minimal(ts_us);
+            if (pkt.empty()) { check(false, "pipeline H.265 Generate packet build"); break; }
+            auto pr = (*r)->push(pkt, pts);
             check(static_cast<bool>(pr), "pipeline H.265 Generate push ok");
             if (!pr) break;
-            sent.insert(sent.end(), klv_bytes.begin() + off, klv_bytes.begin() + off + n);
-            off += n;
+            sent.insert(sent.end(), pkt.begin(), pkt.end());
           }
           auto fr = (*r)->finish();
           check(static_cast<bool>(fr), "pipeline H.265 Generate finish ok");
@@ -395,6 +515,29 @@ int main(int argc, char** argv) {
               check(vtype != 0x1B, "pipeline H.265 Generate PMT not H.264 (0x1B)");
               if (vtype != 0x24) {
                 std::printf("  FAIL: expected HEVC (0x24) got 0x%02x — H.264 SEI injection would flip this\n", vtype);
+              }
+              // Negative guard: pre-fix injected an H.264 SEI NAL (payload type 5
+              // UUID MISPmicrosectime) into the HEVC bitstream. That string
+              // never appears in valid HEVC, so its presence in the reassembled
+              // video PES proves corruption. Search the video ES payload, not the
+              // raw TS, because TS headers split the PES.
+              {
+                unsigned vpid = 0;
+                for (auto &e : es) if (e.stream_type == 0x24) vpid = e.pid;
+                const std::string needle = "MISPmicrosectime";
+                bool found = false;
+                bool found_raw = false;
+                std::size_t vpayload_sz = 0;
+                if (vpid) {
+                  auto vpayload = extract_pes_payload(bytes, vpid);
+                  vpayload_sz = vpayload.size();
+                  found = payload_contains(vpayload, needle);
+                  found_raw = ts_video_payload_contains(bytes, vpid, needle);
+                  found = found || found_raw;
+                  std::printf("  video ES payload %zu bytes, MISP %s (raw-packet %s)\n", vpayload_sz, found ? "FOUND (corrupt)" : "absent", found_raw ? "FOUND" : "absent");
+                }
+                check(!found, "pipeline H.265 Generate no H.264 SEI (MISPmicrosectime) in video ES");
+                if (found) std::printf("  FAIL: H.264 SEI leaked into HEVC — pre-fix would corrupt\n");
               }
               int frames = 0; bool skipped = false; std::string derr;
               bool ok = decode_hevc_frames(out, &frames, &skipped, &derr);
