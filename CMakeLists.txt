@@ -221,6 +221,11 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
   target_link_libraries(live_video_test PRIVATE misbklv-gst Threads::Threads)
   target_include_directories(live_video_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/gst)
   add_test(NAME live_video COMMAND live_video_test ${_video} ${_basic} "${CMAKE_CURRENT_BINARY_DIR}/live_tmp")
+
+  add_executable(generate_path_test test/generate_path_test.cpp)  # Generate-mode latch + bounded map (issue #26)
+  target_link_libraries(generate_path_test PRIVATE misbklv-gst)
+  target_include_directories(generate_path_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/gst)
+  add_test(NAME generate_path COMMAND generate_path_test)
 endif()
 
 # --- gst-free MPEG-TS KLV extractor (fork 12 / B3): 0x06 + 0x15 --------------
