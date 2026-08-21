@@ -75,7 +75,7 @@ void KlvStream::pull() {
       current_.reset();
       return;
     }
-    auto m = Message::parse(f.bytes);
+    auto m = Message::adopt(std::move(f.bytes));
     if (m) {
       m->set_pts(f.pts);
       current_.emplace(std::move(*m));
@@ -127,9 +127,13 @@ KlvSink::KlvSink(std::string sink, bool realtime, std::string video_source,
 Result<std::monostate> KlvSink::emit(const Message& m) {
   if (!inserter_)
     return Result<std::monostate>::err(open_error_.value_or(Error::Backend));
+  if (!m.edited()) {
+    auto orig = m.original_bytes();
+    if (!orig.empty()) return inserter_->push(orig, m.pts());
+  }
   auto bytes = m.encode();
   if (!bytes) return Result<std::monostate>::err(bytes.error());
-  return inserter_->push(*bytes, m.pts());
+  return inserter_->push(std::move(*bytes), m.pts());
 }
 
 Result<std::monostate> KlvSink::close() {

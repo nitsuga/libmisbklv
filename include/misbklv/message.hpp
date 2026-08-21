@@ -27,6 +27,11 @@ class Message {
   // Copy + parse one KLV packet; the registry is chosen from the UL key.
   static Result<Message> parse(std::span<const std::byte> bytes);
 
+  // Move-adopt an already-owned packet buffer; parses in place without copying.
+  // Transfers ownership of `bytes` into the Message (caller’s vector is empty
+  // on success). Preserves `parse` copy semantics for public API.
+  static Result<Message> adopt(std::vector<std::byte>&& bytes);
+
   // Author a fresh, empty packet for `registry` — ST 0601 (`RegistryId::Uas0601`)
   // or standalone ST 0903 VMTI (`RegistryId::Vmti0903`). Populate with `set()`,
   // then `encode()` / emit. Errors for a type with no standalone UL key (e.g.
@@ -86,6 +91,13 @@ class Message {
   // untouched items pass through byte-exact, edited/added via the codec, and the
   // checksum is re-emitted.
   Result<ber::Bytes> encode() const;
+
+  // True if any `set()` has staged an edit/append.
+  bool edited() const { return !edits_.empty(); }
+
+  // Original packet extent as owned by this Message (byte-exact source slice).
+  // Empty if this Message was created via `create()` with no source.
+  std::span<const std::byte> original_bytes() const;
 
   std::int64_t pts() const { return pts_; }
   void set_pts(std::int64_t p) { pts_ = p; }

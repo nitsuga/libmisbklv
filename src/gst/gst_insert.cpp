@@ -142,6 +142,36 @@ class GstInserter : public Inserter {
                               : Result<std::monostate>::err(Error::Backend);
   }
 
+  Result<std::monostate> push(std::vector<std::byte>&& pkt,
+                              std::int64_t pts_ns) override {
+    if (video_ && pts_ns == kNoPts)
+      return Result<std::monostate>::err(Error::Unsupported);
+    if (video_ && video_->generate_sei && pts_ns != kNoPts)
+      record_sensor_timestamp(*video_,
+                              std::span<const std::byte>(pkt.data(), pkt.size()),
+                              pts_ns);
+    GstBuffer* buf = nullptr;
+    if (pkt.empty()) {
+      buf = gst_buffer_new();
+    } else {
+      // Transfer ownership of the vector's storage to GStreamer without copying.
+      auto* vec = new std::vector<std::byte>(std::move(pkt));
+      buf = gst_buffer_new_wrapped_full(
+          static_cast<GstMemoryFlags>(0), vec->data(), vec->size(), 0,
+          vec->size(), vec, [](gpointer data) {
+            delete static_cast<std::vector<std::byte>*>(data);
+          });
+    }
+    GST_BUFFER_PTS(buf) = (pts_ns == kNoPts) ? pts_
+                                              : static_cast<GstClockTime>(pts_ns);
+    GST_BUFFER_DURATION(buf) = kFrameDur;
+    pts_ += kFrameDur;
+    const GstFlowReturn ret =
+        gst_app_src_push_buffer(GST_APP_SRC(appsrc_), buf);
+    return ret == GST_FLOW_OK ? Result<std::monostate>::ok({})
+                              : Result<std::monostate>::err(Error::Backend);
+  }
+
   // Live sources never EOS; for live branches finish() injects EOS into
   // the video branch so mpegtsmux can EOS from both pads — otherwise the
   // mux still waits on an open live video sink pad and finish() would stall

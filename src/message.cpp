@@ -17,6 +17,18 @@ Result<Message> Message::parse(std::span<const std::byte> bytes) {
   return Result<Message>::ok(std::move(m));
 }
 
+Result<Message> Message::adopt(std::vector<std::byte>&& bytes) {
+  Message m;
+  m.bytes_ = std::move(bytes);
+  auto pkt = parse_packet(m.bytes_);
+  if (!pkt) return Result<Message>::err(pkt.error());
+  m.pkt_ = std::move(*pkt);  // spans into m.bytes_
+  const Registry* reg = registry_by_key(m.pkt_.ul_key);
+  if (!reg) return Result<Message>::err(Error::UnknownTag);
+  m.reg_ = reg;
+  return Result<Message>::ok(std::move(m));
+}
+
 Result<Message> Message::create(RegistryId id) {
   const Registry* reg = registry_for(id);
   if (!reg || reg->ul_key.empty())  // not a standalone packet type
@@ -90,6 +102,11 @@ Result<ber::Bytes> Message::encode() const {
   // re-encoding an already-non-conformant capture after a single edit.
   const bool authoring = bytes_.empty();
   return std::move(b).finalize(reg_->ul_key, /*enforce_mandatory=*/authoring);
+}
+
+std::span<const std::byte> Message::original_bytes() const {
+  if (pkt_.total_size == 0 || bytes_.size() < pkt_.total_size) return {};
+  return std::span<const std::byte>(bytes_.data(), pkt_.total_size);
 }
 
 }  // namespace misbklv
