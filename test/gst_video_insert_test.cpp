@@ -26,8 +26,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <stop_token>
 #include <system_error>
 #include <span>
 #include <string>
@@ -911,6 +913,43 @@ int main(int argc, char** argv) {
     std::remove((out_path + ".mp4.ts").c_str());
   } else {
     std::printf("MP4 source: SKIPPED (no usable mp4mux in this gstreamer)\n");
+  }
+
+  // --- cancellable realtime drain (ADR 0032) --------------------------------
+  // A realtime file replay drains its video at wall-clock speed, so finish()
+  // must not block there once the caller asks to stop: without a cancellable
+  // drain, a Ctrl-C arriving after the last KLV packet is ignored until the
+  // source reaches EOS. The TS source is 2 s of realtime video; push one KLV
+  // packet, then finish() with an already-requested stop. It must return
+  // promptly — far under the ~2 s a full drain would take — and, because the
+  // session did not complete, leave no output file (ADR 0022).
+  {
+    std::printf("realtime drain cancellation (ADR 0032)\n");
+    const std::string p = out_path + ".cancel.ts";
+    std::remove(p.c_str());
+    auto ins = be->open_insert({"file:" + p, /*realtime=*/true, ts_source,
+                                Sei0604::Preserve});
+    check("cancel: realtime insert opened", bool(ins));
+    if (ins) {
+      std::span<const std::byte> buf = input;
+      (*ins)->push(buf.subspan(0, packet_frame_length(buf)), 0);
+      std::stop_source ss;
+      ss.request_stop();  // as if SIGINT had already landed
+      const auto t0 = std::chrono::steady_clock::now();
+      auto r = (*ins)->finish(ss.get_token());
+      const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                               std::chrono::steady_clock::now() - t0);
+      // Cooperative cancellation returns ok (matches extract(), ADR 0019).
+      check("cancel: finish returns ok", bool(r));
+      // The whole point: it did not wait out the 2 s realtime drain. A generous
+      // 1 s bound clears CI slop while still failing a regression to the old
+      // blocking drain (which would take ~2 s).
+      std::printf("  finish() returned in %lld ms\n",
+                  static_cast<long long>(elapsed.count()));
+      check("cancel: finish returned promptly (<1s)", elapsed.count() < 1000);
+    }
+    check("cancel: no output left behind", !file_exists(p));
+    std::remove(p.c_str());
   }
 
   std::printf("VIDEO PASSTHROUGH: %s\n", g_pass ? "PASS" : "FAIL");

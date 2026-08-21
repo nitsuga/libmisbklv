@@ -3,6 +3,7 @@
 #pragma once
 
 #include <memory>
+#include <stop_token>
 #include <utility>
 #include <vector>
 
@@ -23,7 +24,7 @@ class MockInserter : public Inserter {
     pts.push_back(t);
     return Result<std::monostate>::ok({});
   }
-  Result<std::monostate> finish() override {
+  Result<std::monostate> finish(std::stop_token /*stop*/ = {}) override {
     finished = true;
     return Result<std::monostate>::ok({});
   }

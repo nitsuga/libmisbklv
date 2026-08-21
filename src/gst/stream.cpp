@@ -136,10 +136,10 @@ Result<std::monostate> KlvSink::emit(const Message& m) {
   return inserter_->push(std::move(*bytes), m.pts());
 }
 
-Result<std::monostate> KlvSink::close() {
+Result<std::monostate> KlvSink::close(std::stop_token stop) {
   if (!inserter_)
     return Result<std::monostate>::err(open_error_.value_or(Error::Backend));
-  return inserter_->finish();
+  return inserter_->finish(std::move(stop));
 }
 
 }  // namespace misbklv

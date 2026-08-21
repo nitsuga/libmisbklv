@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <stop_token>
 #include <system_error>
 #include <memory>
 #include <string>
@@ -20,6 +21,11 @@ namespace {
 // A stall guard, not a performance budget: finish may need to remux the rest of
 // a video file after the caller's final KLV packet.
 inline constexpr GstClockTime kFinishDrainTimeout = 300 * GST_SECOND;
+
+// How long each drain poll blocks before the loop re-checks its stop token and
+// deadline. Short enough that a cancellation takes effect promptly (the whole
+// point of threading a stop_token in — ADR 0032), long enough not to spin.
+inline constexpr GstClockTime kFinishDrainPoll = 100 * GST_MSECOND;
 
 }  // namespace
 
@@ -180,7 +186,7 @@ class GstInserter : public Inserter {
   // unlinking/releasing the pad so the mux can EOS from KLV alone. File
   // sources propagate demuxer EOS. In both cases the pipeline drains through
   // mpegtsmux until EOS or kFinishDrainTimeout.
-  Result<std::monostate> finish() override {
+  Result<std::monostate> finish(std::stop_token stop) override {
     gst_app_src_end_of_stream(GST_APP_SRC(appsrc_));
     // Only truly unbounded live sources need immediate unlink; finite
     // live (pipeline: with num-buffers) will EOS on its own after its buffers
@@ -201,18 +207,30 @@ class GstInserter : public Inserter {
     // Live branches can emit transient not-linked errors when we inject EOS
     // or unlink; those are not terminal — keep waiting for a clean EOS.
     bool ok = false;
+    bool cancelled = false;
     const auto deadline = std::chrono::steady_clock::now() +
                           std::chrono::nanoseconds(kFinishDrainTimeout);
+    // Cap each poll short so a cancellation is noticed promptly rather than
+    // after a full second of blocking. A realtime file replay drains its video
+    // at wall-clock speed, so this loop is where a Ctrl-C arriving after the
+    // last KLV packet has to take effect — otherwise it is ignored until EOS
+    // (ADR 0032). The deadline check already lived here; the stop check joins it.
     while (std::chrono::steady_clock::now() < deadline) {
+      if (stop.stop_requested()) {
+        cancelled = true;
+        break;
+      }
       auto remain = std::chrono::duration_cast<std::chrono::nanoseconds>(
                         deadline - std::chrono::steady_clock::now())
                         .count();
-      GstClockTime poll = remain > GST_SECOND ? GST_SECOND : static_cast<GstClockTime>(remain);
+      GstClockTime poll = remain > kFinishDrainPoll
+                              ? kFinishDrainPoll
+                              : static_cast<GstClockTime>(remain);
       GstMessage* m = gst_bus_timed_pop_filtered(
           bus, poll,
           static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
       if (!m) {
-        // poll timeout — check deadline
+        // poll timeout — re-check stop and deadline
         continue;
       }
       if (GST_MESSAGE_TYPE(m) == GST_MESSAGE_EOS) {
@@ -238,7 +256,7 @@ class GstInserter : public Inserter {
       gst_message_unref(m);
       break;
     }
-    if (!ok) {
+    if (!ok && !cancelled) {
       bool timed_out = std::chrono::steady_clock::now() >= deadline;
       if (timed_out)
         g_warning("misbklv: pipeline did not drain within %" G_GUINT64_FORMAT
@@ -247,12 +265,18 @@ class GstInserter : public Inserter {
     }
     gst_object_unref(bus);
     gst_element_set_state(pipeline_, GST_STATE_NULL);
+    // Three outcomes: a clean EOS keeps the output; a caller cancellation and a
+    // drain failure both discard any partial sink file (ADR 0022 — no output
+    // unless the session succeeded). Cancellation is a caller request, not a
+    // backend fault, so it returns ok — matching extract()'s cooperative-stop
+    // convention (ADR 0019). A cancelled file sink therefore leaves no
+    // half-written output, and a cancelled live sink simply stops.
     if (ok)
       removable_sink_.clear();
     else
       discard_output();
-    return ok ? Result<std::monostate>::ok({})
-              : Result<std::monostate>::err(Error::Backend);
+    if (ok || cancelled) return Result<std::monostate>::ok({});
+    return Result<std::monostate>::err(Error::Backend);
   }
 
  private:
