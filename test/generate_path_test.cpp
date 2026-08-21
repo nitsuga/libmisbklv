@@ -323,20 +323,25 @@ static std::size_t count_sei(const std::vector<std::byte>& payload) {
 // ADR 0033), so a single-encoder test is blind to whichever encoder is not
 // installed. The caller enumerates every encoder present.
 static void test_lagging_pipeline_one_encoder(const char* enc) {
-  const std::string desc = "pipeline:videotestsrc num-buffers=90 ! videoconvert ! video/x-raw,width=320,height=240,framerate=30/1 ! " + std::string(enc) + " ! h264parse";
+  // Start at 3 s so this catches treating set_min_pts as a fixed offset. The
+  // encoder adjustment is min_pts - first_input_pts; the matching KLV remains
+  // on the source's 3 s running-time timeline.
+  const std::string desc = "pipeline:videotestsrc num-buffers=90 timestamp-offset=3000000000 ! videoconvert ! video/x-raw,width=320,height=240,framerate=30/1 ! " + std::string(enc) + " ! h264parse";
   const std::string label = std::string("[") + enc + "] lagging pipeline";
   const std::string out = "/tmp/generate_lagging_test.ts";
   std::filesystem::remove(out);
   auto be = make_gst_backend();
   auto ins_res = be->open_insert({ "file:" + out, true, desc, Sei0604::Generate });
   if (!ins_res) {
-    std::printf("  SKIP %s: open_insert failed %d\n", label.c_str(), (int)ins_res.error());
+    check(false, (label + " open_insert").c_str());
+    std::printf("  %s: open_insert failed %d\n", label.c_str(), (int)ins_res.error());
     return;
   }
   auto& ins = *ins_res;
   // Push 90 KLV packets in a tight burst: each pts 33 ms apart, sensor ts aligned.
-  // This creates >1 s KLV-vs-video lead immediately (video is still near pts 0).
+  // This creates >1 s KLV-vs-video lead immediately (video is still near 3 s).
   constexpr std::uint64_t kBaseUs = 1'600'000'000'000'000ULL;
+  constexpr std::int64_t kPtsBaseNs = 3'000'000'000;
   constexpr std::int64_t kStepNs = 33'333'333;
   const int kFrames = 90;
   std::vector<std::vector<std::byte>> pkts;
@@ -345,7 +350,7 @@ static void test_lagging_pipeline_one_encoder(const char* enc) {
     pkts.push_back(make_packet(ts));
   }
   for (int i=0;i<kFrames;++i){
-    std::int64_t pts = static_cast<std::int64_t>(i) * kStepNs;
+    std::int64_t pts = kPtsBaseNs + static_cast<std::int64_t>(i) * kStepNs;
     auto r = ins->push(pkts[i], pts);
     if (!r) { check(false, (label + " push").c_str()); std::printf(" push %d failed %d\n", i, (int)r.error()); break; }
     // Small delay to let video advance but still keep >1 s lead for future pushes.

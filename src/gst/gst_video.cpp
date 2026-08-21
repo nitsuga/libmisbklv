@@ -23,13 +23,6 @@ namespace {
 inline constexpr std::chrono::seconds kVideoPadTimeout{10};
 inline constexpr std::chrono::seconds kLivePadTimeout{5};
 inline constexpr std::uint64_t kPtsMatchToleranceNs = 200'000'000;
-// DTS-headroom shift some H.264 encoders apply to their whole output timeline
-// via gst_video_encoder_set_min_pts(GST_SECOND * 60 * 60 * 1000) so the first
-// DTS stays non-negative — x264enc and avenc_h264, unconditionally, since
-// GStreamer 1.6 (bug 731351 / commits 698714fc, 43d6ca85; openh264enc does not
-// opt in). The matcher absorbs it when detected — see ADR 0033.
-inline constexpr std::uint64_t kEncoderDtsHeadroomNs = 1000ULL * 60 * 60 *
-                                                        GST_SECOND;
 // A direct-space miss must exceed this before the shifted space is even
 // tried: far above any legitimate KLV-vs-video timing skew (the match
 // tolerance is two orders smaller), far below the headroom shift itself.
@@ -227,20 +220,33 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad* pad,
                                               GstPadProbeInfo* info,
                                               gpointer user);
 
-GstPadProbeReturn on_sei_codec_caps_probe(GstPad*, GstPadProbeInfo* info,
-                                            gpointer user) {
+GstPadProbeReturn on_sei_event_probe(GstPad*, GstPadProbeInfo* info,
+                                     gpointer user) {
   auto* ctx = static_cast<VideoCtx*>(user);
   GstEvent* event = GST_PAD_PROBE_INFO_EVENT(info);
-  if (!event || GST_EVENT_TYPE(event) != GST_EVENT_CAPS) return GST_PAD_PROBE_OK;
-  GstCaps* caps = nullptr;
-  gst_event_parse_caps(event, &caps);
-  latch_codec_from_caps(*ctx, caps);
+  if (!event) return GST_PAD_PROBE_OK;
+  if (GST_EVENT_TYPE(event) == GST_EVENT_CAPS) {
+    GstCaps* caps = nullptr;
+    gst_event_parse_caps(event, &caps);
+    latch_codec_from_caps(*ctx, caps);
+  } else if (GST_EVENT_TYPE(event) == GST_EVENT_SEGMENT) {
+    const GstSegment* segment = nullptr;
+    gst_event_parse_segment(event, &segment);
+    if (segment && segment->format == GST_FORMAT_TIME) {
+      std::lock_guard<std::mutex> lock(ctx->timestamp_mu);
+      gst_segment_copy_into(segment, &ctx->video_segment);
+      ctx->have_video_segment = true;
+      // Re-detect after a discontinuity or renegotiation: the new segment may
+      // describe a different timeline (or even a different encoder branch).
+      ctx->use_segment_timeline = false;
+    }
+  }
   return GST_PAD_PROBE_OK;
 }
 
 void attach_generate_probes(GstPad* pad, VideoCtx* ctx) {
   gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM,
-                    on_sei_codec_caps_probe, ctx, nullptr);
+                    on_sei_event_probe, ctx, nullptr);
   gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_BUFFER,
                     on_h264_buffer_inject_sei, ctx, nullptr);
 }
@@ -272,15 +278,13 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad* pad, GstPadProbeInfo* info,
   //
   // The caller's KLV PTS and the video branch's raw buffer PTS are expected to
   // share one timeline. Encoders that opt into gst_video_encoder_set_min_pts()
-  // (x264enc, avenc_h264 — since GStreamer 1.6) shift their whole output
-  // timeline forward by kEncoderDtsHeadroomNs so the first DTS stays non-
-  // negative, which silently breaks that shared-timeline assumption (every
-  // frame misses, and the eviction below then wipes the map). On a miss too
-  // large to be a timing skew, retry in the shifted space; once it matches,
-  // latch the shifted space for the session — match and eviction below both
-  // read `key_ns` thereafter. A direct hit never latches, and every candidate
-  // obeys the same backward-only tolerance window, so pipelines whose
-  // timelines already agree behave exactly as before (ADR 0033).
+  // (x264enc, avenc_h264 — since GStreamer 1.6) shift their output onto a
+  // 1000-hour minimum so the first DTS stays non-negative. The adjustment is
+  // min_pts - first_input_pts, not a fixed 1000 hours, and is reflected in the
+  // downstream segment. On a miss too large to be ordinary timing skew, retry
+  // at the segment-derived running time; once it matches, latch that space for
+  // the segment. A direct hit never latches, so pipelines whose timelines
+  // already agree behave exactly as before (ADR 0033).
   const std::uint64_t pts_ns = GST_BUFFER_PTS(buffer);
   SensorTime sensor_time;
   bool matched = false;
@@ -297,10 +301,23 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad* pad, GstPadProbeInfo* info,
       }
       return false;
     };
+    const auto segment_running_time = [&]() -> GstClockTime {
+      if (!ctx->have_video_segment) return GST_CLOCK_TIME_NONE;
+      return gst_segment_to_running_time(&ctx->video_segment, GST_FORMAT_TIME,
+                                         pts_ns);
+    };
     std::uint64_t key_ns = pts_ns;
-    if (ctx->encoder_pts_shift) {
-      key_ns = pts_ns - kEncoderDtsHeadroomNs;
-      matched = match_at(key_ns);
+    bool have_key = true;
+    if (ctx->use_segment_timeline) {
+      const GstClockTime running_time = segment_running_time();
+      if (GST_CLOCK_TIME_IS_VALID(running_time)) {
+        key_ns = running_time;
+        matched = match_at(key_ns);
+      } else {
+        // Do not evict on a raw, known-wrong encoded timestamp while waiting
+        // for a usable segment after a discontinuity.
+        have_key = false;
+      }
     } else if (match_at(pts_ns)) {
       matched = true;
     } else {
@@ -312,11 +329,17 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad* pad, GstPadProbeInfo* info,
           nearest == ctx->pts_to_sensor_timestamp.begin()
               ? UINT64_MAX
               : pts_ns - std::prev(nearest)->first;
-      if (dist > kPtsShiftDetectThresholdNs &&
-          pts_ns >= kEncoderDtsHeadroomNs) {
-        key_ns = pts_ns - kEncoderDtsHeadroomNs;
-        matched = match_at(key_ns);
-        ctx->encoder_pts_shift = matched;
+      if (dist > kPtsShiftDetectThresholdNs) {
+        const GstClockTime running_time = segment_running_time();
+        if (GST_CLOCK_TIME_IS_VALID(running_time)) {
+          key_ns = running_time;
+          matched = match_at(key_ns);
+          ctx->use_segment_timeline = matched;
+        } else {
+          // The raw key is already known to be in the wrong space. Preserve
+          // the map until a usable segment or direct-space frame arrives.
+          have_key = false;
+        }
       }
     }
     // Consumer-side eviction: entries older than key_ns - tolerance can never
@@ -326,7 +349,7 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad* pad, GstPadProbeInfo* info,
     // video never arriving, entries accumulate until consumed — inherent, as
     // the data may still be needed. (key_ns, not raw pts_ns: on a shift-
     // detected branch the map lives on the caller's unshifted timeline.)
-    if (key_ns >= kPtsMatchToleranceNs) {
+    if (have_key && key_ns >= kPtsMatchToleranceNs) {
       const std::uint64_t threshold = key_ns - kPtsMatchToleranceNs;
       auto eit = ctx->pts_to_sensor_timestamp.begin();
       while (eit != ctx->pts_to_sensor_timestamp.end() && eit->first < threshold)
