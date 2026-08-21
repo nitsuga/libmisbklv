@@ -43,6 +43,27 @@ std::string caps_media_type(GstCaps* caps) {
   return name ? std::string(name) : std::string();
 }
 
+enum class CapsCodec { Unknown, H264, KnownNonH264 };
+
+CapsCodec caps_codec(GstCaps* caps) {
+  if (!caps || gst_caps_is_empty(caps) || gst_caps_is_any(caps))
+    return CapsCodec::Unknown;
+  GstStructure* s = gst_caps_get_structure(caps, 0);
+  if (!s) return CapsCodec::Unknown;
+  if (gst_structure_has_name(s, "video/x-h264")) return CapsCodec::H264;
+  const gchar* n = gst_structure_get_name(s);
+  if (n && std::strncmp(n, "video/", 6) == 0) return CapsCodec::KnownNonH264;
+  return CapsCodec::Unknown;
+}
+
+void latch_codec_from_caps(VideoCtx& ctx, GstCaps* caps) {
+  const CapsCodec c = caps_codec(caps);
+  if (c == CapsCodec::H264)
+    ctx.codec_latch.store(CodecLatch::IsH264, std::memory_order_relaxed);
+  else if (c == CapsCodec::KnownNonH264)
+    ctx.codec_latch.store(CodecLatch::NotH264, std::memory_order_relaxed);
+}
+
 const char* demuxer_for_media_type(const std::string& type) {
   // This used to be parsebin's job. parsebin decides a stream is fully parsed
   // by asking whether any decoder in the registry accepts its caps — a decoder
@@ -202,12 +223,7 @@ GstPadProbeReturn on_sei_codec_caps_probe(GstPad*, GstPadProbeInfo* info,
   if (!event || GST_EVENT_TYPE(event) != GST_EVENT_CAPS) return GST_PAD_PROBE_OK;
   GstCaps* caps = nullptr;
   gst_event_parse_caps(event, &caps);
-  if (!caps || gst_caps_is_empty(caps) || gst_caps_is_any(caps))
-    return GST_PAD_PROBE_OK;
-  GstStructure* s = gst_caps_get_structure(caps, 0);
-  const bool is_h264 = s && gst_structure_has_name(s, "video/x-h264");
-  ctx->codec_latch.store(is_h264 ? CodecLatch::IsH264 : CodecLatch::NotH264,
-                         std::memory_order_relaxed);
+  latch_codec_from_caps(*ctx, caps);
   return GST_PAD_PROBE_OK;
 }
 
@@ -227,20 +243,13 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad* pad, GstPadProbeInfo* info,
   if (latch == CodecLatch::NotH264) return GST_PAD_PROBE_OK;
   if (latch == CodecLatch::Unknown) {
     // No CAPS event seen yet — fall back to per-buffer query to preserve the
-    // defense against un-negotiated pads. Avoids string churn via
-    // gst_structure_has_name.
+    // defense against un-negotiated pads.
     if (pad) {
       GstCaps* caps = gst_pad_get_current_caps(pad);
       if (!caps) caps = gst_pad_query_caps(pad, nullptr);
-      if (caps) {
-        bool is_h264 = false;
-        if (!gst_caps_is_empty(caps) && !gst_caps_is_any(caps)) {
-          GstStructure* s = gst_caps_get_structure(caps, 0);
-          is_h264 = s && gst_structure_has_name(s, "video/x-h264");
-        }
-        gst_caps_unref(caps);
-        if (!is_h264) return GST_PAD_PROBE_OK;
-      }
+      const bool is_h264 = caps_codec(caps) == CapsCodec::H264;
+      if (caps) gst_caps_unref(caps);
+      if (!is_h264) return GST_PAD_PROBE_OK;
     }
   }
   GstBuffer* buffer = GST_PAD_PROBE_INFO_BUFFER(info);
@@ -261,6 +270,18 @@ GstPadProbeReturn on_h264_buffer_inject_sei(GstPad* pad, GstPadProbeInfo* info,
         sensor_time = it->second;
         matched = true;
       }
+    }
+    // Consumer-side eviction: entries older than pts_ns - tolerance can never
+    // match a future frame under monotonic video PTS, so they are safe to
+    // discard. This bounds the map by the actual KLV-vs-video lead, not by a
+    // wall-clock guess. If Generate is on and KLV is pushed far ahead with
+    // video never arriving, entries accumulate until consumed — inherent, as
+    // the data may still be needed.
+    if (pts_ns >= kPtsMatchToleranceNs) {
+      const std::uint64_t threshold = pts_ns - kPtsMatchToleranceNs;
+      auto eit = ctx->pts_to_sensor_timestamp.begin();
+      while (eit != ctx->pts_to_sensor_timestamp.end() && eit->first < threshold)
+        eit = ctx->pts_to_sensor_timestamp.erase(eit);
     }
   }
   GstMapInfo map;
@@ -501,7 +522,12 @@ void on_video_pad_added(GstElement*, GstPad* pad, gpointer user) {
     return;
   }
   ctx->linked = true;
-  if (ctx->generate_sei) attach_generate_probes(parse_src, ctx);
+  if (ctx->generate_sei) {
+    attach_generate_probes(parse_src, ctx);
+    // Prime latch from the already-known H.264 demuxer caps so the buffer probe
+    // does not stay Unknown when no further CAPS event arrives.
+    ctx->codec_latch.store(CodecLatch::IsH264, std::memory_order_relaxed);
+  }
   gst_object_unref(parse_src);
   ctx->cv.notify_all();
 }
@@ -743,7 +769,11 @@ void on_rtspsrc_pad_added(GstElement*, GstPad* pad, gpointer user) {
     std::lock_guard<std::mutex> lk(ctx->mu);
     ctx->linked = true;
   }
-  if (ctx->generate_sei && probe_pad) attach_generate_probes(probe_pad, ctx);
+  if (ctx->generate_sei && probe_pad) {
+    attach_generate_probes(probe_pad, ctx);
+    // Prime latch from the already-known H.264 RTSP caps.
+    ctx->codec_latch.store(CodecLatch::IsH264, std::memory_order_relaxed);
+  }
   if (probe_pad) gst_object_unref(probe_pad);
   {
     std::lock_guard<std::mutex> lk(ctx->mu);
@@ -784,16 +814,17 @@ void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt,
   const auto pts = static_cast<std::uint64_t>(pts_ns);
   std::lock_guard<std::mutex> lock(video.timestamp_mu);
   // Derive ST 0603 Time Status from absolute time against the media timeline.
-  // Prune entries that can never match a future frame: lookup is
-  // upper_bound(pts) minus kPtsMatchToleranceNs (200 ms) backward-only, so
-  // under the documented monotonic-push contract (backend.hpp: Push in
-  // increasing PTS order) any entry older than pts - tolerance is dead.
-  // Keep a 1 s window (5 * tolerance) as safety margin for laggy video
-  // that trails KLV by more than the match window but still needs a lookup;
-  // this still bounds the map to ~30 entries at 30 fps instead of growing
-  // without bound (~200 MB/24 h at 30 Hz). Out-of-order PTS pushes lose
-  // the accidental backward matches they previously got; matching was already
-  // backward-only best-effort.
+  // No producer-side pruning: the map is consumed by the video-pad SEI probe
+  // asynchronously, so KLV can be pushed more than a second ahead of the
+  // frames being processed (bursty push, clock-paced replay, encoder
+  // buffering). Eviction follows video-consumption progress in the SEI
+  // injection path (upper_bound(pts) lookup), where entries with key <
+  // frame_pts - kPtsMatchToleranceNs are discarded — under monotonic video
+  // PTS those can never match a future frame. This bounds the map by the
+  // actual KLV-vs-video lead (about one tolerance window at 30 fps) rather
+  // than a wall-clock guess. If Generate is on and KLV is pushed far ahead
+  // with video never arriving, entries accumulate until consumed — inherent,
+  // as the data may still be needed.
   SensorTime entry{sensor_timestamp_us, kTimeStatusBase};
   if (video.have_prev_push) {
     entry.status = sensor_time_status(
@@ -806,11 +837,6 @@ void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt,
   video.prev_push_pts_ns = pts;
   video.prev_push_ts_us = sensor_timestamp_us;
   video.pts_to_sensor_timestamp[pts] = entry;
-  constexpr std::uint64_t kPruneWindowNs = kPtsMatchToleranceNs * 5; // 1 s
-  while (!video.pts_to_sensor_timestamp.empty() &&
-         video.pts_to_sensor_timestamp.begin()->first + kPruneWindowNs < pts) {
-    video.pts_to_sensor_timestamp.erase(video.pts_to_sensor_timestamp.begin());
-  }
 }
 
 VideoSource parse_video_source(const std::string& raw) {
@@ -1104,24 +1130,16 @@ static Result<std::monostate> prepare_pipeline_branch(
       // probe then fast-paths on the latched value, falling back to a
       // per-buffer check only while Unknown. Unknown (ghost pad before
       // PLAYING) still attaches both probes so the buffer path stays safe.
+      // Prime the latch when caps are already negotiated to avoid staying
+      // Unknown and retaining the per-frame fallback query this fix removes.
       GstCaps* caps = gst_pad_get_current_caps(srcpad);
       if (!caps) caps = gst_pad_query_caps(srcpad, nullptr);
-      bool is_h264 = false;
-      bool is_known_non_h264 = false;
-      if (caps && !gst_caps_is_empty(caps) && !gst_caps_is_any(caps)) {
-        GstStructure* s = gst_caps_get_structure(caps, 0);
-        if (s) {
-          if (gst_structure_has_name(s, "video/x-h264")) is_h264 = true;
-          else {
-            const gchar* n = gst_structure_get_name(s);
-            if (n && std::strncmp(n, "video/", 6) == 0) is_known_non_h264 = true;
-          }
-        }
-      }
+      const CapsCodec cc = caps_codec(caps);
       if (caps) gst_caps_unref(caps);
-      if (is_h264) {
+      if (cc == CapsCodec::H264) {
         attach_generate_probes(srcpad, video.get());
-      } else if (is_known_non_h264) {
+        video->codec_latch.store(CodecLatch::IsH264, std::memory_order_relaxed);
+      } else if (cc == CapsCodec::KnownNonH264) {
         g_warning("misbklv: Sei0604::Generate needs H.264 video; pipeline source carries non-H.264 caps — carrying through unstamped");
       } else {
         // Caps not yet negotiated (common for ghost pad before PLAYING).
