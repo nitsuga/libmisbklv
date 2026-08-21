@@ -410,6 +410,11 @@ int main(int argc, char** argv) {
   }
   std::printf("== pipeline H.265 Generate unstamped (non-H.264 regression) ==\n");
   {
+    const char* asan_opts_top = std::getenv("ASAN_OPTIONS");
+    if (asan_opts_top && std::strstr(asan_opts_top, "detect_leaks")) {
+      std::printf("  SKIP pipeline H.265 Generate: under ASAN (x265 LSAN leak at x265_encoder_open, ASAN_OPTIONS=%s)\n", asan_opts_top);
+      check(true, "pipeline H.265 Generate skipped (ASAN)");
+    } else {
     // Regression for 9fcf8de: pipeline Generate with non-H.264 (x265enc ! h265parse)
     // must not corrupt the bitstream by injecting H.264 SEI. The fix gates the
     // probe on H.264 caps and otherwise carries through unstamped.
@@ -540,31 +545,17 @@ int main(int argc, char** argv) {
                 check(!found, "pipeline H.265 Generate no H.264 SEI (MISPmicrosectime) in video ES");
                 if (found) std::printf("  FAIL: H.264 SEI leaked into HEVC — pre-fix would corrupt\n");
               }
-              // ASAN/LSAN guard: x265 can leak under LSAN, so skip HEVC decode when running
-              // under ASAN with leak detection. PMT and MISP checks above still run to
-              // validate stream_type 0x24.
-              const char* asan_opts = std::getenv("ASAN_OPTIONS");
-              bool under_asan = asan_opts && std::strstr(asan_opts, "detect_leaks=1");
-              // Fall back to broader check for any detect_leaks flag (e.g., detect_leaks without =1)
-              if (!under_asan && asan_opts && std::strstr(asan_opts, "detect_leaks")) {
-                under_asan = true;
-              }
-              if (under_asan) {
-                std::printf("  SKIP HEVC decode validation: under ASAN (x265 LSAN leak, ASAN_OPTIONS=%s)\n", asan_opts ? asan_opts : "");
-                check(true, "pipeline H.265 Generate video decode skipped (ASAN)");
+              int frames = 0; bool skipped = false; std::string derr;
+              bool ok = decode_hevc_frames(out, &frames, &skipped, &derr);
+              if (skipped) {
+                std::printf("  SKIP HEVC decode validation: no decoder (%s)\n", derr.c_str());
+                check(true, "pipeline H.265 Generate video decode skipped (no decoder)");
               } else {
-                int frames = 0; bool skipped = false; std::string derr;
-                bool ok = decode_hevc_frames(out, &frames, &skipped, &derr);
-                if (skipped) {
-                  std::printf("  SKIP HEVC decode validation: no decoder (%s)\n", derr.c_str());
-                  check(true, "pipeline H.265 Generate video decode skipped (no decoder)");
-                } else {
-                  std::printf("  HEVC decode: %d frames, ok=%d err='%s'\n", frames, (int)ok, derr.c_str());
-                  check(ok, "pipeline H.265 Generate video decode reaches EOS without error");
-                  check(frames > 0, "pipeline H.265 Generate video decode produced frames (>0)");
-                  if (!ok || frames == 0) {
-                    std::printf("  FAIL: HEVC decode failed — corrupted H.265 would error or produce 0 frames\n");
-                  }
+                std::printf("  HEVC decode: %d frames, ok=%d err='%s'\n", frames, (int)ok, derr.c_str());
+                check(ok, "pipeline H.265 Generate video decode reaches EOS without error");
+                check(frames > 0, "pipeline H.265 Generate video decode produced frames (>0)");
+                if (!ok || frames == 0) {
+                  std::printf("  FAIL: HEVC decode failed — corrupted H.265 would error or produce 0 frames\n");
                 }
               }
             }
@@ -572,6 +563,7 @@ int main(int argc, char** argv) {
           std::remove(out.c_str());
         }
       }
+    }
     }
   }
   std::printf("== pipeline grammar narrowed: tsdemux rejected ==\n");
