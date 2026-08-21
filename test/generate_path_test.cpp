@@ -190,13 +190,25 @@ static void test_codec_latch_initial() {
 }
 
 // ---- Pipeline lagging-video hermetic test ----
-static std::string pick_h264_encoder() {
-  const char* candidates[] = {"x264enc", "openh264enc", "avenc_h264"};
-  for (auto* n : candidates) {
-    GstElementFactory* f = gst_element_factory_find(n);
-    if (f) { gst_object_unref(f); return n; }
+static void test_lagging_pipeline_one_encoder(const char* enc);
+
+static void test_lagging_pipeline_hermetic() {
+  gst_init(nullptr,nullptr);
+  // Exercise every H.264 encoder present, not just the first pick — see the
+  // comment on test_lagging_pipeline_one_encoder.
+  bool any = false;
+  for (const char* name : {"x264enc", "openh264enc", "avenc_h264"}) {
+    GstElementFactory* f = gst_element_factory_find(name);
+    if (!f) continue;
+    gst_object_unref(f);
+    if (any) std::printf("  --\n");
+    any = true;
+    test_lagging_pipeline_one_encoder(name);
   }
-  return {};
+  if (!any) {
+    std::printf("== lagging-video pipeline hermetic ==\n");
+    std::printf("  SKIP: no H.264 encoder\n");
+  }
 }
 
 static std::vector<std::byte> read_file_bytes(const char* path) {
@@ -305,27 +317,31 @@ static std::size_t count_sei(const std::vector<std::byte>& payload) {
   return cnt;
 }
 
-static void test_lagging_pipeline_hermetic() {
-  std::printf("== lagging-video pipeline hermetic (burst KLV >1 s ahead) ==\n");
-  gst_init(nullptr,nullptr);
-  std::string enc = pick_h264_encoder();
-  if (enc.empty()) {
-    std::printf("  SKIP lagging pipeline: no H.264 encoder\n");
-    return;
-  }
-  const std::string desc = "pipeline:videotestsrc num-buffers=90 ! videoconvert ! video/x-raw,width=320,height=240,framerate=30/1 ! " + enc + " ! h264parse";
+// One hermetic 90-frame Generate run against a named encoder. Encoders differ
+// in output-timeline behavior (x264enc/avenc_h264 shift their whole output by
+// the gst_video_encoder_set_min_pts DTS headroom; openh264enc does not —
+// ADR 0033), so a single-encoder test is blind to whichever encoder is not
+// installed. The caller enumerates every encoder present.
+static void test_lagging_pipeline_one_encoder(const char* enc) {
+  // Start at 3 s so this catches treating set_min_pts as a fixed offset. The
+  // encoder adjustment is min_pts - first_input_pts; the matching KLV remains
+  // on the source's 3 s running-time timeline.
+  const std::string desc = "pipeline:videotestsrc num-buffers=90 timestamp-offset=3000000000 ! videoconvert ! video/x-raw,width=320,height=240,framerate=30/1 ! " + std::string(enc) + " ! h264parse";
+  const std::string label = std::string("[") + enc + "] lagging pipeline";
   const std::string out = "/tmp/generate_lagging_test.ts";
   std::filesystem::remove(out);
   auto be = make_gst_backend();
   auto ins_res = be->open_insert({ "file:" + out, true, desc, Sei0604::Generate });
   if (!ins_res) {
-    std::printf("  SKIP lagging pipeline: open_insert failed %d (encoder missing?)\n", (int)ins_res.error());
+    check(false, (label + " open_insert").c_str());
+    std::printf("  %s: open_insert failed %d\n", label.c_str(), (int)ins_res.error());
     return;
   }
   auto& ins = *ins_res;
   // Push 90 KLV packets in a tight burst: each pts 33 ms apart, sensor ts aligned.
-  // This creates >1 s KLV-vs-video lead immediately (video is still near pts 0).
+  // This creates >1 s KLV-vs-video lead immediately (video is still near 3 s).
   constexpr std::uint64_t kBaseUs = 1'600'000'000'000'000ULL;
+  constexpr std::int64_t kPtsBaseNs = 3'000'000'000;
   constexpr std::int64_t kStepNs = 33'333'333;
   const int kFrames = 90;
   std::vector<std::vector<std::byte>> pkts;
@@ -334,21 +350,21 @@ static void test_lagging_pipeline_hermetic() {
     pkts.push_back(make_packet(ts));
   }
   for (int i=0;i<kFrames;++i){
-    std::int64_t pts = static_cast<std::int64_t>(i) * kStepNs;
+    std::int64_t pts = kPtsBaseNs + static_cast<std::int64_t>(i) * kStepNs;
     auto r = ins->push(pkts[i], pts);
-    if (!r) { check(false, "lagging pipeline push"); std::printf(" push %d failed %d\n", i, (int)r.error()); break; }
+    if (!r) { check(false, (label + " push").c_str()); std::printf(" push %d failed %d\n", i, (int)r.error()); break; }
     // Small delay to let video advance but still keep >1 s lead for future pushes.
     if (i % 10 == 0) g_usleep(5000); // 5 ms per 10 packets
   }
   auto fr = ins->finish();
-  check(static_cast<bool>(fr), "lagging pipeline finish ok");
+  check(static_cast<bool>(fr), (label + " finish ok").c_str());
   if (!fr) { std::printf(" finish failed %d\n", (int)fr.error()); std::filesystem::remove(out); return; }
   auto bytes = read_file_bytes(out.c_str());
   std::printf("  output %zu bytes\n", bytes.size());
   auto es = read_pmt(bytes);
   unsigned vpid=0, vtype=0;
   for(auto &e: es){ if(e.stream_type==0x1B) {vpid=e.pid; vtype=e.stream_type;} }
-  check(vpid!=0, "lagging pipeline video PID present");
+  check(vpid!=0, (label + " video PID present").c_str());
   if (!vpid) { std::filesystem::remove(out); return; }
   std::printf("  video pid 0x%04x type 0x%02x\n", vpid, vtype);
   auto vpayload = extract_video_payload(bytes, vpid);
@@ -356,14 +372,14 @@ static void test_lagging_pipeline_hermetic() {
   std::printf("  SEI count %zu for %d frames\n", sei_cnt, kFrames);
   // Every frame should have an SEI when KLV is provided for every frame and tolerance is 200 ms.
   // With old producer prune, early frames would lose their SEI, so sei_cnt < kFrames.
-  check(sei_cnt == static_cast<std::size_t>(kFrames), "lagging pipeline every frame got SEI (no silent loss)");
+  check(sei_cnt == static_cast<std::size_t>(kFrames), (label + " every frame got SEI (no silent loss)").c_str());
   if (sei_cnt != static_cast<std::size_t>(kFrames)) {
-    std::fprintf(stderr, "  expected %d SEI, got %zu — indicates KLV pruned before use (the bug this test guards)\n", kFrames, sei_cnt);
+    std::fprintf(stderr, "  expected %d SEI, got %zu — indicates KLV pruned before use or a timeline mismatch (the bugs this test guards)\n", kFrames, sei_cnt);
   }
   // Also verify KLV byte-exact via extract
   std::vector<std::byte> back;
   auto er = be->extract(out, [&](const KlvPacket& kp){ back.insert(back.end(), kp.bytes.begin(), kp.bytes.end()); });
-  check(static_cast<bool>(er), "lagging pipeline extract ok");
+  check(static_cast<bool>(er), (label + " extract ok").c_str());
   std::vector<std::byte> sent;
   for(auto &p: pkts) sent.insert(sent.end(), p.begin(), p.end());
   if (back.size() != sent.size()) std::fprintf(stderr, "  KLV size mismatch sent %zu back %zu\n", sent.size(), back.size());
