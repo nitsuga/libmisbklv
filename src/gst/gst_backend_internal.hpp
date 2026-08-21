@@ -2,6 +2,7 @@
 // Private seams for the gstreamer backend. Not installed.
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <map>
@@ -45,6 +46,8 @@ struct VideoSource {
 
 VideoSource parse_video_source(const std::string& raw);
 
+enum class CodecLatch { Unknown, IsH264, NotH264 };
+
 struct VideoCtx {
   GstElement* pipeline = nullptr;  // for creating fakesinks
   // The muxer sink pad reserved for video while the pipeline was still NULL,
@@ -70,6 +73,7 @@ struct VideoCtx {
   std::uint64_t prev_push_pts_ns = 0;
   std::uint64_t prev_push_ts_us = 0;
   GstH264NalParser* h264_parser = nullptr;
+  std::atomic<CodecLatch> codec_latch{CodecLatch::Unknown};
 
   ~VideoCtx();
 };

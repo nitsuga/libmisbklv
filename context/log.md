@@ -2,6 +2,8 @@
 
 ## 2026-08-21
 
+* **perf: Generate-mode video path — latch SEI codec probe, bound timestamp map (#26)**: latched H.264 codec via atomic `CodecLatch` on a downstream CAPS event probe (`GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM`, `gst_structure_has_name` check) so the 30-60 fps SEI buffer probe fast-paths without per-frame `gst_pad_get_current_caps` + string churn; Unknown falls back to per-buffer caps query to keep un-negotiated-pad defense, and renegotiation re-latches. Pruned `pts_to_sensor_timestamp` to a 1 s sliding window (5× the 200 ms match tolerance) after each `record_sensor_timestamp` insert, bounding the map to ~30 entries at 30 Hz instead of growing without bound (~200 MB/24 h); relies on the documented monotonic-push contract, with out-of-order pushes losing accidental backward matches. Shared `attach_generate_probes` helper keeps file/RTSP/pipeline attach sites in sync; ADR 0024 behavior preserved. New `generate_path_test` bounds the map over 10k monotonic pushes. 27/27 CTest green.
+
 * **perf: zero-copy tag-2 read in record_sensor_timestamp (#25)**: replaced `Message::parse` heap allocation and full payload copy with `parse_packet` borrowed spans and `codec::decode` for tag 2, mirroring `Message::get<std::uint64_t>(2)` semantics exactly (registry lookup via `registry_by_key`, length validation, kind check). Live insert path now avoids per-packet copy. 26/26 CTest green.
 
 ## 2026-08-20
