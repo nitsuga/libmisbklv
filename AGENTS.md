@@ -98,6 +98,9 @@ So:
 
 ## Build / test / run
 
+Preferred: `cmake --preset release && cmake --build --preset release && ctest --test-dir build/release`
+(also `debug`, `sanitize` — see README.md's preset matrix; these are the same
+presets CI uses). Fallback without presets:
 `cmake -S . -B build && cmake --build build && ctest --test-dir build`.
 Normal builds consume committed generated fixtures and need no Python. Python
 3.11+ is needed only for the optional registry/fixture regeneration targets.

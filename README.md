@@ -69,12 +69,12 @@ target_link_libraries(app PRIVATE misbklv::gst)
 ## Build from source
 
 ```sh
-# Preferred — presets (CMake ≥ 3.25, CMakePresets.json v6):
+# Preferred — presets (CMake ≥ 3.21, CMakePresets.json v3; same presets CI uses):
 cmake --preset release          # or debug / sanitize
 cmake --build --preset release
 ctest --test-dir build/release
 # debug → build/debug (Debug + GStreamer ON); sanitize → build/sanitize
-# (Debug + MISBKLV_SANITIZE=ON, MISBKLV_GSTREAMER=OFF core-only, maps to CI build-san)
+# (Debug + MISBKLV_SANITIZE=ON, MISBKLV_GSTREAMER=OFF core-only)
 # Presets place builds under build/* and set jobs=6 via a hidden base (nproc 7 → 6).
 
 # Fallback without presets:

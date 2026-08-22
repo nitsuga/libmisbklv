@@ -22,14 +22,14 @@ jobs:
             gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
             gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
       - name: Configure
-        run: cmake -S . -B build
+        run: cmake --preset release
       - name: Build
-        run: cmake --build build
+        run: cmake --build --preset release
       - name: Test
         # --timeout names the test that hung; the job timeout above is the backstop.
-        run: ctest --test-dir build --output-on-failure --timeout 600
+        run: ctest --test-dir build/release --output-on-failure --timeout 600
       - name: Install
-        run: cmake --install build --prefix "$PWD/_install"
+        run: cmake --install build/release --prefix "$PWD/_install"
       - name: Consumer smoke test (find_package, core + gst component)
         # Builds a throwaway out-of-tree project against the install — catches
         # export/packaging gaps that a bare `cmake --install` cannot.
@@ -63,11 +63,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake g++
       - name: Configure (ASan + UBSan, no gstreamer)
-        run: cmake -S . -B build-san -DMISBKLV_SANITIZE=ON -DMISBKLV_GSTREAMER=OFF
+        run: cmake --preset sanitize
       - name: Build
-        run: cmake --build build-san
+        run: cmake --build --preset sanitize
       - name: Test under sanitizers
-        run: ctest --test-dir build-san --output-on-failure --timeout 600
+        run: ctest --test-dir build/sanitize --output-on-failure --timeout 600
         env:
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
           ASAN_OPTIONS: abort_on_error=1
