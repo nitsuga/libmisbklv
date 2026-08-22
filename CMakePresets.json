@@ -1,0 +1,93 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "displayName": "Base (hidden)",
+      "description": "Hidden base for shared defaults (MISBKLV_GSTREAMER=ON for full builds; sanitize overrides to OFF core-only per ci.yml)"
+    },
+    {
+      "name": "release",
+      "displayName": "Release",
+      "description": "Release build with GStreamer (default ON, optional dep per backend-scope.md; binaryDir: build/release)",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "MISBKLV_GSTREAMER": "ON"
+      }
+    },
+    {
+      "name": "default",
+      "displayName": "Default",
+      "description": "Default alias for release (Release, binaryDir: build/release)",
+      "inherits": "release"
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug",
+      "description": "Debug build with GStreamer (default ON; binaryDir: build/debug)",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "MISBKLV_GSTREAMER": "ON"
+      }
+    },
+    {
+      "name": "sanitize",
+      "displayName": "Sanitize (core-only)",
+      "description": "Sanitizer core-only build per ci.yml (Debug, MISBKLV_SANITIZE=ON + MISBKLV_GSTREAMER=OFF to avoid gstreamer ASan noise; binaryDir: build/sanitize — maps to CI's build-san)",
+      "inherits": "debug",
+      "binaryDir": "${sourceDir}/build/sanitize",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "MISBKLV_SANITIZE": "ON",
+        "MISBKLV_GSTREAMER": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "displayName": "Base build (hidden)",
+      "description": "Hidden base with jobs=6 (nproc=7 -> 6, nproc-1 to leave headroom) — inherited to keep jobs DRY",
+      "jobs": 6
+    },
+    {
+      "name": "release",
+      "displayName": "Release build",
+      "description": "Build release preset (jobs=6 via inherited base)",
+      "configurePreset": "release",
+      "inherits": "base"
+    },
+    {
+      "name": "default",
+      "displayName": "Default build",
+      "description": "Build default preset (jobs=6, nproc-1 to leave headroom; inherits base)",
+      "configurePreset": "default",
+      "inherits": "base"
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug build",
+      "description": "Build debug preset (jobs=6 via inherited base)",
+      "configurePreset": "debug",
+      "inherits": "base"
+    },
+    {
+      "name": "sanitize",
+      "displayName": "Sanitize build (core-only)",
+      "description": "Build sanitizer core-only preset per ci.yml (jobs=6 via inherited base)",
+      "configurePreset": "sanitize",
+      "inherits": "base"
+    }
+  ]
+}
