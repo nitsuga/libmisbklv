@@ -27,6 +27,12 @@ inline constexpr GstClockTime kFinishDrainTimeout = 300 * GST_SECOND;
 // point of threading a stop_token in — ADR 0032), long enough not to spin.
 inline constexpr GstClockTime kFinishDrainPoll = 100 * GST_MSECOND;
 
+// Bound on the wait for the pipeline to actually reach NULL at teardown. Large
+// enough that a healthy NULL transition (streaming threads joining) never trips
+// it, finite so a wedged element cannot hang teardown — or, post-ADR 0032, an
+// infinite block inside a cancellable finish().
+inline constexpr GstClockTime kNullQuiesceTimeout = 10 * GST_SECOND;
+
 }  // namespace
 
 // NOTE: make_sink intentionally lives at misbklv::detail scope (not in the
@@ -114,9 +120,7 @@ class GstInserter : public Inserter {
 
   ~GstInserter() override {
     if (pipeline_) {
-      // NULL joins streaming threads before video_ is destroyed, so pad-added
-      // callbacks and the SEI probe never observe a dangling user pointer.
-      gst_element_set_state(pipeline_, GST_STATE_NULL);
+      quiesce_to_null();
       gst_object_unref(pipeline_);
     }
     // An abandoned session has not produced output, only an unfinalized file.
@@ -264,13 +268,13 @@ class GstInserter : public Inserter {
                   static_cast<guint64>(kFinishDrainTimeout / GST_SECOND));
     }
     gst_object_unref(bus);
-    gst_element_set_state(pipeline_, GST_STATE_NULL);
     // Three outcomes: a clean EOS keeps the output; a caller cancellation and a
     // drain failure both discard any partial sink file (ADR 0022 — no output
     // unless the session succeeded). Cancellation is a caller request, not a
     // backend fault, so it returns ok — matching extract()'s cooperative-stop
     // convention (ADR 0019). A cancelled file sink therefore leaves no
     // half-written output, and a cancelled live sink simply stops.
+    quiesce_to_null();
     if (ok)
       removable_sink_.clear();
     else
@@ -280,6 +284,28 @@ class GstInserter : public Inserter {
   }
 
  private:
+  // Bring the pipeline to a fully quiesced NULL before VideoCtx is freed.
+  // Order is load-bearing for issue #57: sever the SEI probes first, so no
+  // streaming thread can re-enter on_h264_buffer_inject_sei / the CAPS probe
+  // (each holds a raw VideoCtx*) once teardown starts — gst_pad_remove_probe
+  // blocks until any in-flight callback returns. Then take the pipeline to NULL
+  // and *wait* for that transition to finish: set_state alone can return
+  // GST_STATE_CHANGE_ASYNC with streaming threads not yet joined, so we block on
+  // gst_element_get_state until NULL is actually reached — bounded by
+  // kNullQuiesceTimeout so a wedged element cannot hang teardown. Idempotent —
+  // finish() and the destructor both call it, and remove_sei_probes()/a repeated
+  // NULL are no-ops the second time.
+  void quiesce_to_null() {
+    if (!pipeline_) return;
+    if (video_) video_->remove_sei_probes();
+    gst_element_set_state(pipeline_, GST_STATE_NULL);
+    if (gst_element_get_state(pipeline_, nullptr, nullptr,
+                              kNullQuiesceTimeout) == GST_STATE_CHANGE_ASYNC)
+      g_warning("misbklv: pipeline did not reach NULL within %" G_GUINT64_FORMAT
+                "s of teardown; proceeding without confirmed quiesce",
+                static_cast<guint64>(kNullQuiesceTimeout / GST_SECOND));
+  }
+
   void discard_output() {
     // Called after NULL, when filesink has closed the path.
     if (removable_sink_.empty()) return;

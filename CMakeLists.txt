@@ -226,6 +226,20 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
   target_link_libraries(generate_path_test PRIVATE misbklv-gst)
   target_include_directories(generate_path_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/gst)
   add_test(NAME generate_path COMMAND generate_path_test)
+
+  # SEI-probe teardown use-after-free guard (issue #57): destroys the Inserter
+  # mid-stream so a probe is in flight at the VideoCtx free. Run under valgrind
+  # when present (deterministic UAF detection); bare otherwise (crash guard).
+  add_executable(teardown_probe_uaf_test test/teardown_probe_uaf_test.cpp)
+  target_link_libraries(teardown_probe_uaf_test PRIVATE misbklv-gst Threads::Threads)
+  find_program(VALGRIND_EXECUTABLE valgrind)
+  if(VALGRIND_EXECUTABLE)
+    add_test(NAME teardown_probe_uaf COMMAND ${VALGRIND_EXECUTABLE}
+      --error-exitcode=97 --leak-check=no --errors-for-leak-kinds=none
+      $<TARGET_FILE:teardown_probe_uaf_test> 8 200)
+  else()
+    add_test(NAME teardown_probe_uaf COMMAND teardown_probe_uaf_test 8 200)
+  endif()
 endif()
 
 # --- gst-free MPEG-TS KLV extractor (fork 12 / B3): 0x06 + 0x15 --------------

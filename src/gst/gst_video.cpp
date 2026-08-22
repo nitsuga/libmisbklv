@@ -245,10 +245,15 @@ GstPadProbeReturn on_sei_event_probe(GstPad*, GstPadProbeInfo* info,
 }
 
 void attach_generate_probes(GstPad* pad, VideoCtx* ctx) {
-  gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM,
-                    on_sei_event_probe, ctx, nullptr);
-  gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_BUFFER,
-                    on_h264_buffer_inject_sei, ctx, nullptr);
+  // Record each probe so teardown can sever it before ctx is freed (issue #57).
+  const gulong event_id =
+      gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM,
+                        on_sei_event_probe, ctx, nullptr);
+  ctx->register_sei_probe(pad, event_id);
+  const gulong buf_id =
+      gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_BUFFER,
+                        on_h264_buffer_inject_sei, ctx, nullptr);
+  ctx->register_sei_probe(pad, buf_id);
 }
 
 GstPadProbeReturn on_h264_buffer_inject_sei(GstPad* pad, GstPadProbeInfo* info,
@@ -855,7 +860,41 @@ void on_rtspsrc_pad_added(GstElement*, GstPad* pad, gpointer user) {
 
 }  // namespace
 
+void VideoCtx::register_sei_probe(GstPad* pad, gulong id) {
+  if (!pad || id == 0) return;
+  std::unique_lock<std::mutex> lk(probe_mu);
+  if (probes_severed) {
+    // Teardown already ran; a late live pad-added must not re-arm the race.
+    // Remove outside the lock — gst_pad_remove_probe blocks on any in-flight
+    // callback, and holding probe_mu across it is needless.
+    lk.unlock();
+    gst_pad_remove_probe(pad, id);
+    return;
+  }
+  gst_object_ref(pad);
+  sei_probes.emplace_back(pad, id);
+}
+
+void VideoCtx::remove_sei_probes() {
+  std::vector<std::pair<GstPad*, gulong>> probes;
+  {
+    std::lock_guard<std::mutex> lk(probe_mu);
+    probes_severed = true;
+    probes.swap(sei_probes);
+  }
+  // Outside the lock: gst_pad_remove_probe blocks until any running callback
+  // returns, and a callback that ever took probe_mu would otherwise deadlock.
+  for (const auto& [pad, id] : probes) {
+    gst_pad_remove_probe(pad, id);
+    gst_object_unref(pad);
+  }
+}
+
 VideoCtx::~VideoCtx() {
+  // Belt to the caller's braces: the pipeline should already be NULL and the
+  // probes severed by the time we get here, but severing again is idempotent
+  // and guards a VideoCtx freed on a path that skipped GstInserter teardown.
+  remove_sei_probes();
   if (h264_parser) gst_h264_nal_parser_free(h264_parser);
 }
 

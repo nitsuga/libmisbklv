@@ -159,6 +159,43 @@ from item 2.
   describes the timestamp being carried, and those frames all carry the same
   timestamp, so they all report it.
 
+# Teardown: SEI probe lifetime (parrot-to-klv#57)
+
+`Generate` attaches two pad probes — a downstream-event probe
+(`on_sei_event_probe`, handling CAPS and SEGMENT) and a per-buffer probe
+(`on_h264_buffer_inject_sei`) — each handed a raw `VideoCtx*` as user data. Both
+run on the GStreamer
+**streaming thread** and dereference the ctx (the buffer probe also locks its
+`timestamp_mu`). Only ordering keeps that pointer valid: freeing `VideoCtx` while
+a probe is in flight is a use-after-free.
+
+The original teardown left this to an unstated guarantee — the probes were never
+removed, and `~VideoCtx` freed the ctx relying on `set_state(NULL)` having
+already quiesced the streaming threads. `set_state(NULL)` can return
+`GST_STATE_CHANGE_ASYNC` with threads not yet joined, so the guarantee did not
+hold; parrot-to-klv#57 was the resulting crash — the probe callbacks reading and
+writing a freed `VideoCtx` on the streaming thread, reproduced deterministically
+under Valgrind memcheck (the `live_rtp` CI flake never faulted under ASAN because
+that suite always tears down after EOS/drain, with no probe in flight at the
+free).
+
+Teardown now orders shutdown explicitly in `GstInserter::quiesce_to_null`, run
+from both `~GstInserter` and `finish()`:
+
+1. **Sever the probes first.** `VideoCtx::remove_sei_probes()` calls
+   `gst_pad_remove_probe`, which blocks until any in-flight callback returns, and
+   latches `probes_severed` so a late live pad-added cannot re-arm one.
+2. **Then `set_state(NULL)` and wait** on `gst_element_get_state` — bounded by a
+   finite timeout so a wedged element cannot hang teardown (nor, post-ADR 0032,
+   an infinite block inside a cancellable `finish()`) — so the transition is
+   actually reached, streaming threads joined, before `VideoCtx` is freed.
+
+`~VideoCtx` also calls `remove_sei_probes()` idempotently, so a ctx freed on any
+path that bypassed `GstInserter` teardown still cannot leave a probe holding a
+dangling pointer. `remove_sei_probes` calls `gst_pad_remove_probe` outside
+`probe_mu`, and the callbacks never hold `probe_mu` across their own body, so
+severing cannot deadlock against an in-flight probe.
+
 # Citations
 
 [1] [`0020`](./0020-video-passthrough.md) — the passthrough contract this
