@@ -11,6 +11,8 @@
 #include <span>
 #include <stop_token>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <gst/gst.h>
 #define GST_USE_UNSTABLE_API
@@ -82,6 +84,29 @@ struct VideoCtx {
   GstSegment video_segment{};
   bool have_video_segment = false;
   bool use_segment_timeline = false;
+
+  // SEI-injection probes (the CAPS-event and buffer probes attach_generate_probes
+  // arms). Each holds a raw `VideoCtx*` as its user data, so a probe callback
+  // that fires after this VideoCtx is freed is a use-after-free — the deferred
+  // heap corruption behind issue #57. We record every probe as it is armed and
+  // sever them all deterministically at teardown, before the pipeline goes NULL
+  // and before this object is destroyed, rather than relying on set_state(NULL)
+  // to have quiesced the streaming threads first. Each entry owns a ref on its
+  // pad so remove stays valid mid-teardown; guarded by `probe_mu`.
+  std::mutex probe_mu;
+  std::vector<std::pair<GstPad*, gulong>> sei_probes;
+  bool probes_severed = false;
+
+  // Record a just-armed probe. Refs `pad`. Thread-safe: pad-added callbacks arm
+  // probes on streaming threads while teardown runs on the caller's. If teardown
+  // has already severed, the probe is removed immediately here so a late live
+  // pad cannot re-arm the race.
+  void register_sei_probe(GstPad* pad, gulong id);
+  // Remove every recorded probe and drop the pad refs, then mark severed.
+  // gst_pad_remove_probe blocks until any in-flight callback returns, so after
+  // this call no probe callback can be running or start — safe to free the ctx.
+  // Idempotent.
+  void remove_sei_probes();
 
   ~VideoCtx();
 };

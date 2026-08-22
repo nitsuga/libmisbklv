@@ -114,9 +114,7 @@ class GstInserter : public Inserter {
 
   ~GstInserter() override {
     if (pipeline_) {
-      // NULL joins streaming threads before video_ is destroyed, so pad-added
-      // callbacks and the SEI probe never observe a dangling user pointer.
-      gst_element_set_state(pipeline_, GST_STATE_NULL);
+      quiesce_to_null();
       gst_object_unref(pipeline_);
     }
     // An abandoned session has not produced output, only an unfinalized file.
@@ -264,13 +262,13 @@ class GstInserter : public Inserter {
                   static_cast<guint64>(kFinishDrainTimeout / GST_SECOND));
     }
     gst_object_unref(bus);
-    gst_element_set_state(pipeline_, GST_STATE_NULL);
     // Three outcomes: a clean EOS keeps the output; a caller cancellation and a
     // drain failure both discard any partial sink file (ADR 0022 — no output
     // unless the session succeeded). Cancellation is a caller request, not a
     // backend fault, so it returns ok — matching extract()'s cooperative-stop
     // convention (ADR 0019). A cancelled file sink therefore leaves no
     // half-written output, and a cancelled live sink simply stops.
+    quiesce_to_null();
     if (ok)
       removable_sink_.clear();
     else
@@ -280,6 +278,25 @@ class GstInserter : public Inserter {
   }
 
  private:
+  // Sever the SEI probes, then take the pipeline to NULL, before VideoCtx is
+  // freed. The probe severing is what closes the issue #57 use-after-free:
+  // remove_sei_probes() calls gst_pad_remove_probe, which blocks until any
+  // in-flight callback returns, so once teardown starts no streaming thread can
+  // re-enter on_h264_buffer_inject_sei / the CAPS probe (each holds a raw
+  // VideoCtx*). We do NOT wait on gst_element_get_state after set_state(NULL):
+  // that wait is unnecessary for #57 (severing already satisfies the memcheck
+  // control) and only restores the original teardown timing. A non-probe
+  // streaming-thread access after an async NULL transition (e.g. a late
+  // pad-added) remains a known, pre-existing residual — it predates this fix and
+  // is tracked on parrot-to-klv#57, not scoped here. Idempotent: finish() and
+  // the destructor both call it, and remove_sei_probes()/a repeated NULL are
+  // no-ops the second time.
+  void quiesce_to_null() {
+    if (!pipeline_) return;
+    if (video_) video_->remove_sei_probes();
+    gst_element_set_state(pipeline_, GST_STATE_NULL);
+  }
+
   void discard_output() {
     // Called after NULL, when filesink has closed the path.
     if (removable_sink_.empty()) return;

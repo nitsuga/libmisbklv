@@ -187,6 +187,12 @@ is trivially revisited if a consumer needs it (link non-video pads too).
   `realtime` with video) is out of scope and currently rejected.
 - **Only the first video stream is carried.** Multi-video sources are rare here;
   if one matters, the choice of *which* stream would need to enter the API.
+- **Teardown must sever the probes when one is attached.** Under
+  `Generate` ([`0024`](./0024-sei-generation-opt-in.md)) the passthrough branch
+  carries SEI pad probes holding a raw `VideoCtx*`; disposing the pipeline must
+  sever those probes (a blocking `gst_pad_remove_probe`) before `VideoCtx` is
+  freed, or the streaming thread races the free (parrot-to-klv#57). See 0024 §
+  *Teardown: SEI probe lifetime*.
 - **The video ES is no longer byte-identical (2026-07-27,
   [`0023`](./0023-st0604-sei-passthrough.md)):** this design's "parsed, never
   decoded" property still holds — no transcode — but H.264 passthrough now

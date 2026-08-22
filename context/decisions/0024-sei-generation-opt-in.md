@@ -159,6 +159,64 @@ from item 2.
   describes the timestamp being carried, and those frames all carry the same
   timestamp, so they all report it.
 
+# Teardown: SEI probe lifetime (parrot-to-klv#57)
+
+`Generate` attaches two pad probes — a downstream-event probe
+(`on_sei_event_probe`, handling CAPS and SEGMENT) and a per-buffer probe
+(`on_h264_buffer_inject_sei`) — each handed a raw `VideoCtx*` as user data. Both
+run on the GStreamer
+**streaming thread** and dereference the ctx (the buffer probe also locks its
+`timestamp_mu`). Only ordering keeps that pointer valid: freeing `VideoCtx` while
+a probe is in flight is a use-after-free.
+
+The original teardown left this to an unstated guarantee — the probes were never
+removed, and `~VideoCtx` freed the ctx relying on `set_state(NULL)` having
+already quiesced the streaming threads. `set_state(NULL)` can return
+`GST_STATE_CHANGE_ASYNC` with threads not yet joined, so the guarantee did not
+hold; parrot-to-klv#57 was the resulting crash — the probe callbacks reading and
+writing a freed `VideoCtx` on the streaming thread, reproduced deterministically
+under Valgrind memcheck (the `live_rtp` CI flake never faulted under ASAN because
+that suite always tears down after EOS/drain, with no probe in flight at the
+free).
+
+Teardown now severs the probes explicitly in `GstInserter::quiesce_to_null`, run
+from both `~GstInserter` and `finish()`:
+
+1. **Sever the probes.** `VideoCtx::remove_sei_probes()` calls
+   `gst_pad_remove_probe`, which blocks until any in-flight callback returns, and
+   latches `probes_severed` so a late live pad-added cannot re-arm one. This is
+   what deterministically closes the SEI-probe use-after-free: once it returns,
+   no streaming thread can be running or start a probe callback, so the raw
+   `VideoCtx*` those callbacks hold can never be dereferenced after the free.
+2. **Then `set_state(NULL)`** — but we do *not* wait on `gst_element_get_state`
+   for the transition to complete. Waiting is unnecessary for this fix: the
+   probe severing above already satisfies the Valgrind memcheck control, and the
+   wait only reproduces the original teardown timing.
+
+Because we don't wait, `set_state(NULL)` can still return
+`GST_STATE_CHANGE_ASYNC` with a streaming thread not yet joined. That thread can
+no longer touch `VideoCtx` through a *probe* (they're severed), but a **non-probe**
+access — for example a late pad-added handler dereferencing the ctx after an
+async NULL — remains possible. This is a **known, pre-existing residual**: it
+predates this fix (the original teardown had the same window) and it is out of
+scope for parrot-to-klv#57, which is specifically the probe use-after-free. A
+residual heap-corruption flake at roughly the pre-existing baseline rate *has*
+been observed during `Generate` live teardown (glibc `tcache_thread_shutdown`
+signature, detected at a worker thread's exit), but it has **not** been
+attributed to this specific window: the captured cores carry no project,
+GStreamer, or plugin frames at fault time, and candidate causes include upstream
+encoder/GStreamer teardown races as much as this path. It is tracked on
+parrot-to-klv#57 rather than closed here. In particular, this ADR does **not**
+claim teardown reaches
+`GST_STATE_NULL` before `VideoCtx` is freed — that was exactly the unstated
+guarantee the original teardown got wrong.
+
+`~VideoCtx` also calls `remove_sei_probes()` idempotently, so a ctx freed on any
+path that bypassed `GstInserter` teardown still cannot leave a probe holding a
+dangling pointer. `remove_sei_probes` calls `gst_pad_remove_probe` outside
+`probe_mu`, and the callbacks never hold `probe_mu` across their own body, so
+severing cannot deadlock against an in-flight probe.
+
 # Citations
 
 [1] [`0020`](./0020-video-passthrough.md) — the passthrough contract this
