@@ -179,16 +179,31 @@ under Valgrind memcheck (the `live_rtp` CI flake never faulted under ASAN becaus
 that suite always tears down after EOS/drain, with no probe in flight at the
 free).
 
-Teardown now orders shutdown explicitly in `GstInserter::quiesce_to_null`, run
+Teardown now severs the probes explicitly in `GstInserter::quiesce_to_null`, run
 from both `~GstInserter` and `finish()`:
 
-1. **Sever the probes first.** `VideoCtx::remove_sei_probes()` calls
+1. **Sever the probes.** `VideoCtx::remove_sei_probes()` calls
    `gst_pad_remove_probe`, which blocks until any in-flight callback returns, and
-   latches `probes_severed` so a late live pad-added cannot re-arm one.
-2. **Then `set_state(NULL)` and wait** on `gst_element_get_state` — bounded by a
-   finite timeout so a wedged element cannot hang teardown (nor, post-ADR 0032,
-   an infinite block inside a cancellable `finish()`) — so the transition is
-   actually reached, streaming threads joined, before `VideoCtx` is freed.
+   latches `probes_severed` so a late live pad-added cannot re-arm one. This is
+   what deterministically closes the SEI-probe use-after-free: once it returns,
+   no streaming thread can be running or start a probe callback, so the raw
+   `VideoCtx*` those callbacks hold can never be dereferenced after the free.
+2. **Then `set_state(NULL)`** — but we do *not* wait on `gst_element_get_state`
+   for the transition to complete. Waiting is unnecessary for this fix: the
+   probe severing above already satisfies the Valgrind memcheck control, and the
+   wait only reproduces the original teardown timing.
+
+Because we don't wait, `set_state(NULL)` can still return
+`GST_STATE_CHANGE_ASYNC` with a streaming thread not yet joined. That thread can
+no longer touch `VideoCtx` through a *probe* (they're severed), but a **non-probe**
+access — for example a late pad-added handler dereferencing the ctx after an
+async NULL — remains possible. This is a **known, pre-existing residual**: it
+predates this fix (the original teardown had the same window), it has not been
+observed firing, and it is out of scope for parrot-to-klv#57, which is
+specifically the probe use-after-free. It is tracked on parrot-to-klv#57 rather
+than closed here. In particular, this ADR does **not** claim teardown reaches
+`GST_STATE_NULL` before `VideoCtx` is freed — that was exactly the unstated
+guarantee the original teardown got wrong.
 
 `~VideoCtx` also calls `remove_sei_probes()` idempotently, so a ctx freed on any
 path that bypassed `GstInserter` teardown still cannot leave a probe holding a

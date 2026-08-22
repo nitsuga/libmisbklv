@@ -93,8 +93,12 @@ int main(int argc, char** argv) {
   // If no pipeline ever opened (no H.264 encoder on this host) the teardown path
   // was never exercised — report skip rather than a false pass.
   if (opened == 0) {
+    // Name the missing element so a plugin regression on CI surfaces as a
+    // visible skip rather than a silent pass: this host lacks the openh264enc
+    // (gstreamer1.0-plugins-bad) the pipeline above needs.
     std::fprintf(stderr,
-                 "  SKIP: no H.264 encoder pipeline could be opened\n");
+                 "  SKIP: no H.264 encoder pipeline could be opened "
+                 "(openh264enc / gstreamer1.0-plugins-bad missing)\n");
     return 0;
   }
   std::fprintf(stderr, "  ok: %d mid-stream teardowns, no crash\n", torn);

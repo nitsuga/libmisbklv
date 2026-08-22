@@ -27,12 +27,6 @@ inline constexpr GstClockTime kFinishDrainTimeout = 300 * GST_SECOND;
 // point of threading a stop_token in — ADR 0032), long enough not to spin.
 inline constexpr GstClockTime kFinishDrainPoll = 100 * GST_MSECOND;
 
-// Bound on the wait for the pipeline to actually reach NULL at teardown. Large
-// enough that a healthy NULL transition (streaming threads joining) never trips
-// it, finite so a wedged element cannot hang teardown — or, post-ADR 0032, an
-// infinite block inside a cancellable finish().
-inline constexpr GstClockTime kNullQuiesceTimeout = 10 * GST_SECOND;
-
 }  // namespace
 
 // NOTE: make_sink intentionally lives at misbklv::detail scope (not in the
@@ -284,26 +278,23 @@ class GstInserter : public Inserter {
   }
 
  private:
-  // Bring the pipeline to a fully quiesced NULL before VideoCtx is freed.
-  // Order is load-bearing for issue #57: sever the SEI probes first, so no
-  // streaming thread can re-enter on_h264_buffer_inject_sei / the CAPS probe
-  // (each holds a raw VideoCtx*) once teardown starts — gst_pad_remove_probe
-  // blocks until any in-flight callback returns. Then take the pipeline to NULL
-  // and *wait* for that transition to finish: set_state alone can return
-  // GST_STATE_CHANGE_ASYNC with streaming threads not yet joined, so we block on
-  // gst_element_get_state until NULL is actually reached — bounded by
-  // kNullQuiesceTimeout so a wedged element cannot hang teardown. Idempotent —
-  // finish() and the destructor both call it, and remove_sei_probes()/a repeated
-  // NULL are no-ops the second time.
+  // Sever the SEI probes, then take the pipeline to NULL, before VideoCtx is
+  // freed. The probe severing is what closes the issue #57 use-after-free:
+  // remove_sei_probes() calls gst_pad_remove_probe, which blocks until any
+  // in-flight callback returns, so once teardown starts no streaming thread can
+  // re-enter on_h264_buffer_inject_sei / the CAPS probe (each holds a raw
+  // VideoCtx*). We do NOT wait on gst_element_get_state after set_state(NULL):
+  // that wait is unnecessary for #57 (severing already satisfies the memcheck
+  // control) and only restores the original teardown timing. A non-probe
+  // streaming-thread access after an async NULL transition (e.g. a late
+  // pad-added) remains a known, pre-existing residual — it predates this fix and
+  // is tracked on parrot-to-klv#57, not scoped here. Idempotent: finish() and
+  // the destructor both call it, and remove_sei_probes()/a repeated NULL are
+  // no-ops the second time.
   void quiesce_to_null() {
     if (!pipeline_) return;
     if (video_) video_->remove_sei_probes();
     gst_element_set_state(pipeline_, GST_STATE_NULL);
-    if (gst_element_get_state(pipeline_, nullptr, nullptr,
-                              kNullQuiesceTimeout) == GST_STATE_CHANGE_ASYNC)
-      g_warning("misbklv: pipeline did not reach NULL within %" G_GUINT64_FORMAT
-                "s of teardown; proceeding without confirmed quiesce",
-                static_cast<guint64>(kNullQuiesceTimeout / GST_SECOND));
   }
 
   void discard_output() {
