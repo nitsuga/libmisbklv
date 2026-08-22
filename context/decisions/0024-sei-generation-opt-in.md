@@ -198,10 +198,16 @@ Because we don't wait, `set_state(NULL)` can still return
 no longer touch `VideoCtx` through a *probe* (they're severed), but a **non-probe**
 access — for example a late pad-added handler dereferencing the ctx after an
 async NULL — remains possible. This is a **known, pre-existing residual**: it
-predates this fix (the original teardown had the same window), it has not been
-observed firing, and it is out of scope for parrot-to-klv#57, which is
-specifically the probe use-after-free. It is tracked on parrot-to-klv#57 rather
-than closed here. In particular, this ADR does **not** claim teardown reaches
+predates this fix (the original teardown had the same window) and it is out of
+scope for parrot-to-klv#57, which is specifically the probe use-after-free. A
+residual heap-corruption flake at roughly the pre-existing baseline rate *has*
+been observed during `Generate` live teardown (glibc `tcache_thread_shutdown`
+signature, detected at a worker thread's exit), but it has **not** been
+attributed to this specific window: the captured cores carry no project,
+GStreamer, or plugin frames at fault time, and candidate causes include upstream
+encoder/GStreamer teardown races as much as this path. It is tracked on
+parrot-to-klv#57 rather than closed here. In particular, this ADR does **not**
+claim teardown reaches
 `GST_STATE_NULL` before `VideoCtx` is freed — that was exactly the unstated
 guarantee the original teardown got wrong.
 
