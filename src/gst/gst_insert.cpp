@@ -20,7 +20,7 @@ namespace {
 
 // A stall guard, not a performance budget: finish may need to remux the rest of
 // a video file after the caller's final KLV packet.
-inline constexpr GstClockTime kFinishDrainTimeout = 300 * GST_SECOND;
+inline constexpr GstClockTime kFinishDrainTimeout = 2 * GST_SECOND;
 
 // How long each drain poll blocks before the loop re-checks its stop token and
 // deadline. Short enough that a cancellation takes effect promptly (the whole
@@ -186,15 +186,17 @@ class GstInserter : public Inserter {
   // mpegtsmux until EOS or kFinishDrainTimeout.
   Result<std::monostate> finish(std::stop_token stop) override {
     gst_app_src_end_of_stream(GST_APP_SRC(appsrc_));
-    // D1 discriminator (parrot-to-klv#57): defer live-pad unlink +
-    // release_request_pad until after the pipeline has reached NULL.
-    // The original mid-PLAYING release (now deferred below) is the
-    // suspected heap-corruption trigger. Leaving the pad linked during
-    // the drain means mpegtsmux may wait on the still-open live sink pad
-    // and time out after kFinishDrainTimeout — that is intentional for
-    // this branch; we prefer a clean NULL teardown over early unlink
-    // while PLAYING. Only unbounded live sources would have triggered
-    // the early path; finite live (num-buffers) EOSes on its own.
+    // D1-drop discriminator (parrot-to-klv#57): drop the mid-PLAYING
+    // gst_pad_unlink + gst_element_release_request_pad entirely.
+    // The original mid-PLAYING release is the suspected heap-corruption
+    // trigger. The previous D1-defer variant moved it after
+    // quiesce_to_null() but left the pad linked during the drain, so
+    // mpegtsmux waited for EOS on the still-open live sink pad and
+    // deterministically hit kFinishDrainTimeout ("pipeline did not drain
+    // within 5s", suite failed every run). The drop variant accepts that
+    // the reserved pad stays linked until pipeline destruction (unref in
+    // NULL teardown) — this avoids the mid-PLAYING release window without
+    // requiring EOS from the live pad and without a post-NULL unlink race.
     GstBus* bus = gst_element_get_bus(pipeline_);
     // Live branches can emit transient not-linked errors when we inject EOS
     // or unlink; those are not terminal — keep waiting for a clean EOS.
@@ -263,21 +265,13 @@ class GstInserter : public Inserter {
     // convention (ADR 0019). A cancelled file sink therefore leaves no
     // half-written output, and a cancelled live sink simply stops.
     quiesce_to_null();
-    // D1: deferred live-pad teardown — now that quiesce_to_null has set
-    // the pipeline to NULL and waited for it, it is safe to unlink and
-    // release the reserved request pad without racing the streaming thread.
-    // Guarded for idempotency so the dtor's quiesce and a second finish()
-    // are harmless. Dropping this block entirely would also be a valid
-    // D1 variant (accepting a drain timeout for live sources).
-    if (video_ && video_->reserved_video_pad && video_->mux_element) {
-      GstPad* peer = gst_pad_get_peer(video_->reserved_video_pad);
-      if (peer) {
-        gst_pad_unlink(peer, video_->reserved_video_pad);
-        gst_object_unref(peer);
-      }
-      gst_element_release_request_pad(video_->mux_element, video_->reserved_video_pad);
-      video_->reserved_video_pad = nullptr;
-    }
+    // D1-drop: no deferred unlink/release. The reserved pad stays linked
+    // until pipeline teardown (gst_object_unref(pipeline_) in ~GstInserter
+    // after quiesce_to_null()). This avoids the mid-PLAYING
+    // gst_pad_unlink + release_request_pad race without introducing a
+    // post-NULL unlink that still blocks the drain on EOS (previous
+    // D1-defer variant deterministically timed out: mpegtsmux waited for
+    // EOS on the still-linked live pad). Dropped entirely — see NOTE.md.
     if (ok)
       removable_sink_.clear();
     else
@@ -294,15 +288,18 @@ class GstInserter : public Inserter {
   // re-enter on_h264_buffer_inject_sei / the CAPS probe (each holds a raw
   // VideoCtx*).
   //
-  // D1 discriminator change: unlike main, we DO wait on
-  // gst_element_get_state after set_state(NULL) so that the deferred
-  // release_request_pad in finish() happens only after the pipeline has
-  // fully reached NULL. Main intentionally avoids this wait — it is
-  // unnecessary for #57 (severing already satisfies the memcheck control)
+  // D1-drop discriminator change: unlike main, we DO wait on
+  // gst_element_get_state after set_state(NULL) with GST_CLOCK_TIME_NONE
+  // so that teardown does not race with the streaming thread still in
+  // PLAYING. Main intentionally avoids this wait — it is unnecessary for
+  // #57 (remove_sei_probes() already blocks until in-flight probes return)
   // and only restores the original timing. Here the wait is the test:
   // if the residual corruption is caused by the mid-PLAYING
-  // unlink/release racing with the streaming thread, deferring + waiting
-  // should eliminate it.
+  // unlink/release racing with the streaming thread, dropping that
+  // unlink/release entirely + waiting for NULL should eliminate it.
+  // The previous D1-defer variant also waited but additionally did a
+  // deferred unlink/release after NULL, which deterministically blocked
+  // the drain (mpegtsmux waited for EOS on the still-linked pad).
   //
   // A non-probe streaming-thread access after an async NULL transition
   // (e.g. a late pad-added) remains a known, pre-existing residual — it
@@ -313,8 +310,10 @@ class GstInserter : public Inserter {
     if (!pipeline_) return;
     if (video_) video_->remove_sei_probes();
     gst_element_set_state(pipeline_, GST_STATE_NULL);
-    // D1: synchronously wait for NULL so the deferred
-    // release_request_pad does not race with PLAYING state.
+    // D1-drop: synchronously wait for NULL so any in-flight streaming-
+    // thread work completes before pipeline destruction. This is the
+    // essential D1 discriminator (avoids racing PLAYING); unlike main
+    // we MUST wait. Use GST_CLOCK_TIME_NONE to fully quiesce.
     GstState cur = GST_STATE_VOID_PENDING;
     GstState pending = GST_STATE_VOID_PENDING;
     gst_element_get_state(pipeline_, &cur, &pending, GST_CLOCK_TIME_NONE);
