@@ -186,21 +186,15 @@ class GstInserter : public Inserter {
   // mpegtsmux until EOS or kFinishDrainTimeout.
   Result<std::monostate> finish(std::stop_token stop) override {
     gst_app_src_end_of_stream(GST_APP_SRC(appsrc_));
-    // Only truly unbounded live sources need immediate unlink; finite
-    // live (pipeline: with num-buffers) will EOS on its own after its buffers
-    // are consumed, and early unlinks break the KLV timeline (file sink got
-    // 0 bytes). So gate on is_live_unbounded.
-    if (video_ && video_->is_live && video_->is_live_unbounded && video_->reserved_video_pad) {
-      GstPad* peer = gst_pad_get_peer(video_->reserved_video_pad);
-      if (peer) {
-        gst_pad_unlink(peer, video_->reserved_video_pad);
-        gst_object_unref(peer);
-      }
-      if (video_->mux_element) {
-        gst_element_release_request_pad(video_->mux_element, video_->reserved_video_pad);
-        video_->reserved_video_pad = nullptr;
-      }
-    }
+    // D1 discriminator (parrot-to-klv#57): defer live-pad unlink +
+    // release_request_pad until after the pipeline has reached NULL.
+    // The original mid-PLAYING release (now deferred below) is the
+    // suspected heap-corruption trigger. Leaving the pad linked during
+    // the drain means mpegtsmux may wait on the still-open live sink pad
+    // and time out after kFinishDrainTimeout — that is intentional for
+    // this branch; we prefer a clean NULL teardown over early unlink
+    // while PLAYING. Only unbounded live sources would have triggered
+    // the early path; finite live (num-buffers) EOSes on its own.
     GstBus* bus = gst_element_get_bus(pipeline_);
     // Live branches can emit transient not-linked errors when we inject EOS
     // or unlink; those are not terminal — keep waiting for a clean EOS.
@@ -269,6 +263,21 @@ class GstInserter : public Inserter {
     // convention (ADR 0019). A cancelled file sink therefore leaves no
     // half-written output, and a cancelled live sink simply stops.
     quiesce_to_null();
+    // D1: deferred live-pad teardown — now that quiesce_to_null has set
+    // the pipeline to NULL and waited for it, it is safe to unlink and
+    // release the reserved request pad without racing the streaming thread.
+    // Guarded for idempotency so the dtor's quiesce and a second finish()
+    // are harmless. Dropping this block entirely would also be a valid
+    // D1 variant (accepting a drain timeout for live sources).
+    if (video_ && video_->reserved_video_pad && video_->mux_element) {
+      GstPad* peer = gst_pad_get_peer(video_->reserved_video_pad);
+      if (peer) {
+        gst_pad_unlink(peer, video_->reserved_video_pad);
+        gst_object_unref(peer);
+      }
+      gst_element_release_request_pad(video_->mux_element, video_->reserved_video_pad);
+      video_->reserved_video_pad = nullptr;
+    }
     if (ok)
       removable_sink_.clear();
     else
@@ -283,18 +292,32 @@ class GstInserter : public Inserter {
   // remove_sei_probes() calls gst_pad_remove_probe, which blocks until any
   // in-flight callback returns, so once teardown starts no streaming thread can
   // re-enter on_h264_buffer_inject_sei / the CAPS probe (each holds a raw
-  // VideoCtx*). We do NOT wait on gst_element_get_state after set_state(NULL):
-  // that wait is unnecessary for #57 (severing already satisfies the memcheck
-  // control) and only restores the original teardown timing. A non-probe
-  // streaming-thread access after an async NULL transition (e.g. a late
-  // pad-added) remains a known, pre-existing residual — it predates this fix and
-  // is tracked on parrot-to-klv#57, not scoped here. Idempotent: finish() and
-  // the destructor both call it, and remove_sei_probes()/a repeated NULL are
-  // no-ops the second time.
+  // VideoCtx*).
+  //
+  // D1 discriminator change: unlike main, we DO wait on
+  // gst_element_get_state after set_state(NULL) so that the deferred
+  // release_request_pad in finish() happens only after the pipeline has
+  // fully reached NULL. Main intentionally avoids this wait — it is
+  // unnecessary for #57 (severing already satisfies the memcheck control)
+  // and only restores the original timing. Here the wait is the test:
+  // if the residual corruption is caused by the mid-PLAYING
+  // unlink/release racing with the streaming thread, deferring + waiting
+  // should eliminate it.
+  //
+  // A non-probe streaming-thread access after an async NULL transition
+  // (e.g. a late pad-added) remains a known, pre-existing residual — it
+  // predates this fix and is tracked on parrot-to-klv#57, not scoped here.
+  // Idempotent: finish() and the destructor both call it, and
+  // remove_sei_probes()/a repeated NULL are no-ops the second time.
   void quiesce_to_null() {
     if (!pipeline_) return;
     if (video_) video_->remove_sei_probes();
     gst_element_set_state(pipeline_, GST_STATE_NULL);
+    // D1: synchronously wait for NULL so the deferred
+    // release_request_pad does not race with PLAYING state.
+    GstState cur = GST_STATE_VOID_PENDING;
+    GstState pending = GST_STATE_VOID_PENDING;
+    gst_element_get_state(pipeline_, &cur, &pending, GST_CLOCK_TIME_NONE);
   }
 
   void discard_output() {
