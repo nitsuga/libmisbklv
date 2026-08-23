@@ -95,7 +95,69 @@ updated to explain the intentional divergence from `main`.
 
 Diff remains isolated to the worktree; `main` checkout untouched.
 
-## Build verification (done)
+## Refinement — skip EOS drain for unbounded live (2026-08-23)
+
+`D1-drop` alone still failed deterministically, but now for the same structural
+reason as `D1-defer`: with the reserved pad left linked, `mpegtsmux` waits for
+EOS on the still-open live sink pad. `finish()` injected `gst_app_src_end_of_stream()`
+for KLV then bus-waited for `EOS` up to `kFinishDrainTimeout=2s`. That wait
+hit the 2 s timeout every run on any unbounded live path:
+
+- `live_rtp_test` `test_continuous_live` uses `pipeline:videotestsrc is-live=true`
+  (no `num-buffers` → `is_live_unbounded=true`) with `run_duration=2s` and
+  `file:` sink. The timeout made `finish()` return `Backend` (`continuous live_ingest failed: 6`)
+  and emitted `pipeline did not drain within 2s of EOS; giving up`.
+- `test_indefinite_live_until_sigint` (`run_duration=nullopt`, interrupted after
+  500 ms) waited the full 2 s in `finish()`, so elapsed was `~2510 ms want ~500`
+  and failed even though the mux never needed to drain.
+
+Suite therefore failed every run on *drain*, not heap corruption — UAF was
+closed (0/30+ with `MALLOC_PERTURB_=165`, vs 4/250 baseline) but the test
+harness could not pass.
+
+Chosen refinement (minimal, keeps the UAF fix — no mid-PLAYING `release_request_pad`):
+
+```cpp
+const bool live_unbounded = video_ && video_->is_live_unbounded;
+bool ok = false, cancelled = false;
+if (live_unbounded) {
+  // No drain wait: live branch never EOS, mux would block until timeout.
+  // Treat KLV EOS injection as success; still honor stop_requested.
+  if (stop.stop_requested()) cancelled = true; else ok = true;
+} else {
+  // existing GstBus EOS/ERROR wait with kFinishDrainPoll / kFinishDrainTimeout
+}
+quiesce_to_null(); // still synchronously waits for NULL (GST_CLOCK_TIME_NONE)
+```
+
+- For `is_live_unbounded` the 2 s bus wait is skipped entirely → `continuous`
+  finishes in ~2.3 s (deadline, not deadline+2 s) and `indefinite` in ~500 ms.
+  The warning `pipeline did not drain within 2s` is no longer emitted for live,
+  and the `2s timeout treated as success` behaviour is explicit (option b would
+  have been warning→ok, option a is skip — skip is cleaner and also fixes the
+  elapsed budget).
+- Bounded live (`pipeline:… num-buffers=30`, `is_live_unbounded=false`) still
+  drains normally and must see `EOS` because `videotestsrc` will EOS after 30
+  buffers; file sources also still drain through `mpegtsmux` until EOS.
+- KLV-only and non-live paths unchanged.
+
+Alternative considered: keep the 2 s wait but make the warning non-fatal for
+live (return `ok` on timeout). That would keep the UAF fix but still add 2 s
+to every indefinite run and miss the `want ~500` budget — so skip is correct.
+Adjusting the test expectation (`500 ms vs 2510 ms`) is unnecessary when the
+wait itself is the bug.
+
+Smoke verified in this task:
+
+```bash
+cmake --preset release --fresh && cmake --build --preset release  # worktree, all targets OK
+# parrot build against worktree:
+cmake -S . -B /tmp/parrot-d1-test -DFETCHCONTENT_SOURCE_DIR_MISBKLV=/tmp/opencode/d1-reorder
+cmake --build /tmp/parrot-d1-test --target live_rtp_test
+MALLOC_PERTURB_=165 timeout 30 /tmp/parrot-d1-test/live_rtp_test test/fixtures  # → live_rtp_test: all ok, 507 ms indefinite, 2322 ms continuous
+```
+
+## Build verification (done, refined)
 
 ```bash
 git worktree add /tmp/opencode/d1-reorder -b d1-reorder-teardown main
@@ -105,9 +167,14 @@ cmake --build --preset release        # all targets OK (misbklv + misbklv-gst + 
 ```
 
 Build verified 2026-08-23 in worktree after the drop edit — all targets compile.
+Re-built and smoke-tested 2026-08-23 after the live-unbounded drain refinement
+(see above): `live_rtp_test` under `MALLOC_PERTURB_=165` is now `all ok`
+(continuous + indefinite both pass, no `did not drain within 2s`). No tcache/
+malloc errors.
 
-No functional tests run here per instructions; previous D1-defer failed
-deterministically on `pipeline did not drain within Xs` before the drop fix.
+No long 250× stress loops run per instructions; previous `D1-defer` and the
+unrefined `D1-drop` both failed deterministically on `pipeline did not drain
+within 2s` before the refinement.
 
 ## How to test (not run — for the operator)
 
@@ -132,8 +199,8 @@ MALLOC_CHECK_=3 parallel --lb ctest --test-dir build/release ::: {1..250}
 Compare:
 
 * **main:** expected to show residual `MALLOC_CHECK_` aborts / `free(): invalid pointer` / `double free` at some low but non-zero rate (the residual tracked on #57).
-* **D1-drop:** if hypothesis holds, the same 250× `MALLOC_CHECK_=3` loop should be **clean** (no heap errors). If corruption persists, D1 falsifies the mid-PLAYING pad-release hypothesis.
-* **D1-defer (historical):** deterministically hit `pipeline did not drain within 2s` and failed the suite every run — do not use; superseded by D1-drop.
+* **D1-drop (refined, current):** if hypothesis holds, the same 250× `MALLOC_CHECK_=3` loop should be **clean** (no heap errors) *and* `live_rtp_test` should be `all ok` (no drain timeout). If corruption persists, D1 falsifies the mid-PLAYING pad-release hypothesis.
+* **D1-drop (unrefined) / D1-defer (historical):** deterministically hit `pipeline did not drain within 2s` and failed the suite every run — do not use; superseded by the refined D1-drop that skips the drain for `is_live_unbounded`.
 
 ## Cleanup
 

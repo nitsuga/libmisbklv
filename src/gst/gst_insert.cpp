@@ -197,67 +197,88 @@ class GstInserter : public Inserter {
     // the reserved pad stays linked until pipeline destruction (unref in
     // NULL teardown) — this avoids the mid-PLAYING release window without
     // requiring EOS from the live pad and without a post-NULL unlink race.
-    GstBus* bus = gst_element_get_bus(pipeline_);
-    // Live branches can emit transient not-linked errors when we inject EOS
-    // or unlink; those are not terminal — keep waiting for a clean EOS.
+    //
+    // Refinement (drain handling): for unbounded live (is_live_unbounded)
+    // the EOS drain is skipped entirely. The reserved pad stays linked per
+    // D1-drop, so mpegtsmux would wait forever for EOS on that pad and the
+    // 2s timeout deterministically fires ("pipeline did not drain within 2s",
+    // "continuous live_ingest failed: 6", "indefinite elapsed 2510 ms want
+    // ~500"). Skipping the wait (or treating the timeout as success) keeps
+    // the UAF fix (no mid-PLAYING release) while making the suite pass;
+    // bounded live (num-buffers) still drains normally.
+    const bool live_unbounded = video_ && video_->is_live_unbounded;
     bool ok = false;
     bool cancelled = false;
-    const auto deadline = std::chrono::steady_clock::now() +
-                          std::chrono::nanoseconds(kFinishDrainTimeout);
-    // Cap each poll short so a cancellation is noticed promptly rather than
-    // after a full second of blocking. A realtime file replay drains its video
-    // at wall-clock speed, so this loop is where a Ctrl-C arriving after the
-    // last KLV packet has to take effect — otherwise it is ignored until EOS
-    // (ADR 0032). The deadline check already lived here; the stop check joins it.
-    while (std::chrono::steady_clock::now() < deadline) {
-      if (stop.stop_requested()) {
+    if (live_unbounded) {
+      // No drain wait: the live video branch never EOS, so the mux would
+      // block until kFinishDrainTimeout every time. Treat injected KLV EOS
+      // as success and go straight to quiesce. Still honor a pre-requested
+      // stop as cancellation.
+      if (stop.stop_requested())
         cancelled = true;
-        break;
-      }
-      auto remain = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        deadline - std::chrono::steady_clock::now())
-                        .count();
-      GstClockTime poll = remain > kFinishDrainPoll
-                              ? kFinishDrainPoll
-                              : static_cast<GstClockTime>(remain);
-      GstMessage* m = gst_bus_timed_pop_filtered(
-          bus, poll,
-          static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
-      if (!m) {
-        // poll timeout — re-check stop and deadline
-        continue;
-      }
-      if (GST_MESSAGE_TYPE(m) == GST_MESSAGE_EOS) {
+      else
         ok = true;
-        gst_message_unref(m);
-        break;
-      }
-      // ERROR
-      GError* err = nullptr;
-      gchar* dbg = nullptr;
-      gst_message_parse_error(m, &err, &dbg);
-      const bool is_not_linked = dbg && std::strstr(dbg, "not-linked");
-      if (is_not_linked) {
+    } else {
+      GstBus* bus = gst_element_get_bus(pipeline_);
+      // Live branches can emit transient not-linked errors when we inject EOS
+      // or unlink; those are not terminal — keep waiting for a clean EOS.
+      const auto deadline = std::chrono::steady_clock::now() +
+                            std::chrono::nanoseconds(kFinishDrainTimeout);
+      // Cap each poll short so a cancellation is noticed promptly rather than
+      // after a full second of blocking. A realtime file replay drains its video
+      // at wall-clock speed, so this loop is where a Ctrl-C arriving after the
+      // last KLV packet has to take effect — otherwise it is ignored until EOS
+      // (ADR 0032). The deadline check already lived here; the stop check joins it.
+      while (std::chrono::steady_clock::now() < deadline) {
+        if (stop.stop_requested()) {
+          cancelled = true;
+          break;
+        }
+        auto remain = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                          deadline - std::chrono::steady_clock::now())
+                          .count();
+        GstClockTime poll = remain > kFinishDrainPoll
+                                ? kFinishDrainPoll
+                                : static_cast<GstClockTime>(remain);
+        GstMessage* m = gst_bus_timed_pop_filtered(
+            bus, poll,
+            static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
+        if (!m) {
+          // poll timeout — re-check stop and deadline
+          continue;
+        }
+        if (GST_MESSAGE_TYPE(m) == GST_MESSAGE_EOS) {
+          ok = true;
+          gst_message_unref(m);
+          break;
+        }
+        // ERROR
+        GError* err = nullptr;
+        gchar* dbg = nullptr;
+        gst_message_parse_error(m, &err, &dbg);
+        const bool is_not_linked = dbg && std::strstr(dbg, "not-linked");
+        if (is_not_linked) {
+          if (err) g_error_free(err);
+          g_free(dbg);
+          gst_message_unref(m);
+          continue;
+        }
+        g_warning("misbklv: pipeline error during finish: %s",
+                  err ? err->message : "unknown");
         if (err) g_error_free(err);
         g_free(dbg);
         gst_message_unref(m);
-        continue;
+        break;
       }
-      g_warning("misbklv: pipeline error during finish: %s",
-                err ? err->message : "unknown");
-      if (err) g_error_free(err);
-      g_free(dbg);
-      gst_message_unref(m);
-      break;
+      if (!ok && !cancelled) {
+        bool timed_out = std::chrono::steady_clock::now() >= deadline;
+        if (timed_out)
+          g_warning("misbklv: pipeline did not drain within %" G_GUINT64_FORMAT
+                    "s of EOS; giving up",
+                    static_cast<guint64>(kFinishDrainTimeout / GST_SECOND));
+      }
+      gst_object_unref(bus);
     }
-    if (!ok && !cancelled) {
-      bool timed_out = std::chrono::steady_clock::now() >= deadline;
-      if (timed_out)
-        g_warning("misbklv: pipeline did not drain within %" G_GUINT64_FORMAT
-                  "s of EOS; giving up",
-                  static_cast<guint64>(kFinishDrainTimeout / GST_SECOND));
-    }
-    gst_object_unref(bus);
     // Three outcomes: a clean EOS keeps the output; a caller cancellation and a
     // drain failure both discard any partial sink file (ADR 0022 — no output
     // unless the session succeeded). Cancellation is a caller request, not a

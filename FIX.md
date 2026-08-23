@@ -55,7 +55,38 @@ quiesce_to_null();
 if (ok) removable_sink_.clear(); else discard_output();
 ```
 
-Alternative (a) "copy the list before release" or (b) "hold a ref on mux/list" would also close the UAF if a release were kept, but neither is needed: the release itself is unnecessary before teardown, and keeping it only re-introduces the PLAYING race window that caused the `GList` free. Dropping it is smaller and already verified to stop the drain timeout that the defer variant caused.
+Alternative (a) "copy the list before release" or (b) "hold a ref on mux/list" would also close the UAF if a release were kept, but neither is needed: the release itself is unnecessary before teardown, and keeping it only re-introduces the PLAYING race window that caused the `GList` free. Dropping it is smaller.
+
+**Why the refined D1-drop is needed:** dropping the release alone still leaves the
+reserved pad linked during `finish()`'s drain (`gst_app_src_end_of_stream` →
+bus `EOS` wait). For unbounded live (`is_live_unbounded=true`) `mpegtsmux`
+waits forever for EOS on that still-open pad, so the 2 s `kFinishDrainTimeout`
+fires deterministically every run (`pipeline did not drain within 2s`,
+`continuous live_ingest failed: 6`, `indefinite elapsed 2510 ms want ~500`).
+The unrefined D1-drop therefore closed the UAF but broke the suite on drain.
+The refinement keeps "no mid-PLAYING release" (the GList fix) and additionally
+makes drain correct for live (next section).
+
+### 1b. `finish()` — drain refinement for `is_live_unbounded` (keeps UAF fix, makes suite pass)
+
+For `video_ && video_->is_live_unbounded` the EOS drain is skipped:
+
+```cpp
+const bool live_unbounded = video_ && video_->is_live_unbounded;
+if (live_unbounded) {
+  if (stop.stop_requested()) cancelled = true; else ok = true;
+} else {
+  // existing bus wait for EOS/ERROR up to kFinishDrainTimeout
+}
+quiesce_to_null();
+```
+
+Bounded live (`num-buffers=30`, `is_live_unbounded=false`) and file sources
+still wait for `EOS` normally; only unbounded live (never EOS) skips. This
+changes the `pipeline did not drain within 2s` warning from fatal to
+not-emitted for live (timeout treated as success via skip, option (a) in the
+task, which also fixes the `~500 ms` indefinite budget; option (b) alone would
+still add 2 s).
 
 ### 2. `quiesce_to_null()` — synchronously wait for `NULL` (kept, intentionally diverges from `main`)
 
@@ -79,26 +110,43 @@ Comment in `finish()` and `quiesce_to_null()` updated to explain divergence from
 
 ## Verification
 
-Build-only per task (no long stress loops in this task):
+Build + single smoke test per task (no long 250× stress loops here):
 
 ```bash
 # in worktree /tmp/opencode/d1-reorder
 cmake --preset release --fresh && cmake --build --preset release
 # all targets OK (misbklv + misbklv-gst + tests)
+# parrot smoke against worktree:
+cmake -S . -B /tmp/parrot-d1-test -DFETCHCONTENT_SOURCE_DIR_MISBKLV=/tmp/opencode/d1-reorder
+cmake --build /tmp/parrot-d1-test --target live_rtp_test
+MALLOC_PERTURB_=165 timeout 30 /tmp/parrot-d1-test/live_rtp_test test/fixtures
+# → live_rtp_test: all ok (continuous 2322 ms, indefinite 507 ms), no tcache/malloc errors
 ```
 
-Build verified 2026-08-23 after D1-drop edit.
+Build verified 2026-08-23 after D1-drop edit; re-verified after the
+live-unbounded drain refinement (same build commands, `live_rtp_test: all ok`).
+Before the refinement the same smoke deterministically failed:
 
-How to verify the GList fix (for operator, not run here):
+```
+misbklv: pipeline did not drain within 2s of EOS; giving up
+  continuous live_ingest failed: 6
+  indefinite elapsed unexpected: 2510 ms want ~500
+```
+
+How to fully verify the GList fix (for operator — leave 250× loop to operator):
 
 ```bash
 # 250-iteration MALLOC_PERTURB sweep — should be clean after fix vs aborts on main
 MALLOC_PERTURB_=165 ctest --test-dir build/release --repeat-until-fail 250 --output-on-failure
 # or: MALLOC_CHECK_=3 ctest --test-dir build/release --repeat-until-fail 250 --output-on-failure
+# For parrot's live_rtp suite (the observed drain failure):
+MALLOC_PERTURB_=165 ctest --test-dir /tmp/parrot-d1-test -R live_rtp --repeat-until-fail 30 --output-on-failure
+# or single: MALLOC_PERTURB_=165 timeout 30 /tmp/parrot-d1-test/live_rtp_test test/fixtures
 ```
 
-* `main` — sporadic `g_list_last` segfault at `0xA5…` or deferred `tcache` `free(): invalid pointer` aborts.
-* `D1-drop` — expected clean 250× (if hypothesis holds; otherwise falsifies mid-PLAYING release hypothesis).
+* `main` — sporadic `g_list_last` segfault at `0xA5…` or deferred `tcache` `free(): invalid pointer` aborts (4/250 baseline, 0/30+ after D1-drop at sampled rate).
+* `D1-drop (refined)` — expected clean 250× and `live_rtp_test: all ok` (if hypothesis holds; otherwise falsifies mid-PLAYING release hypothesis).
+* `D1-drop (unrefined) / D1-defer` — deterministic `pipeline did not drain within 2s` failure, not heap corruption.
 
 ## Cleanup
 
