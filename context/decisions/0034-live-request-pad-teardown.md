@@ -5,7 +5,7 @@ decision_status: accepted
 tags: [decision, backend, gstreamer, streaming, teardown, phase-5]
 generated:
   by: openai/gpt-5
-  at: 2026-08-24T00:49:35Z
+  at: 2026-08-24T01:55:22Z
 fork: 31
 ---
 
@@ -40,13 +40,18 @@ other insert session.**
 The finish sequence is:
 
 1. End the KLV `appsrc` and check whether it accepted EOS.
-2. For an unbounded live video branch, wait up to one second for its final pad
-   to negotiate caps and deliver a buffer. This covers a caller that closes
-   immediately after opening while ensuring `mpegtsmux` has a real video stream
-   handler. Failure to become usable is an insertion failure, not permission to
-   silently emit KLV-only output.
+2. Arm a persistent delivery probe on the reserved video pad when an unbounded
+   live branch is built. If it has never delivered a buffer, wait up to one
+   second for negotiated caps and its first delivery. A branch that delivered
+   earlier remains ready through a close-time source stall; it is never required
+   to produce a fresh buffer merely to preserve its output. A branch that has
+   never become usable fails rather than silently emitting KLV-only output.
 3. Push EOS from that live source pad while it remains linked to the reserved
-   muxer pad. Never call `gst_pad_unlink` or
+   muxer pad. Because EOS is serialized with data, poll the pad stream lock with
+   `GST_PAD_STREAM_TRYLOCK` for at most five seconds and honor the stop token
+   before pushing. This prevents `finish()` from waiting behind a stuck
+   streaming thread. Once the lock is owned, handle EOS synchronously as
+   GStreamer requires. Never call `gst_pad_unlink` or
    `gst_element_release_request_pad` during `PLAYING`.
 4. Drain to a clean pipeline EOS, surface a bus error, or honor the caller's
    stop token. Retain the five-minute stall guard; it is not a performance
@@ -75,6 +80,13 @@ has stopped.
   breaks legitimate bounded pipelines and changes unrelated behavior.
 - **Wait indefinitely for NULL** — rejected. It bypasses the stop token and can
   hang `close()` or destruction forever; teardown confirmation is bounded.
+- **Require a new buffer during every `finish()`** — rejected. Readiness is a
+  first-delivery property; a healthy long-running RTSP session may be stalled at
+  the exact instant it closes and must not lose its completed output.
+- **Push serialized EOS without first acquiring the stream lock** — rejected.
+  The implicit lock wait has no deadline. A detached EOS worker is also
+  rejected: cancellation cannot stop `gst_pad_push_event`, and letting it
+  outlive the owning pipeline turns a latency problem into a lifetime race.
 - **Pause, release, resume, then drain** — rejected. It adds another state
   transition and request-pad mutation when a serialized EOS event provides the
   normal GStreamer end-of-stream mechanism.
@@ -85,6 +97,9 @@ has stopped.
   terminal-error reporting.
 - A normal unbounded live close produces drained video plus byte-exact KLV; an
   already-requested cancellation returns promptly and leaves no file.
+- A branch that delivered video earlier retains its output through a transient
+  close-time stall. Only a branch that never delivered at all takes the
+  one-second readiness failure path.
 - Immediate close can wait briefly for the live video branch to become usable.
   A branch that cannot negotiate or deliver data fails rather than degrading to
   an undocumented KLV-only stream.
@@ -93,9 +108,12 @@ has stopped.
 
 # Assumptions / open questions
 
-- The one-second readiness bound is an operational guard for a branch already
-  in `PLAYING`; it is separate from RTSP connection/open time. Increase it only
-  with evidence that a valid connected source routinely negotiates more slowly.
+- The one-second readiness bound applies only until first delivery and is
+  separate from RTSP connection/open time. Increase it only with evidence that
+  a valid connected source routinely negotiates more slowly.
+- GStreamer defines EOS as a serialized downstream event. The five-second
+  stream-lock acquisition bound prevents waiting on an in-flight/stuck buffer;
+  after acquisition, the event handler itself remains synchronous by contract.
 - Allocator-stress validation remains valuable because the original corruption
   was timing-sensitive. The deterministic semantic regressions are covered by
   the hermetic live-video tests; downstream parrot-to-klv stress remains the
@@ -112,3 +130,5 @@ has stopped.
     insert drain cancellation.
 [5] [ADR 0031](./0031-live-streaming-surface.md) — the live video-source
     surface whose teardown is refined here.
+[6] [GStreamer `GstPad`](https://gstreamer.freedesktop.org/documentation/gstreamer/gstpad.html)
+    — serialized-event stream locking and `GST_PAD_STREAM_TRYLOCK`.

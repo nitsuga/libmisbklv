@@ -5,7 +5,7 @@ decision_status: accepted
 tags: [decision, 0604, sei, video-passthrough, api, phase-3]
 generated:
   by: openai/gpt-5
-  at: 2026-08-24T00:49:35Z
+  at: 2026-08-24T01:55:22Z
 fork: 22
 ---
 
@@ -182,7 +182,7 @@ free).
 Teardown now severs the probes explicitly in `GstInserter::quiesce_to_null`, run
 from both `~GstInserter` and `finish()`:
 
-1. **Sever the probes.** `VideoCtx::remove_sei_probes()` calls
+1. **Sever the probes.** `VideoCtx::remove_probes()` calls
    `gst_pad_remove_probe`, which blocks until any in-flight callback returns, and
    latches `probes_severed` so a late live pad-added cannot re-arm one. This is
    what deterministically closes the SEI-probe use-after-free: once it returns,
@@ -202,9 +202,10 @@ finding neither weakens nor broadens the proof above. Probe removal owns the
 separately keeps the mux request pad linked through EOS drain and bounded NULL
 teardown.
 
-`~VideoCtx` also calls `remove_sei_probes()` idempotently, so a ctx freed on any
+`~VideoCtx` also calls `remove_probes()` idempotently, so a ctx freed on any
 path that bypassed `GstInserter` teardown still cannot leave a probe holding a
-dangling pointer. `remove_sei_probes` calls `gst_pad_remove_probe` outside
+dangling pointer. The same registry now owns ADR 0034's live-delivery probe,
+which also holds the ctx. `remove_probes` calls `gst_pad_remove_probe` outside
 `probe_mu`, and the callbacks never hold `probe_mu` across their own body, so
 severing cannot deadlock against an in-flight probe.
 

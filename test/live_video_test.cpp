@@ -5,6 +5,7 @@
 // - file source + realtime now succeeds (lift)
 // - multicast knobs still map with live video
 // - hermetic UDP loopback with pipeline live video (KLV+video share timeline, byte-exact)
+// - unbounded-live stalled close, never-delivered readiness, cancellation, and failed NULL teardown
 // - repeated under load (ctest runs 5x externally)
 #include <chrono>
 #include <cstdio>
@@ -64,6 +65,60 @@ static std::string pipeline_desc_for(const std::string& enc) {
   }
   // openh264enc and x264enc both output h264
   return "pipeline:videotestsrc is-live=true num-buffers=60 ! videoconvert ! video/x-raw,width=320,height=240,framerate=30/1 ! " + enc + " ! h264parse";
+}
+
+// Test-only sink that rejects its first READY -> NULL transition.  A second
+// request succeeds so the owning pipeline can still be disposed cleanly after
+// the assertion exercises finish()'s NULL-failure handling.
+struct OneShotNullFailSink {
+  GstElement parent;
+  gboolean failed_once;
+};
+struct OneShotNullFailSinkClass {
+  GstElementClass parent_class;
+};
+
+static GstStaticPadTemplate one_shot_null_fail_sink_pad_template =
+    GST_STATIC_PAD_TEMPLATE("sink", GST_PAD_SINK, GST_PAD_ALWAYS,
+                            GST_STATIC_CAPS_ANY);
+
+G_DEFINE_TYPE(OneShotNullFailSink, one_shot_null_fail_sink, GST_TYPE_ELEMENT)
+
+static GstFlowReturn one_shot_null_fail_sink_chain(GstPad*, GstObject*,
+                                                    GstBuffer* buffer) {
+  gst_buffer_unref(buffer);
+  return GST_FLOW_OK;
+}
+
+static GstStateChangeReturn one_shot_null_fail_sink_change_state(
+    GstElement* element, GstStateChange transition) {
+  auto* self = reinterpret_cast<OneShotNullFailSink*>(element);
+  if (transition == GST_STATE_CHANGE_READY_TO_NULL && !self->failed_once) {
+    self->failed_once = TRUE;
+    return GST_STATE_CHANGE_FAILURE;
+  }
+  return GST_ELEMENT_CLASS(one_shot_null_fail_sink_parent_class)
+      ->change_state(element, transition);
+}
+
+static void one_shot_null_fail_sink_class_init(
+    OneShotNullFailSinkClass* klass) {
+  auto* element_class = GST_ELEMENT_CLASS(klass);
+  gst_element_class_set_static_metadata(
+      element_class, "One-shot NULL failure sink", "Sink/Testing",
+      "Fails the first READY-to-NULL transition", "libmisbklv tests");
+  gst_element_class_add_static_pad_template(
+      element_class, &one_shot_null_fail_sink_pad_template);
+  element_class->change_state = one_shot_null_fail_sink_change_state;
+}
+
+static void one_shot_null_fail_sink_init(OneShotNullFailSink* self) {
+  self->failed_once = FALSE;
+  GstPad* sink = gst_pad_new_from_static_template(
+      &one_shot_null_fail_sink_pad_template, "sink");
+  gst_pad_set_chain_function(
+      sink, GST_DEBUG_FUNCPTR(one_shot_null_fail_sink_chain));
+  gst_element_add_pad(GST_ELEMENT(self), sink);
 }
 
 // --- HEVC regression helpers: validate video ES, not just KLV + size ---------
@@ -308,6 +363,11 @@ static bool decode_hevc_frames(const std::string& path, int* out_frames, bool* s
 
 int main(int argc, char** argv) {
   gst_init(nullptr, nullptr);
+  if (!gst_element_register(nullptr, "oneshotnullfailsink", GST_RANK_NONE,
+                            one_shot_null_fail_sink_get_type())) {
+    std::fprintf(stderr, "failed to register one-shot NULL-failure sink\n");
+    return 2;
+  }
   if (argc < 4) {
     std::fprintf(stderr, "usage: live_video_test <synthetic-video.ts> <synthetic-basic.klv> <tmpdir>\n");
     return 2;
@@ -614,6 +674,66 @@ int main(int argc, char** argv) {
     }
   }
 
+  std::printf("== previously healthy unbounded live closes during a stall ==\n");
+  {
+    std::string enc = pick_h264_encoder();
+    if (enc.empty()) {
+      std::printf("  SKIP stalled close: no encoder\n");
+    } else {
+      // identity delays each already-encoded buffer by two seconds. Waiting
+      // 2.5 s lets one buffer reach the mux, then closes while the next is
+      // stalled for longer than the one-second first-buffer readiness bound.
+      std::string desc =
+          "pipeline:videotestsrc is-live=true ! videoconvert ! "
+          "video/x-raw,width=320,height=240,framerate=30/1 ! " +
+          enc + " ! h264parse ! identity sleep-time=2000000";
+      std::string out = tmpdir + "/pipeline-unbounded-stalled.ts";
+      std::remove(out.c_str());
+      auto r =
+          be->open_insert({"file:" + out, true, desc, Sei0604::Preserve});
+      check(static_cast<bool>(r), "stalled live open succeeds");
+      if (r) {
+        const size_t n = packet_frame_length(klv);
+        check(static_cast<bool>((*r)->push(klv.subspan(0, n), 0)),
+              "stalled live push ok");
+        std::this_thread::sleep_for(std::chrono::milliseconds(2500));
+        auto fr = (*r)->finish();
+        check(static_cast<bool>(fr),
+              "previously delivered live branch survives close-time stall");
+        check(file_exists_p(out), "stalled live output preserved");
+        if (file_exists_p(out))
+          check(std::filesystem::file_size(out) > 1000,
+                "stalled live output non-empty");
+        std::remove(out.c_str());
+      }
+    }
+  }
+
+  std::printf("== unbounded live that never delivers fails without output ==\n");
+  {
+    std::string desc =
+        "pipeline:appsrc is-live=true format=time "
+        "caps=video/x-h264,stream-format=byte-stream,alignment=au ! h264parse";
+    std::string out = tmpdir + "/pipeline-unbounded-never-ready.ts";
+    std::remove(out.c_str());
+    auto r = be->open_insert({"file:" + out, true, desc, Sei0604::Preserve});
+    check(static_cast<bool>(r), "never-ready live open succeeds");
+    if (r) {
+      const auto t0 = std::chrono::steady_clock::now();
+      auto fr = (*r)->finish();
+      const auto elapsed =
+          std::chrono::duration_cast<std::chrono::milliseconds>(
+              std::chrono::steady_clock::now() - t0)
+              .count();
+      check(!fr && fr.error() == Error::Backend,
+            "never-ready live finish reports Backend");
+      check(elapsed >= 900 && elapsed < 2500,
+            "never-ready live failure uses bounded readiness wait");
+      check(!file_exists_p(out), "never-ready live output discarded");
+      std::remove(out.c_str());
+    }
+  }
+
   std::printf("== unbounded live cancellation stays prompt and discards output ==\n");
   {
     std::string enc = pick_h264_encoder();
@@ -642,6 +762,38 @@ int main(int argc, char** argv) {
         check(static_cast<bool>(fr), "unbounded cancellation returns ok");
         check(elapsed < 1000, "unbounded cancellation returns within 1s");
         check(!file_exists_p(out), "unbounded cancellation discards output");
+        std::remove(out.c_str());
+      }
+    }
+  }
+
+  std::printf("== NULL failure demotes cancellation to Backend ==\n");
+  {
+    std::string enc = pick_h264_encoder();
+    if (enc.empty()) {
+      std::printf("  SKIP NULL failure: no encoder\n");
+    } else {
+      std::string desc =
+          "pipeline:videotestsrc is-live=true ! tee name=t "
+          "t. ! queue ! videoconvert ! "
+          "video/x-raw,width=320,height=240,framerate=30/1 ! " +
+          enc + " ! h264parse "
+                "t. ! queue ! oneshotnullfailsink";
+      std::string out = tmpdir + "/pipeline-null-failure.ts";
+      std::remove(out.c_str());
+      auto r =
+          be->open_insert({"file:" + out, true, desc, Sei0604::Preserve});
+      check(static_cast<bool>(r), "NULL-failure live open succeeds");
+      if (r) {
+        const size_t n = packet_frame_length(klv);
+        check(static_cast<bool>((*r)->push(klv.subspan(0, n), 0)),
+              "NULL-failure live push ok");
+        std::stop_source ss;
+        ss.request_stop();
+        auto fr = (*r)->finish(ss.get_token());
+        check(!fr && fr.error() == Error::Backend,
+              "NULL failure overrides cancellation success");
+        check(!file_exists_p(out), "NULL-failure output discarded");
         std::remove(out.c_str());
       }
     }

@@ -37,6 +37,26 @@ inline constexpr GstClockTime kNullStateTimeout = 5 * GST_SECOND;
 // caps mpegtsmux cannot create the video stream handler.
 inline constexpr auto kLiveEosReadyTimeout = std::chrono::seconds(1);
 
+// EOS is serialized with video data and would otherwise wait indefinitely for
+// the pad's stream lock. Poll that lock so cancellation and a stuck streaming
+// thread remain bounded before entering the event handler.
+inline constexpr auto kLiveEosLockTimeout = std::chrono::seconds(5);
+
+bool push_live_eos_when_idle(GstPad* pad, std::stop_token stop) {
+  const auto deadline =
+      std::chrono::steady_clock::now() + kLiveEosLockTimeout;
+  while (!stop.stop_requested() &&
+         std::chrono::steady_clock::now() < deadline) {
+    if (GST_PAD_STREAM_TRYLOCK(pad)) {
+      const bool sent = gst_pad_push_event(pad, gst_event_new_eos());
+      GST_PAD_STREAM_UNLOCK(pad);
+      return sent;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  return false;
+}
+
 }  // namespace
 
 // NOTE: make_sink intentionally lives at misbklv::detail scope (not in the
@@ -198,30 +218,23 @@ class GstInserter : public Inserter {
     if (video_ && video_->is_live_unbounded && video_->reserved_video_pad) {
       GstPad* peer = gst_pad_get_peer(video_->reserved_video_pad);
       if (peer) {
-        bool negotiated = false;
-        std::atomic<bool> saw_buffer{false};
-        const gulong probe_id = gst_pad_add_probe(
-            peer, GST_PAD_PROBE_TYPE_BUFFER,
-            [](GstPad*, GstPadProbeInfo*, gpointer data) {
-              static_cast<std::atomic<bool>*>(data)->store(
-                  true, std::memory_order_release);
-              return GST_PAD_PROBE_OK;
-            },
-            &saw_buffer, nullptr);
-        const auto ready_deadline =
-            std::chrono::steady_clock::now() + kLiveEosReadyTimeout;
-        while (!stop.stop_requested() &&
-               std::chrono::steady_clock::now() < ready_deadline) {
-          GstCaps* caps = gst_pad_get_current_caps(peer);
-          negotiated = caps && !gst_caps_is_empty(caps);
-          if (caps) gst_caps_unref(caps);
-          if (negotiated && saw_buffer.load(std::memory_order_acquire)) break;
-          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        bool ready =
+            video_->delivered_buffer.load(std::memory_order_acquire);
+        if (!ready) {
+          const auto ready_deadline =
+              std::chrono::steady_clock::now() + kLiveEosReadyTimeout;
+          while (!stop.stop_requested() &&
+                 std::chrono::steady_clock::now() < ready_deadline) {
+            GstCaps* caps = gst_pad_get_current_caps(peer);
+            const bool negotiated = caps && !gst_caps_is_empty(caps);
+            if (caps) gst_caps_unref(caps);
+            ready = negotiated && video_->delivered_buffer.load(
+                                      std::memory_order_acquire);
+            if (ready) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+          }
         }
-        if (probe_id != 0) gst_pad_remove_probe(peer, probe_id);
-        live_video_eos =
-            negotiated && saw_buffer.load(std::memory_order_acquire) &&
-            gst_pad_push_event(peer, gst_event_new_eos());
+        live_video_eos = ready && push_live_eos_when_idle(peer, stop);
         gst_object_unref(peer);
       } else {
         live_video_eos = false;
@@ -240,9 +253,10 @@ class GstInserter : public Inserter {
     // the final KLV packet must take effect (ADR 0032).
     while (!cancelled && klv_eos == GST_FLOW_OK && live_video_eos &&
            std::chrono::steady_clock::now() < deadline) {
-      if (stop.stop_requested())
+      if (stop.stop_requested()) {
         cancelled = true;
-      if (cancelled) break;
+        break;
+      }
       const auto remain = std::chrono::duration_cast<std::chrono::nanoseconds>(
                               deadline - std::chrono::steady_clock::now())
                               .count();
@@ -254,7 +268,7 @@ class GstInserter : public Inserter {
           static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
       if (!m) continue;
       if (GST_MESSAGE_TYPE(m) == GST_MESSAGE_EOS) {
-        ok = klv_eos == GST_FLOW_OK && live_video_eos;
+        ok = true;
         gst_message_unref(m);
         break;
       }
@@ -294,18 +308,16 @@ class GstInserter : public Inserter {
   }
 
  private:
-  // Sever the SEI probes, then take the pipeline to NULL, before VideoCtx is
-  // freed. The probe severing is what closes the issue #57 use-after-free:
-  // remove_sei_probes() calls gst_pad_remove_probe, which blocks until any
-  // in-flight callback returns, so once teardown starts no streaming thread can
-  // re-enter on_h264_buffer_inject_sei / the CAPS probe (each holds a raw
-  // VideoCtx*).
+  // Sever every probe holding VideoCtx, then take the pipeline to NULL before
+  // freeing it. remove_probes() blocks until any in-flight callback returns;
+  // this closes the issue #57 SEI-probe use-after-free and also owns the live
+  // delivery tracker's callback lifetime.
   //
   // Idempotent: finish() and the destructor both call it, and
-  // remove_sei_probes()/a repeated NULL are no-ops the second time.
+  // remove_probes()/a repeated NULL are no-ops the second time.
   bool quiesce_to_null() {
     if (!pipeline_) return true;
-    if (video_) video_->remove_sei_probes();
+    if (video_) video_->remove_probes();
     if (gst_element_set_state(pipeline_, GST_STATE_NULL) ==
         GST_STATE_CHANGE_FAILURE) {
       g_warning("misbklv: failed to request NULL pipeline state");
@@ -325,7 +337,8 @@ class GstInserter : public Inserter {
   }
 
   void discard_output() {
-    // Called after NULL, when filesink has closed the path.
+    // Called after NULL was requested. On a bounded NULL-confirmation failure,
+    // POSIX unlink still removes the directory entry while filesink unwinds.
     if (removable_sink_.empty()) return;
     std::remove(removable_sink_.c_str());
     removable_sink_.clear();

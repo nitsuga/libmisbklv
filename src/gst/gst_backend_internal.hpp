@@ -58,8 +58,11 @@ struct VideoCtx {
   GstPad* reserved_video_pad = nullptr;
   // Unbounded live branches never EOS on their own; finish() pushes EOS through
   // their final src pad while it remains linked so mpegtsmux can drain safely.
-  bool is_live = false;
   bool is_live_unbounded = false; // true if no num-buffers (pipeline) or RTSP
+  // Set by a persistent probe on the reserved mux sink pad. Unlike a probe
+  // armed only during finish(), this remembers that a long-running branch has
+  // already established a real mux stream even if it stalls at close time.
+  std::atomic<bool> delivered_buffer{false};
   GstElement* mux_element = nullptr;   // borrowed, owned by pipeline
   GstElement* video_bin = nullptr;     // borrowed: rtspsrc or pipeline bin
   std::mutex mu;
@@ -85,28 +88,26 @@ struct VideoCtx {
   bool have_video_segment = false;
   bool use_segment_timeline = false;
 
-  // SEI-injection probes (the CAPS-event and buffer probes attach_generate_probes
-  // arms). Each holds a raw `VideoCtx*` as its user data, so a probe callback
-  // that fires after this VideoCtx is freed is a use-after-free — the deferred
-  // heap corruption behind issue #57. We record every probe as it is armed and
-  // sever them all deterministically at teardown, before the pipeline goes NULL
-  // and before this object is destroyed, rather than relying on set_state(NULL)
-  // to have quiesced the streaming threads first. Each entry owns a ref on its
-  // pad so remove stays valid mid-teardown; guarded by `probe_mu`.
+  // Every probe holding a raw `VideoCtx*`: the live delivery tracker plus the
+  // CAPS-event/buffer probes armed by attach_generate_probes. A callback after
+  // this object is freed is a use-after-free (issue #57), so every probe is
+  // recorded and severed before NULL/destruction rather than relying on a state
+  // transition to have quiesced streaming threads. Each entry owns a pad ref so
+  // removal stays valid mid-teardown; guarded by `probe_mu`.
   std::mutex probe_mu;
-  std::vector<std::pair<GstPad*, gulong>> sei_probes;
+  std::vector<std::pair<GstPad*, gulong>> probes;
   bool probes_severed = false;
 
   // Record a just-armed probe. Refs `pad`. Thread-safe: pad-added callbacks arm
   // probes on streaming threads while teardown runs on the caller's. If teardown
   // has already severed, the probe is removed immediately here so a late live
   // pad cannot re-arm the race.
-  void register_sei_probe(GstPad* pad, gulong id);
+  void register_probe(GstPad* pad, gulong id);
   // Remove every recorded probe and drop the pad refs, then mark severed.
   // gst_pad_remove_probe blocks until any in-flight callback returns, so after
   // this call no probe callback can be running or start — safe to free the ctx.
   // Idempotent.
-  void remove_sei_probes();
+  void remove_probes();
 
   ~VideoCtx();
 };
