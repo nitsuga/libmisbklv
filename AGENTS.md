@@ -178,6 +178,31 @@ spellings for one agent is the failure this rule exists to prevent, and a
 
 The rule applies going forward; comments predating it are left as they are.
 
+## Security — location and identity data
+
+`data/` holds developer-provided media that may carry real location and identity
+data, and is gitignored. **Never commit a file from `data/`**, and never copy
+what one contains — coordinates, platform or sensor identity, tail numbers,
+absolute times — into code, tests, fixtures, commit messages, documentation, or
+agent memory. `test/fixtures/` is project-authored and synthesized by
+`generate_synthetic_fixtures.py`, never derived from supplied media.
+
+**Scope: media this project holds, and anything derived from it.** The rule
+protects recordings; it is not a rule about citing external material. Published
+facts about third-party media the project does not hold — where a sample came
+from, who holds the rights, why its terms were judged unclear — are bibliography.
+[`context/data-samples.md`](context/data-samples.md) is exactly that: the record
+of why the historical corpus was removed
+([ADR 0028](context/decisions/0028-hermetic-synthetic-fixtures.md)), describing
+files this repository never contained and no longer references. It is subject to
+this rule for *accuracy*, not for redaction — and it is the evidence that the
+removal was deliberate, so it is retained.
+
+The sibling repository **parrot-to-klv carries this same rule, scoped the same
+way**, where `data/` holds real flight recordings. The same class of data crosses
+both repositories, so the two are kept aligned deliberately — change one and
+change the other.
+
 ## Repo layout
 
 - `references/` — MISB standards (PDF + `.txt` extract). Source of truth,
