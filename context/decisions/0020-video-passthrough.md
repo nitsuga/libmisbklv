@@ -4,8 +4,8 @@ title: Video passthrough on the insert path
 decision_status: accepted
 tags: [decision, backend, muxing, video, phase-3]
 generated:
-  by: claude/opus-5
-  at: 2026-08-12T18:00:00Z
+  by: openai/gpt-5
+  at: 2026-08-24T01:20:14Z
 fork: 18
 ---
 
@@ -98,6 +98,11 @@ the matching defaulted constructor argument.
 - **`realtime` + `video_source` is rejected** (`Error::Unsupported`). Clock-paced
   output with a file-backed video branch is unexercised; better to refuse than to
   ship something untested. Revisit if a live-out consumer appears.
+
+  *Superseded 2026-08-20:* [ADR 0031](./0031-live-streaming-surface.md) supplied
+  that consumer and lifted this restriction. File video can replay on the
+  pipeline clock; RTSP and explicit `pipeline:` video sources are supported as
+  live branches.
 - **A failed `open_insert` leaves no output file**, in two layers. *(Extended by
   [`0022`](./0022-no-output-on-failure.md) to the whole insert session: a
   failing or never-called `finish()` cleans up the same way. A source whose
@@ -183,8 +188,10 @@ is trivially revisited if a consumer needs it (link non-video pads too).
 
 # Assumptions / open questions
 
-- **File in.** The video branch is `filesrc`-backed; a live video input (and
-  `realtime` with video) is out of scope and currently rejected.
+- **File in (superseded 2026-08-20).** This decision originally limited the
+  branch to `filesrc` and rejected `realtime` with video. ADR 0031 extended the
+  same reserved-pad/timeline contract to `rtsp[s]:` and `pipeline:` live sources
+  and enabled realtime video without changing the file behavior decided here.
 - **Only the first video stream is carried.** Multi-video sources are rare here;
   if one matters, the choice of *which* stream would need to enter the API.
 - **Teardown must sever the probes when one is attached.** Under
@@ -306,6 +313,8 @@ evidence at all.
 [4] `planning/video-passthrough-spec.md` — the consumer-side spec written by
     `parrot-to-klv`, which this implements. Kept out of the repo deliberately:
     it is a fulfilled request, and this ADR is where its content now lives.
+[5] [`0031`](./0031-live-streaming-surface.md) — the live-source and realtime
+    extension that supersedes this ADR's original file-only boundary.
 
 > **Mechanism superseded (2026-07-28).** The chain is no longer `filesrc !
 > parsebin` — parsebin turned out to require a *decoder* in the registry before

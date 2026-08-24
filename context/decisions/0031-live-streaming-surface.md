@@ -4,8 +4,8 @@ title: Vendor-neutral live streaming surface — file-or-live video source and m
 decision_status: accepted
 tags: [decision, streaming, gstreamer, backend, phase-3]
 generated:
-  by: claude/opus-5
-  at: 2026-08-20T18:45:00Z
+  by: openai/gpt-5
+  at: 2026-08-24T01:20:14Z
 fork: 28
 ---
 
@@ -110,13 +110,12 @@ What is **deliberately not** in scope:
   `gst_insert_test` are untouched.
 - `prepare_video_branch()` forks on file vs live: the file path keeps its
   `PAUSED` pad-wait; the live path skips the container sniff, does not wait in
-  `PAUSED` (live preroll never completes), and reports `Unsupported` only on a
-  bus `ERROR`.
-- Live preroll/timebase semantics (how KLV PTS maps to a live branch's running
-  time; `mpegtsmux` + `sync` sink pacing with two live inputs) must be pinned
-  during implementation, with the ADR 0020 lesson applied: pipeline-construction
-  changes need repeated runs under load before they are believed, and a
-  loopback-multicast + live-video-pacing hermetic test is required.
+  `PAUSED` (live preroll never completes), and reports `Unsupported` on a bus
+  `ERROR` or if no usable video pad appears within the five-second open bound.
+- The implementation pins live KLV PTS to the video branch's running-time
+  domain and covers clock-paced pipeline video plus UDP loopback hermetically.
+  Pipeline-construction changes still require repeated runs under load per the
+  ADR 0020 lesson.
 - Each consumer (parrot-to-klv, dji-to-klv, future) owns its own RTSP/vendor
   decode against this surface; the library stays vendor-neutral.
 - `ts-udpsink` / `multiudpsink` are noted for live TS pacing and fanout but not
@@ -124,8 +123,11 @@ What is **deliberately not** in scope:
 
 # Assumptions / open questions
 
-- This ADR is `accepted`; it records the shape and the placement. Implementation
-  is separate work, now unblocked.
+- This ADR is implemented. File replay, RTSP/pipeline video, multicast controls,
+  realtime pacing, and the live running-time contract are in the public surface
+  and `live_video_test`. [ADR 0034](./0034-live-request-pad-teardown.md)
+  subsequently defined the EOS and request-pad teardown contract for unbounded
+  live branches.
 - Whether a "TS-in → TS-out with KLV inserted" remux API is wanted at all is a
   different fork (adjacent to the ROADMAP live-0x15 streaming-demux item), not
   decided here.
@@ -140,5 +142,7 @@ What is **deliberately not** in scope:
   defines live KLV PTS.
 - [ADR 0025](./0025-explicit-demuxer-passthrough.md) — the container-sniff
   table the `file:` path keeps.
+- [ADR 0034](./0034-live-request-pad-teardown.md) — EOS drain and request-pad
+  ownership for the unbounded live branches introduced here.
 - [`../../planning/ROADMAP.md`](../../planning/ROADMAP.md) — where fork 28 is
   decided.

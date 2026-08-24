@@ -30,8 +30,12 @@ if (auto closed = out.close(); !closed) return;
 `for (Message& m : in)` pulls each packet until the source ends (EOS for a file;
 UDP after its idle timeout). SRT has no equivalent idle signal, so it continues
 until cancellation (for example, destroying the stream) or external source
-termination/error. `emit` re-encodes and muxes; `close` drains. See
-[`examples/klv_edit.cpp`](../examples/klv_edit.cpp).
+termination/error. `emit` re-encodes and muxes; `close` drains. A caller that
+needs to interrupt a post-EOS drain can pass a `std::stop_token` to
+`close(stop)`. Cooperative cancellation returns success and removes any partial
+file output; the default token still drains normally. See
+[`examples/klv_edit.cpp`](../examples/klv_edit.cpp) and
+[ADR 0032](../context/decisions/0032-cancellable-insert-drain.md).
 
 `KlvStream` accepts `ExtractOptions` to change the 16 MiB default cap on a
 complete incrementally reassembled KLV frame. A declared frame above that cap
@@ -57,10 +61,12 @@ then check every returned `Result` as in the example.
 
 ## Write video + KLV in one pass
 
-To *author* a stream rather than edit one — video from an existing file, KLV you
-generated — give the sink a `video_source`. Its video elementary stream is
-re-muxed **unchanged** (parsed, never decoded, so H.264 and H.265 both just
-work); the source's audio and any KLV it already carries are dropped.
+To *author* a stream rather than edit one, give the sink a `video_source`. It can
+be a bare/file-prefixed path, an `rtsp://` or `rtsps://` URI, or an explicit
+`pipeline:<gst-launch description>` whose bin exposes a static source pad. Its
+video elementary stream is re-muxed **unchanged** (parsed, never decoded, so
+H.264 and H.265 both just work); the source's audio and any KLV it already
+carries are dropped.
 
 **Select streams by index or by type.** The muxer announces the video first, so
 `0:0` is the video and `0:1` the KLV (`ffmpeg -map 0:0` or `-map 0:v`). Video is
@@ -79,25 +85,45 @@ for (auto& [pts_ns, msg] : my_klv) {   // your converted metadata
 out.close();
 ```
 
-- **One timeline.** The video is timestamped from the start of `input.mp4`, and
-  your KLV must be on that same timeline — presentation time from the start of
-  the source, in nanoseconds. Not wall-clock, not epoch. A Message with no PTS is
-  **rejected** (`Error::Unsupported`) rather than given a synthetic one, because a
-  synthetic timestamp drifts silently against real frame timing. It is the same
-  timeline `KlvStream` reports, so a Message read from a stream is already on
-  it — "read a video+KLV file, edit an item, write it back with the video" needs
-  no timestamps of your own.
+- **One timeline.** For a file, the video timeline starts at the beginning of
+  the source. For RTSP or `pipeline:` live video, it is the branch's running
+  time. Your KLV must use that same timeline in nanoseconds — not wall-clock or
+  epoch. A Message with no PTS is **rejected** (`Error::Unsupported`) rather
+  than given a synthetic one, because a synthetic timestamp drifts silently
+  against real frame timing. It is the same timeline `KlvStream` reports, so a
+  Message read from a stream is already positioned correctly.
 - **Push in order, as the video flows.** The muxer waits on the slower stream and
-  `emit` blocks, which is the backpressure working — but don't try to emit a
-  whole file's KLV before the video has started.
-- `realtime` pacing is not supported with a video source. A source that is
-  missing, unreadable, or carries no video stream fails at construction (`emit`
-  then errors) and leaves no output file behind — as does a failure that only
-  surfaces later, e.g. a video track that is declared but does not parse, which
-  fails at `close()`.
+  `emit` blocks, which is the backpressure working. Do not enqueue metadata far
+  ahead of the corresponding video.
+- **Realtime video is supported.** With a file source, `realtime=true` replays
+  the recording on the pipeline clock. For an RTSP or `pipeline:` live source,
+  it is the normal clock-paced configuration. An invalid file, a terminal
+  source error, or a live source that exposes no usable video pad within the
+  bounded open wait fails without leaving a newly created output file. A parse
+  or pipeline error that appears later is reported by `close()` and has the
+  same cleanup guarantee.
 
 The same field exists on the lower level: `open_insert({.sink = "file:out.ts",
 .video_source = "in.mp4"})`. Leave it empty for the KLV-only pipeline.
+
+### Live multicast output
+
+For a clock-paced multicast sink, pass the full `InsertConfig` so the network
+and video-source settings stay named:
+
+```cpp
+KlvSink out({.sink              = "udp:239.10.10.10:5004",
+             .realtime          = true,
+             .video_source      = "rtsp://camera.example/live",
+             .udp_ttl_mcast     = 4,
+             .udp_mcast_iface   = "eth0",
+             .udp_loop          = false});
+```
+
+`udp_ttl_mcast` maps to multicast TTL, `udp_mcast_iface` selects the egress
+interface, and `udp_loop` controls local multicast loopback. Defaults preserve
+GStreamer's normal behavior (TTL 1, automatic interface, loopback enabled).
+These fields are ignored by `file:` and `srt:` sinks.
 
 ### ST 0604 timestamps in the video stream
 
