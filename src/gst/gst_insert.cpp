@@ -38,26 +38,40 @@ inline constexpr GstClockTime kNullStateTimeout = 5 * GST_SECOND;
 inline constexpr auto kLiveEosReadyTimeout = std::chrono::seconds(1);
 
 // EOS is serialized with video data and would otherwise wait indefinitely for
-// the pad's stream lock. Poll that lock so cancellation and a stuck streaming
-// thread remain bounded before entering the event handler.
+// the mux sink pad's stream lock. Poll that lock so cancellation and a stuck
+// streaming thread remain bounded before entering the event handler.
 inline constexpr auto kLiveEosLockTimeout = std::chrono::seconds(5);
 
-bool push_live_eos_when_idle(GstPad* pad, std::stop_token stop) {
-  const auto deadline =
-      std::chrono::steady_clock::now() + kLiveEosLockTimeout;
+}  // namespace
+
+bool push_live_eos_when_idle(
+    VideoCtx& video, std::stop_token stop,
+    std::chrono::steady_clock::duration lock_timeout) {
+  if (!video.reserved_video_pad) return false;
+  GstPad* source_pad = gst_pad_get_peer(video.reserved_video_pad);
+  if (!source_pad) return false;
+  const auto deadline = std::chrono::steady_clock::now() + lock_timeout;
+  bool sent = false;
   while (!stop.stop_requested() &&
          std::chrono::steady_clock::now() < deadline) {
-    if (GST_PAD_STREAM_TRYLOCK(pad)) {
-      const bool sent = gst_pad_push_event(pad, gst_event_new_eos());
-      GST_PAD_STREAM_UNLOCK(pad);
-      return sent;
+    // Acquire in the event's source-to-sink order. Checking only source_pad is
+    // insufficient: a branch ghost-src lock can remain free while a mux chain
+    // function holds the downstream lock. Both are recursive, so the event can
+    // safely re-enter them on this thread.
+    if (GST_PAD_STREAM_TRYLOCK(source_pad)) {
+      if (GST_PAD_STREAM_TRYLOCK(video.reserved_video_pad)) {
+        sent = gst_pad_push_event(source_pad, gst_event_new_eos());
+        GST_PAD_STREAM_UNLOCK(video.reserved_video_pad);
+        GST_PAD_STREAM_UNLOCK(source_pad);
+        break;
+      }
+      GST_PAD_STREAM_UNLOCK(source_pad);
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
-  return false;
+  gst_object_unref(source_pad);
+  return sent;
 }
-
-}  // namespace
 
 // NOTE: make_sink intentionally lives at misbklv::detail scope (not in the
 // anonymous namespace below) so the unit tests can construct and inspect a sink.
@@ -234,7 +248,9 @@ class GstInserter : public Inserter {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
           }
         }
-        live_video_eos = ready && push_live_eos_when_idle(peer, stop);
+        live_video_eos =
+            ready && push_live_eos_when_idle(*video_, stop,
+                                             kLiveEosLockTimeout);
         gst_object_unref(peer);
       } else {
         live_video_eos = false;

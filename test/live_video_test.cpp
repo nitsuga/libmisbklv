@@ -5,20 +5,23 @@
 // - file source + realtime now succeeds (lift)
 // - multicast knobs still map with live video
 // - hermetic UDP loopback with pipeline live video (KLV+video share timeline, byte-exact)
-// - unbounded-live stalled close, never-delivered readiness, cancellation, and failed NULL teardown
+// - mux-lock timeout, stalled close, never-ready, cancellation, failed NULL teardown
 // - repeated under load (ctest runs 5x externally)
+#include <atomic>
+#include <cctype>
 #include <chrono>
+#include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <cctype>
-#include <cstring>
+#include <future>
+#include <mutex>
 #include <span>
 #include <string>
 #include <thread>
 #include <vector>
-#include <atomic>
 
 #include <gst/gst.h>
 
@@ -119,6 +122,93 @@ static void one_shot_null_fail_sink_init(OneShotNullFailSink* self) {
   gst_pad_set_chain_function(
       sink, GST_DEBUG_FUNCPTR(one_shot_null_fail_sink_chain));
   gst_element_add_pad(GST_ELEMENT(self), sink);
+}
+
+static void check_live_eos_uses_downstream_lock() {
+  GstPad* target = gst_pad_new("target", GST_PAD_SRC);
+  GstPad* source = gst_ghost_pad_new("src", target);
+  GstPad* sink = gst_pad_new("sink", GST_PAD_SINK);
+  gst_pad_set_event_function(
+      sink, [](GstPad*, GstObject*, GstEvent* event) -> gboolean {
+        gst_event_unref(event);
+        return TRUE;
+      });
+  const bool active = gst_pad_set_active(source, TRUE) &&
+                      gst_pad_set_active(sink, TRUE);
+  const bool linked = active && gst_pad_link(source, sink) == GST_PAD_LINK_OK;
+  check(linked, "EOS lock regression pads link");
+  if (!linked) {
+    gst_pad_set_active(source, FALSE);
+    gst_pad_set_active(sink, FALSE);
+    gst_object_unref(source);
+    gst_object_unref(target);
+    gst_object_unref(sink);
+    return;
+  }
+
+  std::mutex lock_mu;
+  std::condition_variable lock_cv;
+  bool sink_locked = false;
+  bool release_sink = false;
+  std::thread holder([&] {
+    GST_PAD_STREAM_LOCK(sink);
+    {
+      std::lock_guard<std::mutex> lk(lock_mu);
+      sink_locked = true;
+    }
+    lock_cv.notify_one();
+    {
+      std::unique_lock<std::mutex> lk(lock_mu);
+      lock_cv.wait(lk, [&] { return release_sink; });
+    }
+    GST_PAD_STREAM_UNLOCK(sink);
+  });
+  {
+    std::unique_lock<std::mutex> lk(lock_mu);
+    lock_cv.wait(lk, [&] { return sink_locked; });
+  }
+
+  // This is the shape behind Claude's repro: the branch ghost-src lock is
+  // idle while the linked downstream sink lock is held by streaming work.
+  const bool source_lock_free = GST_PAD_STREAM_TRYLOCK(source);
+  if (source_lock_free) GST_PAD_STREAM_UNLOCK(source);
+  check(source_lock_free, "branch ghost-src lock is independently idle");
+
+  misbklv::detail::VideoCtx video;
+  video.reserved_video_pad = sink;
+  auto eos = std::async(std::launch::async, [&] {
+    const auto call = std::chrono::steady_clock::now();
+    const bool sent = misbklv::detail::push_live_eos_when_idle(
+        video, {}, std::chrono::milliseconds(200));
+    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             std::chrono::steady_clock::now() - call)
+                             .count();
+    return std::pair{sent, elapsed};
+  });
+  const auto status = eos.wait_for(std::chrono::seconds(2));
+  const bool bounded = status == std::future_status::ready;
+  std::pair<bool, long long> outcome{};
+  if (bounded) outcome = eos.get();
+  {
+    std::lock_guard<std::mutex> lk(lock_mu);
+    release_sink = true;
+  }
+  lock_cv.notify_one();
+  holder.join();
+  if (!bounded) outcome = eos.get();
+
+  check(bounded, "EOS returns while the mux sink stream lock remains held");
+  check(!outcome.first, "EOS is not pushed after lock-acquisition timeout");
+  check(outcome.second >= 150 && outcome.second < 1000,
+        "EOS downstream-lock acquisition uses the requested bound");
+
+  video.reserved_video_pad = nullptr;
+  gst_pad_unlink(source, sink);
+  gst_pad_set_active(source, FALSE);
+  gst_pad_set_active(sink, FALSE);
+  gst_object_unref(source);
+  gst_object_unref(target);
+  gst_object_unref(sink);
 }
 
 // --- HEVC regression helpers: validate video ES, not just KLV + size ---------
@@ -380,6 +470,9 @@ int main(int argc, char** argv) {
   std::span<const std::byte> klv(klv_bytes);
 
   auto be = make_gst_backend();
+
+  std::printf("== serialized live EOS locks the downstream mux pad ==\n");
+  check_live_eos_uses_downstream_lock();
 
   std::printf("== error cases: unsupported URIs ==\n");
   {

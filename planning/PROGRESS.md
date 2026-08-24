@@ -18,8 +18,10 @@ build, sanitizer, generated-drift, and link checks are green. The API guide,
 public header comments, ADR 0020/0031
 supersession, and backend scope now match the landed live-video surface. Review
 follow-up makes first delivery persistent across close-time stalls, bounds EOS
-stream-lock acquisition, and adds never-delivered, stalled-close, and failed-NULL
-regressions.
+stream-lock acquisition on the actual mux sink pad, and adds mux-lock,
+never-delivered, stalled-close, and failed-NULL regressions. ADR 0034 records
+that the acquisition deadline ends at synchronous handler entry and that a
+timeout discards incomplete file output.
 The remaining work is the downstream parrot-to-klv stress witness after this PR
 lands or is pinned there.
 

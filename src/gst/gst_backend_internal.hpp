@@ -3,6 +3,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <map>
@@ -47,6 +48,15 @@ struct VideoSource {
 };
 
 VideoSource parse_video_source(const std::string& raw);
+
+// Push EOS from an unbounded live branch only after acquiring the source and
+// linked mux sink stream locks in source-to-sink order. The source/ghost lock
+// can be idle while a downstream chain function holds the mux lock, so both
+// must be acquired before entering gst_pad_push_event(). Exposed only through
+// this private header so lock selection and timeout behavior can be tested.
+bool push_live_eos_when_idle(
+    struct VideoCtx& video, std::stop_token stop,
+    std::chrono::steady_clock::duration lock_timeout);
 
 enum class CodecLatch { Unknown, IsH264, NotH264 };
 

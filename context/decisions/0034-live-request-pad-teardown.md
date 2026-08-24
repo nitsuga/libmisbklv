@@ -5,7 +5,7 @@ decision_status: accepted
 tags: [decision, backend, gstreamer, streaming, teardown, phase-5]
 generated:
   by: openai/gpt-5
-  at: 2026-08-24T01:55:22Z
+  at: 2026-08-24T02:34:13Z
 fork: 31
 ---
 
@@ -47,11 +47,14 @@ The finish sequence is:
    to produce a fresh buffer merely to preserve its output. A branch that has
    never become usable fails rather than silently emitting KLV-only output.
 3. Push EOS from that live source pad while it remains linked to the reserved
-   muxer pad. Because EOS is serialized with data, poll the pad stream lock with
-   `GST_PAD_STREAM_TRYLOCK` for at most five seconds and honor the stop token
-   before pushing. This prevents `finish()` from waiting behind a stuck
-   streaming thread. Once the lock is owned, handle EOS synchronously as
-   GStreamer requires. Never call `gst_pad_unlink` or
+   muxer pad. Because EOS is serialized with data, poll the source and
+   **reserved mux sink pad** stream locks in source-to-sink order with
+   `GST_PAD_STREAM_TRYLOCK` for at most five seconds, honoring the stop token
+   before pushing. Polling the branch ghost source pad alone is insufficient:
+   its lock can be idle while a downstream chain function holds the mux sink
+   lock. Acquiring both locks bounds entry into the EOS handler; it does not
+   impose a deadline on the synchronous `mpegtsmux` handler after entry. Never
+   call `gst_pad_unlink` or
    `gst_element_release_request_pad` during `PLAYING`.
 4. Drain to a clean pipeline EOS, surface a bus error, or honor the caller's
    stop token. Retain the five-minute stall guard; it is not a performance
@@ -60,7 +63,9 @@ The finish sequence is:
    most five seconds. A failed or incomplete transition makes `finish()` fail;
    there is no unbounded state wait.
 6. Preserve a newly created output file only after clean EOS and successful
-   quiescence. Cancellation remains success but removes partial file output,
+   quiescence. Failure to acquire the mux stream lock is a backend failure and
+   removes the output: without branch EOS there is no evidence that the TS is
+   complete. Cancellation remains success but also removes partial file output,
    per [ADR 0022](./0022-no-output-on-failure.md) and ADR 0032.
 
 The reserved request pad needs no explicit release: destroying the NULL
@@ -87,6 +92,12 @@ has stopped.
   The implicit lock wait has no deadline. A detached EOS worker is also
   rejected: cancellation cannot stop `gst_pad_push_event`, and letting it
   outlive the owning pipeline turns a latency problem into a lifetime race.
+- **Preserve file output after the mux-lock deadline** — rejected. A session
+  that cannot deliver video EOS has not completed its mux drain, so retaining
+  the file would weaken ADR 0022's successful-session-only output guarantee and
+  expose a possibly truncated transport stream as a recording. The lower-risk
+  data-loss tradeoff is explicit: a five-second mux stall at the instant of
+  close fails the session and removes its output.
 - **Pause, release, resume, then drain** — rejected. It adds another state
   transition and request-pad mutation when a serialized EOS event provides the
   normal GStreamer end-of-stream mechanism.
@@ -103,6 +114,9 @@ has stopped.
 - Immediate close can wait briefly for the live video branch to become usable.
   A branch that cannot negotiate or deliver data fails rather than degrading to
   an undocumented KLV-only stream.
+- A mux sink stream-lock stall is bounded before EOS handler entry. A timeout
+  fails the session and discards file output; after successful lock acquisition,
+  GStreamer's synchronous EOS handler itself remains outside that bound.
 - The full insert surface keeps one drain contract and one stall guard. No live
   special case is allowed to manufacture success without pipeline EOS.
 
@@ -112,8 +126,11 @@ has stopped.
   separate from RTSP connection/open time. Increase it only with evidence that
   a valid connected source routinely negotiates more slowly.
 - GStreamer defines EOS as a serialized downstream event. The five-second
-  stream-lock acquisition bound prevents waiting on an in-flight/stuck buffer;
-  after acquisition, the event handler itself remains synchronous by contract.
+  stream-lock acquisition bound includes the reserved mux sink pad, not merely
+  the branch ghost source pad; both are acquired in source-to-sink order. It
+  prevents entering behind an in-flight or stuck chain call; after acquisition,
+  the event handler remains synchronous and cannot be interrupted by the stop
+  token under GStreamer's contract.
 - Allocator-stress validation remains valuable because the original corruption
   was timing-sensitive. The deterministic semantic regressions are covered by
   the hermetic live-video tests; downstream parrot-to-klv stress remains the
