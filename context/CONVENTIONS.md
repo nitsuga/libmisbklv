@@ -53,8 +53,12 @@ generated:
 `human:<id>` for people, `<producer>/<version>` for agents and tools (e.g.
 `claude/opus-5`), `process:<id>` for automation. Trust tooling keys off the
 `human:` prefix — use it only for genuine human authorship or review, never for
-agent-written docs a human merely merged. Every doc in this bundle is agent-written,
-so every `generated.by` here is `claude/opus-5`, not `human:`.
+agent-written docs a human merely merged. Every doc in this bundle is
+agent-written, so no `generated.by` here is ever `human:` — it names whichever
+agent authored that doc (`claude/opus-5`, `openai/gpt-5`, …). More than one
+model works this repo, so don't assume a single actor; the same spelling
+identifies an agent posting to a PR, an issue, or a comment (`AGENTS.md`
+§ Agent authorship on PRs, issues, and comments).
 
 **`generated.at` is the last *meaningful* content change** — the spec's words,
 and consumers use it to tell a recent edit from a stale fact. So bump it when
