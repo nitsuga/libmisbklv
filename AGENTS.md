@@ -166,10 +166,17 @@ produced what, and a comment's author line names the model that wrote *that*
 comment — not the model that opened the PR. More than one agent works this repo,
 so an unattributed comment is genuinely ambiguous.
 
-Spell the model with the same actor convention the knowledge bundle uses for
-`generated.by`: `<producer>/<version>`, e.g. `claude/opus-5`, `openai/gpt-5`
-([`context/CONVENTIONS.md`](context/CONVENTIONS.md) § Actors). One repo, one
-spelling.
+Spell the model as `<producer>/<model>` — the vendor *or* harness that
+generated the text, then the model: `claude/opus-5`, `openai/gpt-5`,
+`opencode-go/muse-spark-1.2-contributor`. One pair, no exceptions. That is the
+same pair the knowledge bundle's `generated.by` actor form uses
+([`context/CONVENTIONS.md`](context/CONVENTIONS.md) § Actors), written for a
+narrower case, so an agent spells itself identically in frontmatter and in
+prose. Don't exempt an agent whose harness and model are distinct: two
+spellings for one agent is the failure this rule exists to prevent, and a
+`<producer>` slot that accepts a harness already fits it.
+
+The rule applies going forward; comments predating it are left as they are.
 
 ## Repo layout
 
