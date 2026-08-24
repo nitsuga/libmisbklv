@@ -1,5 +1,9 @@
 # Knowledge Bundle Log
 
+## 2026-08-24
+
+* **fix: live request-pad teardown drains without a mid-PLAYING release (ADR 0034, fork 31 — #39 / PR #40)**: traced the residual parrot-to-klv#57 heap corruption to `GstInserter::finish()` unlinking and releasing an unbounded live video's `mpegtsmux` request pad while the mux streaming thread could still traverse its pad list. The production fix keeps the pad linked until NULL pipeline destruction, waits briefly for an immediately-closed live branch to negotiate and deliver data, pushes EOS through that pad, and uses the common error-aware five-minute drain. It removes the diagnostic branch's two-second global timeout, success-without-drain path, and unbounded NULL wait; NULL confirmation is bounded, cancellation stays prompt, and incomplete/error output is removed. `live_video_test` now requires non-empty, byte-exact KLV after unbounded-live drain and covers pre-requested cancellation leaving no output. The temporary root `FIX.md`/`NOTE.md` investigation files were removed; durable rationale lives in [ADR 0034](./decisions/0034-live-request-pad-teardown.md). Validation: all 28 release tests pass; five allocator-perturbed repeats each of `live_video` and the Valgrind-backed `teardown_probe_uaf` harness also pass.
+
 ## 2026-08-22
 
 * **build: CMakePresets.json v6→v3; wire ci.yml to `cmake --preset`**: downgraded `CMakePresets.json` from schema v6 (`cmakeMinimumRequired` 3.25) to v3 (3.21) to stay in lockstep with parrot-to-klv, whose `release.yml` pins `ubuntu-22.04` and only has apt `cmake` 3.22.1 — too old for v6. `ci.yml`'s `build-test` job now configures/builds/tests/installs via the `release` preset (`build/release`) instead of ad hoc `-B build`, and `sanitizers` now uses the `sanitize` preset (`build/sanitize`) instead of `-B build-san`. README.md and AGENTS.md updated to match, dropping the now-stale "maps to CI build-san" parenthetical since CI uses the preset directly.

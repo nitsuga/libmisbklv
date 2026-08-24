@@ -56,8 +56,8 @@ struct VideoCtx {
   // so it takes the lower ES PID and is announced first in the PMT (ADR 0020
   // § stream order). Borrowed: the muxer owns the pad; this is only linked.
   GstPad* reserved_video_pad = nullptr;
-  // Live branches (Rtsp, Pipeline) never EOS; finish() must unlink their
-  // reserved pad so mpegtsmux can EOS from KLV alone.
+  // Unbounded live branches never EOS on their own; finish() pushes EOS through
+  // their final src pad while it remains linked so mpegtsmux can drain safely.
   bool is_live = false;
   bool is_live_unbounded = false; // true if no num-buffers (pipeline) or RTSP
   GstElement* mux_element = nullptr;   // borrowed, owned by pipeline
@@ -117,8 +117,7 @@ struct VideoCtx {
 // `reserved_video_pad` is the muxer sink pad reserved for video while the
 // pipeline was NULL (borrowed, owned by the muxer); the video stream is linked
 // onto it once the demuxer exposes its pad, keeping video first in the PMT.
-// `mux` is the pipeline's mpegtsmux element (borrowed, stored in VideoCtx
-// for live finish unlink).
+// `mux` is the pipeline's mpegtsmux element (borrowed, stored in VideoCtx).
 Result<std::monostate> prepare_video_branch(
     GstElement* pipeline, GstPad* reserved_video_pad, GstElement* mux,
     const VideoSource& src, Sei0604 sei_0604,

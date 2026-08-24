@@ -584,12 +584,14 @@ int main(int argc, char** argv) {
       check(static_cast<bool>(r), "unbounded pipeline live open succeeds");
       if (r) {
         auto t0 = std::chrono::steady_clock::now();
+        std::vector<std::byte> sent;
         for (int i = 0; i < 3; ++i) {
           size_t n = packet_frame_length(klv);
           int64_t pts = 1'000'000'000LL + static_cast<int64_t>(i * 100'000'000LL);
           auto pr = (*r)->push(klv.subspan(0, n), pts);
           check(static_cast<bool>(pr), "unbounded push ok");
           if (!pr) break;
+          sent.insert(sent.end(), klv.begin(), klv.begin() + n);
         }
         auto fr = (*r)->finish();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
@@ -600,7 +602,46 @@ int main(int argc, char** argv) {
         if (file_exists_p(out)) {
           auto sz = std::filesystem::file_size(out);
           check(sz > 1000, "unbounded output non-empty");
+          std::vector<std::byte> back;
+          auto rr = be->extract(out, [&](const KlvPacket& kp) {
+            back.insert(back.end(), kp.bytes.begin(), kp.bytes.end());
+          });
+          check(static_cast<bool>(rr), "unbounded output extracts");
+          check(back == sent, "unbounded output KLV byte-exact after drain");
         }
+        std::remove(out.c_str());
+      }
+    }
+  }
+
+  std::printf("== unbounded live cancellation stays prompt and discards output ==\n");
+  {
+    std::string enc = pick_h264_encoder();
+    if (enc.empty()) {
+      std::printf("  SKIP unbounded cancellation: no encoder\n");
+    } else {
+      std::string desc = "pipeline:videotestsrc is-live=true ! videoconvert ! "
+                         "video/x-raw,width=320,height=240,framerate=30/1 ! " +
+                         enc + " ! h264parse";
+      std::string out = tmpdir + "/pipeline-unbounded-cancel.ts";
+      std::remove(out.c_str());
+      auto r = be->open_insert({"file:" + out, true, desc, Sei0604::Preserve});
+      check(static_cast<bool>(r), "unbounded cancellation open succeeds");
+      if (r) {
+        const size_t n = packet_frame_length(klv);
+        check(static_cast<bool>((*r)->push(klv.subspan(0, n), 0)),
+              "unbounded cancellation push ok");
+        std::stop_source ss;
+        ss.request_stop();
+        const auto t0 = std::chrono::steady_clock::now();
+        auto fr = (*r)->finish(ss.get_token());
+        const auto elapsed =
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - t0)
+                .count();
+        check(static_cast<bool>(fr), "unbounded cancellation returns ok");
+        check(elapsed < 1000, "unbounded cancellation returns within 1s");
+        check(!file_exists_p(out), "unbounded cancellation discards output");
         std::remove(out.c_str());
       }
     }

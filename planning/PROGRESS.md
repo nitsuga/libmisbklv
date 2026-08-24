@@ -8,7 +8,14 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-PR #38 (`fix/live-rtp-teardown-probe-uaf-57`, libmisbklv#37) is validated and ready to merge: it closes the parrot-to-klv#57 SEI-probe use-after-free — `GstInserter::quiesce_to_null()` severs the `Generate` pad probes before the pipeline reaches `GST_STATE_NULL` (detail in [log](../context/log.md); rationale in ADR 0024 § *Teardown: SEI probe lifetime*, cross-referenced from 0020). Both a Valgrind memcheck control and @ox-alpha's stress rig confirm the probe UAF is gone and that variant A sits at the pre-existing baseline flake rate. Remaining work: merge #38, then bump the libmisbklv pin in parrot-to-klv. A separate, still-unattributed heap-corruption residual (glibc `tcache_thread_shutdown` signature during `Generate` live teardown, ~baseline rate) is out of scope for #38 and tracked downstream on parrot-to-klv#57. Recently landed on `main`: generate-path encoder-shift fix ([ADR 0033](../context/decisions/0033-generate-sei-encoder-timeline-shift.md), #33), cancellable insert drain ([ADR 0032](../context/decisions/0032-cancellable-insert-drain.md)), and perf fix #27. Build presets: `CMakePresets.json` v3 provides `release`/`debug`/`sanitize` under `build/*` (`jobs=6` via hidden base; `sanitize` is core-only) — `ci.yml` configures/builds/tests through these same presets.
+PR #40 (`d1-reorder-teardown`, libmisbklv#39) now carries the production fix for
+the residual parrot-to-klv#57 live teardown corruption. The repair keeps the
+live-video request pad linked through a real EOS drain, preserves
+error/output/cancellation guarantees, and bounds NULL-state confirmation
+([ADR 0034](../context/decisions/0034-live-request-pad-teardown.md)). The full
+release suite passes, as do five allocator-perturbed repeats each of the live
+test and Valgrind-backed teardown harness. The remaining integration witness is
+the downstream parrot-to-klv stress run after this PR lands or is pinned there.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
@@ -16,7 +23,7 @@ PR #38 (`fix/live-rtp-teardown-probe-uaf-57`, libmisbklv#37) is validated and re
 
 ## In progress
 
-None currently.
+- Update PR #40 with the production repair and confirm its CI checks.
 
 ## Next
 
