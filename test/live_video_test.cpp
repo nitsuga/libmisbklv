@@ -174,12 +174,10 @@ static void check_live_eos_uses_downstream_lock() {
   if (source_lock_free) GST_PAD_STREAM_UNLOCK(source);
   check(source_lock_free, "branch ghost-src lock is independently idle");
 
-  misbklv::detail::VideoCtx video;
-  video.reserved_video_pad = sink;
   auto eos = std::async(std::launch::async, [&] {
     const auto call = std::chrono::steady_clock::now();
     const bool sent = misbklv::detail::push_live_eos_when_idle(
-        video, {}, std::chrono::milliseconds(200));
+        source, sink, {}, std::chrono::milliseconds(200));
     const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                              std::chrono::steady_clock::now() - call)
                              .count();
@@ -202,7 +200,6 @@ static void check_live_eos_uses_downstream_lock() {
   check(outcome.second >= 150 && outcome.second < 1000,
         "EOS downstream-lock acquisition uses the requested bound");
 
-  video.reserved_video_pad = nullptr;
   gst_pad_unlink(source, sink);
   gst_pad_set_active(source, FALSE);
   gst_pad_set_active(sink, FALSE);

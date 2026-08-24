@@ -45,11 +45,9 @@ inline constexpr auto kLiveEosLockTimeout = std::chrono::seconds(5);
 }  // namespace
 
 bool push_live_eos_when_idle(
-    VideoCtx& video, std::stop_token stop,
+    GstPad* source_pad, GstPad* mux_pad, std::stop_token stop,
     std::chrono::steady_clock::duration lock_timeout) {
-  if (!video.reserved_video_pad) return false;
-  GstPad* source_pad = gst_pad_get_peer(video.reserved_video_pad);
-  if (!source_pad) return false;
+  if (!source_pad || !mux_pad) return false;
   const auto deadline = std::chrono::steady_clock::now() + lock_timeout;
   bool sent = false;
   while (!stop.stop_requested() &&
@@ -59,9 +57,9 @@ bool push_live_eos_when_idle(
     // function holds the downstream lock. Both are recursive, so the event can
     // safely re-enter them on this thread.
     if (GST_PAD_STREAM_TRYLOCK(source_pad)) {
-      if (GST_PAD_STREAM_TRYLOCK(video.reserved_video_pad)) {
+      if (GST_PAD_STREAM_TRYLOCK(mux_pad)) {
         sent = gst_pad_push_event(source_pad, gst_event_new_eos());
-        GST_PAD_STREAM_UNLOCK(video.reserved_video_pad);
+        GST_PAD_STREAM_UNLOCK(mux_pad);
         GST_PAD_STREAM_UNLOCK(source_pad);
         break;
       }
@@ -69,7 +67,6 @@ bool push_live_eos_when_idle(
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
-  gst_object_unref(source_pad);
   return sent;
 }
 
@@ -249,8 +246,8 @@ class GstInserter : public Inserter {
           }
         }
         live_video_eos =
-            ready && push_live_eos_when_idle(*video_, stop,
-                                             kLiveEosLockTimeout);
+            ready && push_live_eos_when_idle(peer, video_->reserved_video_pad,
+                                             stop, kLiveEosLockTimeout);
         gst_object_unref(peer);
       } else {
         live_video_eos = false;
