@@ -154,6 +154,23 @@ match. So is any vendored third-party code: read it, never restyle it.
 No `Co-Authored-By` trailer — keep history clean. When committing on the user's
 behalf, write the message without the Claude co-authorship line.
 
+## Agent authorship on PRs, issues, and comments
+
+When an agent posts a PR body, an issue, or a review comment, it identifies
+*itself* — the generating model — as the author, e.g.
+`Author: Claude Code (model: claude/opus-5)`. This is separate from the git
+commit author, which stays the human or machine that invoked `git`, and the
+commit message's author field is not the place for it (see **Commit messages**
+above). It goes in the PR/issue/comment prose so a reader can tell which model
+produced what, and a comment's author line names the model that wrote *that*
+comment — not the model that opened the PR. More than one agent works this repo,
+so an unattributed comment is genuinely ambiguous.
+
+Spell the model with the same actor convention the knowledge bundle uses for
+`generated.by`: `<producer>/<version>`, e.g. `claude/opus-5`, `openai/gpt-5`
+([`context/CONVENTIONS.md`](context/CONVENTIONS.md) § Actors). One repo, one
+spelling.
+
 ## Repo layout
 
 - `references/` — MISB standards (PDF + `.txt` extract). Source of truth,
