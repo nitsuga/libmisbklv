@@ -7,10 +7,11 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
-#include <stop_token>
-#include <system_error>
 #include <memory>
+#include <stop_token>
 #include <string>
+#include <system_error>
+#include <thread>
 #include <utility>
 
 #include <gst/app/app.h>
@@ -27,7 +28,47 @@ inline constexpr GstClockTime kFinishDrainTimeout = 300 * GST_SECOND;
 // point of threading a stop_token in — ADR 0032), long enough not to spin.
 inline constexpr GstClockTime kFinishDrainPoll = 100 * GST_MSECOND;
 
+// NULL teardown should normally complete synchronously, but a misbehaving
+// source/plugin must not turn close() or destruction into an unbounded wait.
+inline constexpr GstClockTime kNullStateTimeout = 5 * GST_SECOND;
+
+// A caller can close immediately after opening a live source. Give its final
+// src pad a short, bounded window to negotiate caps before sending EOS; without
+// caps mpegtsmux cannot create the video stream handler.
+inline constexpr auto kLiveEosReadyTimeout = std::chrono::seconds(1);
+
+// EOS is serialized with video data and would otherwise wait indefinitely for
+// the mux sink pad's stream lock. Poll that lock so cancellation and a stuck
+// streaming thread remain bounded before entering the event handler.
+inline constexpr auto kLiveEosLockTimeout = std::chrono::seconds(5);
+
 }  // namespace
+
+bool push_live_eos_when_idle(
+    GstPad* source_pad, GstPad* mux_pad, std::stop_token stop,
+    std::chrono::steady_clock::duration lock_timeout) {
+  if (!source_pad || !mux_pad) return false;
+  const auto deadline = std::chrono::steady_clock::now() + lock_timeout;
+  bool sent = false;
+  while (!stop.stop_requested() &&
+         std::chrono::steady_clock::now() < deadline) {
+    // Acquire in the event's source-to-sink order. Checking only source_pad is
+    // insufficient: a branch ghost-src lock can remain free while a mux chain
+    // function holds the downstream lock. Both are recursive, so the event can
+    // safely re-enter them on this thread.
+    if (GST_PAD_STREAM_TRYLOCK(source_pad)) {
+      if (GST_PAD_STREAM_TRYLOCK(mux_pad)) {
+        sent = gst_pad_push_event(source_pad, gst_event_new_eos());
+        GST_PAD_STREAM_UNLOCK(mux_pad);
+        GST_PAD_STREAM_UNLOCK(source_pad);
+        break;
+      }
+      GST_PAD_STREAM_UNLOCK(source_pad);
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  return sent;
+}
 
 // NOTE: make_sink intentionally lives at misbklv::detail scope (not in the
 // anonymous namespace below) so the unit tests can construct and inspect a sink.
@@ -176,77 +217,77 @@ class GstInserter : public Inserter {
                               : Result<std::monostate>::err(Error::Backend);
   }
 
-  // Live sources never EOS; for live branches finish() injects EOS into
-  // the video branch so mpegtsmux can EOS from both pads — otherwise the
-  // mux still waits on an open live video sink pad and finish() would stall
-  // until the 5min timeout. We send an EOS event down the peer of the
-  // reserved pad and, if that peer is gone (already unlinked), fall back to
-  // unlinking/releasing the pad so the mux can EOS from KLV alone. File
-  // sources propagate demuxer EOS. In both cases the pipeline drains through
-  // mpegtsmux until EOS or kFinishDrainTimeout.
+  // An unbounded live video source will never produce EOS by itself. Send EOS
+  // from its final src pad while it remains linked to mpegtsmux, then wait for
+  // the muxer/sink to drain both the video and KLV pads. In particular, do not
+  // unlink or release the mux request pad while PLAYING: mpegtsmux can still be
+  // traversing its request-pad list on a streaming thread (issue #39).
   Result<std::monostate> finish(std::stop_token stop) override {
-    gst_app_src_end_of_stream(GST_APP_SRC(appsrc_));
-    // Only truly unbounded live sources need immediate unlink; finite
-    // live (pipeline: with num-buffers) will EOS on its own after its buffers
-    // are consumed, and early unlinks break the KLV timeline (file sink got
-    // 0 bytes). So gate on is_live_unbounded.
-    if (video_ && video_->is_live && video_->is_live_unbounded && video_->reserved_video_pad) {
+    const GstFlowReturn klv_eos =
+        gst_app_src_end_of_stream(GST_APP_SRC(appsrc_));
+    bool live_video_eos = true;
+    if (video_ && video_->is_live_unbounded && video_->reserved_video_pad) {
       GstPad* peer = gst_pad_get_peer(video_->reserved_video_pad);
       if (peer) {
-        gst_pad_unlink(peer, video_->reserved_video_pad);
+        bool ready =
+            video_->delivered_buffer.load(std::memory_order_acquire);
+        if (!ready) {
+          const auto ready_deadline =
+              std::chrono::steady_clock::now() + kLiveEosReadyTimeout;
+          while (!stop.stop_requested() &&
+                 std::chrono::steady_clock::now() < ready_deadline) {
+            GstCaps* caps = gst_pad_get_current_caps(peer);
+            const bool negotiated = caps && !gst_caps_is_empty(caps);
+            if (caps) gst_caps_unref(caps);
+            ready = negotiated && video_->delivered_buffer.load(
+                                      std::memory_order_acquire);
+            if (ready) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+          }
+        }
+        live_video_eos =
+            ready && push_live_eos_when_idle(peer, video_->reserved_video_pad,
+                                             stop, kLiveEosLockTimeout);
         gst_object_unref(peer);
+      } else {
+        live_video_eos = false;
       }
-      if (video_->mux_element) {
-        gst_element_release_request_pad(video_->mux_element, video_->reserved_video_pad);
-        video_->reserved_video_pad = nullptr;
-      }
+      if (!live_video_eos && !stop.stop_requested())
+        g_warning("misbklv: failed to send EOS through the live video branch");
     }
+
     GstBus* bus = gst_element_get_bus(pipeline_);
-    // Live branches can emit transient not-linked errors when we inject EOS
-    // or unlink; those are not terminal — keep waiting for a clean EOS.
     bool ok = false;
-    bool cancelled = false;
+    bool cancelled = stop.stop_requested();
     const auto deadline = std::chrono::steady_clock::now() +
                           std::chrono::nanoseconds(kFinishDrainTimeout);
-    // Cap each poll short so a cancellation is noticed promptly rather than
-    // after a full second of blocking. A realtime file replay drains its video
-    // at wall-clock speed, so this loop is where a Ctrl-C arriving after the
-    // last KLV packet has to take effect — otherwise it is ignored until EOS
-    // (ADR 0032). The deadline check already lived here; the stop check joins it.
-    while (std::chrono::steady_clock::now() < deadline) {
+    // Cap each poll short so a cancellation is noticed promptly. A realtime
+    // file replay drains at wall-clock speed, so this is where a Ctrl-C after
+    // the final KLV packet must take effect (ADR 0032).
+    while (!cancelled && klv_eos == GST_FLOW_OK && live_video_eos &&
+           std::chrono::steady_clock::now() < deadline) {
       if (stop.stop_requested()) {
         cancelled = true;
         break;
       }
-      auto remain = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        deadline - std::chrono::steady_clock::now())
-                        .count();
-      GstClockTime poll = remain > kFinishDrainPoll
-                              ? kFinishDrainPoll
-                              : static_cast<GstClockTime>(remain);
+      const auto remain = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                              deadline - std::chrono::steady_clock::now())
+                              .count();
+      const GstClockTime poll = remain > kFinishDrainPoll
+                                    ? kFinishDrainPoll
+                                    : static_cast<GstClockTime>(remain);
       GstMessage* m = gst_bus_timed_pop_filtered(
           bus, poll,
           static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
-      if (!m) {
-        // poll timeout — re-check stop and deadline
-        continue;
-      }
+      if (!m) continue;
       if (GST_MESSAGE_TYPE(m) == GST_MESSAGE_EOS) {
         ok = true;
         gst_message_unref(m);
         break;
       }
-      // ERROR
       GError* err = nullptr;
       gchar* dbg = nullptr;
       gst_message_parse_error(m, &err, &dbg);
-      const bool is_not_linked = dbg && std::strstr(dbg, "not-linked");
-      if (is_not_linked) {
-        if (err) g_error_free(err);
-        g_free(dbg);
-        gst_message_unref(m);
-        continue;
-      }
       g_warning("misbklv: pipeline error during finish: %s",
                 err ? err->message : "unknown");
       if (err) g_error_free(err);
@@ -254,21 +295,23 @@ class GstInserter : public Inserter {
       gst_message_unref(m);
       break;
     }
-    if (!ok && !cancelled) {
-      bool timed_out = std::chrono::steady_clock::now() >= deadline;
-      if (timed_out)
-        g_warning("misbklv: pipeline did not drain within %" G_GUINT64_FORMAT
-                  "s of EOS; giving up",
-                  static_cast<guint64>(kFinishDrainTimeout / GST_SECOND));
-    }
+    if (!ok && !cancelled && std::chrono::steady_clock::now() >= deadline)
+      g_warning("misbklv: pipeline did not drain within %" G_GUINT64_FORMAT
+                "s of EOS; giving up",
+                static_cast<guint64>(kFinishDrainTimeout / GST_SECOND));
     gst_object_unref(bus);
+
+    const bool quiesced = quiesce_to_null();
+    if (!quiesced) {
+      ok = false;
+      cancelled = false;
+    }
     // Three outcomes: a clean EOS keeps the output; a caller cancellation and a
     // drain failure both discard any partial sink file (ADR 0022 — no output
     // unless the session succeeded). Cancellation is a caller request, not a
     // backend fault, so it returns ok — matching extract()'s cooperative-stop
     // convention (ADR 0019). A cancelled file sink therefore leaves no
     // half-written output, and a cancelled live sink simply stops.
-    quiesce_to_null();
     if (ok)
       removable_sink_.clear();
     else
@@ -278,27 +321,37 @@ class GstInserter : public Inserter {
   }
 
  private:
-  // Sever the SEI probes, then take the pipeline to NULL, before VideoCtx is
-  // freed. The probe severing is what closes the issue #57 use-after-free:
-  // remove_sei_probes() calls gst_pad_remove_probe, which blocks until any
-  // in-flight callback returns, so once teardown starts no streaming thread can
-  // re-enter on_h264_buffer_inject_sei / the CAPS probe (each holds a raw
-  // VideoCtx*). We do NOT wait on gst_element_get_state after set_state(NULL):
-  // that wait is unnecessary for #57 (severing already satisfies the memcheck
-  // control) and only restores the original teardown timing. A non-probe
-  // streaming-thread access after an async NULL transition (e.g. a late
-  // pad-added) remains a known, pre-existing residual — it predates this fix and
-  // is tracked on parrot-to-klv#57, not scoped here. Idempotent: finish() and
-  // the destructor both call it, and remove_sei_probes()/a repeated NULL are
-  // no-ops the second time.
-  void quiesce_to_null() {
-    if (!pipeline_) return;
-    if (video_) video_->remove_sei_probes();
-    gst_element_set_state(pipeline_, GST_STATE_NULL);
+  // Sever every probe holding VideoCtx, then take the pipeline to NULL before
+  // freeing it. remove_probes() blocks until any in-flight callback returns;
+  // this closes the issue #57 SEI-probe use-after-free and also owns the live
+  // delivery tracker's callback lifetime.
+  //
+  // Idempotent: finish() and the destructor both call it, and
+  // remove_probes()/a repeated NULL are no-ops the second time.
+  bool quiesce_to_null() {
+    if (!pipeline_) return true;
+    if (video_) video_->remove_probes();
+    if (gst_element_set_state(pipeline_, GST_STATE_NULL) ==
+        GST_STATE_CHANGE_FAILURE) {
+      g_warning("misbklv: failed to request NULL pipeline state");
+      return false;
+    }
+    GstState cur = GST_STATE_VOID_PENDING;
+    GstState pending = GST_STATE_VOID_PENDING;
+    const GstStateChangeReturn state = gst_element_get_state(
+        pipeline_, &cur, &pending, kNullStateTimeout);
+    if (state == GST_STATE_CHANGE_FAILURE || cur != GST_STATE_NULL) {
+      g_warning("misbklv: pipeline did not reach NULL within %" G_GUINT64_FORMAT
+                "s; continuing bounded teardown",
+                static_cast<guint64>(kNullStateTimeout / GST_SECOND));
+      return false;
+    }
+    return true;
   }
 
   void discard_output() {
-    // Called after NULL, when filesink has closed the path.
+    // Called after NULL was requested. On a bounded NULL-confirmation failure,
+    // POSIX unlink still removes the directory entry while filesink unwinds.
     if (removable_sink_.empty()) return;
     std::remove(removable_sink_.c_str());
     removable_sink_.clear();

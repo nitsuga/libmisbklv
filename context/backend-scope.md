@@ -167,7 +167,14 @@ Opened here during scoping, each resolved by an ADR (see the
   (`Sei0604::Generate`, ADRs [`0023`](./decisions/0023-st0604-sei-passthrough.md)
   / [`0024`](./decisions/0024-sei-generation-opt-in.md), forks 21-22). Generation
   is H.264-only and refuses other codecs; passthrough itself carries any codec,
-  picking its parser from the pad's caps.
+  picking its parser from the pad's caps. ADR
+  [`0031`](./decisions/0031-live-streaming-surface.md) later extended the same
+  surface to `rtsp[s]:` and explicit `pipeline:` live video, enabled realtime
+  file replay/video, and added UDP multicast TTL/interface/loopback controls.
+  Its unbounded live close uses the EOS-drain and request-pad ownership contract
+  from ADR [`0034`](./decisions/0034-live-request-pad-teardown.md); insert drain
+  is cooperatively cancellable per ADR
+  [`0032`](./decisions/0032-cancellable-insert-drain.md).
 
 ## Risks
 

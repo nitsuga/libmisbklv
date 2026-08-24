@@ -92,11 +92,13 @@ class KlvStream {
 // failing close, or destroying the sink without one, removes the file this
 // session created (never one that was already there — ADR 0022).
 //
-// `video_source` (a path / "file:PATH", empty by default) re-muxes that file's
-// video elementary stream, unchanged, alongside the KLV — see InsertConfig for
-// the full contract. With it set, every emitted Message must carry a real PTS on
-// the source's timeline (`Message::set_pts`, nanoseconds from the start of the
-// file); an unset PTS is rejected rather than synthesized.
+// `video_source` accepts a path / "file:PATH", an RTSP URI, or a
+// "pipeline:<gst-launch desc>" live source and re-muxes its video elementary
+// stream alongside the KLV — see InsertConfig for the full contract. With it
+// set, every emitted Message must carry a real PTS on the source timeline
+// (`Message::set_pts`; file-relative or live running time, in nanoseconds); an
+// unset PTS is rejected rather than synthesized. `realtime` is supported with
+// both file and live video (ADR 0031).
 class KlvSink {
  public:
   explicit KlvSink(std::string sink, bool realtime = false,

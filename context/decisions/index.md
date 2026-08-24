@@ -47,3 +47,4 @@ diverge — e.g. fork 7 → ADR 0004; one fork can span several ADRs — fork 4 
 | 28 | [0031 — Vendor-neutral live streaming surface — file-or-live video source and multicast sink](./0031-live-streaming-surface.md) | accepted |
 | 29 | [0032 — Cooperative insert-drain cancellation (stop token on finish/close)](./0032-cancellable-insert-drain.md) | accepted |
 | 30 | [0033 — Generate SEI matching absorbs the encoder DTS-headroom timeline shift](./0033-generate-sei-encoder-timeline-shift.md) | accepted |
+| 31 | [0034 — Live video request pads remain linked through EOS drain](./0034-live-request-pad-teardown.md) | accepted |

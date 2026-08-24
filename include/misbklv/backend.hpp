@@ -95,18 +95,18 @@ struct InsertConfig {
   // the source is dropped — audio, subtitles, and any KLV the source already
   // has (the caller supplies its own KLV through push()).
   //
-  // PTS contract: the video branch is timestamped from the source file, running
-  // from zero at the start of that file, and BOTH branches must land on that one
-  // timeline. So push() must be called with a real `pts_ns` on the same timeline
-  // — presentation time from the start of the source, in nanoseconds, not
-  // wall-clock and not epoch. `kNoPts` is a caller error here and is rejected
-  // (Error::Unsupported): the synthesized ~30 fps counter has no relation to the
-  // source's frame timing and would drift silently.
+  // PTS contract: file video uses time from the start of the source; RTSP and
+  // pipeline video use the live branch's running time. BOTH branches must land
+  // on that one timeline. So push() must receive a real `pts_ns` on the matching
+  // source timeline, in nanoseconds, not wall-clock or epoch. `kNoPts` is a
+  // caller error here and is rejected (Error::Unsupported): the synthesized
+  // ~30 fps counter has no relation to the source's frame timing and would drift
+  // silently.
   //
   // Push order: the muxer waits on the slower pad and the KLV appsrc blocks, so
   // push() applies backpressure as the video branch flows. Push in increasing
-  // PTS order, interleaved with the video's progress — do not try to push a whole
-  // file's worth of KLV before the video has started.
+  // PTS order, interleaved with the video's progress — do not enqueue metadata
+  // far ahead of its corresponding video.
   //
   // realtime + video_source is supported: file source replays on pipeline clock, live source is normal mode (ADR 0031); kNoPts still rejected with video_source.
   std::string video_source;

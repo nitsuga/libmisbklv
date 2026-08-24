@@ -249,11 +249,26 @@ void attach_generate_probes(GstPad* pad, VideoCtx* ctx) {
   const gulong event_id =
       gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM,
                         on_sei_event_probe, ctx, nullptr);
-  ctx->register_sei_probe(pad, event_id);
+  ctx->register_probe(pad, event_id);
   const gulong buf_id =
       gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_BUFFER,
                         on_h264_buffer_inject_sei, ctx, nullptr);
-  ctx->register_sei_probe(pad, buf_id);
+  ctx->register_probe(pad, buf_id);
+}
+
+GstPadProbeReturn on_video_buffer_delivered(GstPad*, GstPadProbeInfo*,
+                                            gpointer user) {
+  static_cast<VideoCtx*>(user)->delivered_buffer.store(
+      true, std::memory_order_release);
+  return GST_PAD_PROBE_OK;
+}
+
+void attach_delivery_probe(VideoCtx* ctx) {
+  if (!ctx || !ctx->reserved_video_pad) return;
+  const gulong id = gst_pad_add_probe(
+      ctx->reserved_video_pad, GST_PAD_PROBE_TYPE_BUFFER,
+      on_video_buffer_delivered, ctx, nullptr);
+  ctx->register_probe(ctx->reserved_video_pad, id);
 }
 
 GstPadProbeReturn on_h264_buffer_inject_sei(GstPad* pad, GstPadProbeInfo* info,
@@ -860,7 +875,7 @@ void on_rtspsrc_pad_added(GstElement*, GstPad* pad, gpointer user) {
 
 }  // namespace
 
-void VideoCtx::register_sei_probe(GstPad* pad, gulong id) {
+void VideoCtx::register_probe(GstPad* pad, gulong id) {
   if (!pad || id == 0) return;
   std::unique_lock<std::mutex> lk(probe_mu);
   if (probes_severed) {
@@ -872,19 +887,19 @@ void VideoCtx::register_sei_probe(GstPad* pad, gulong id) {
     return;
   }
   gst_object_ref(pad);
-  sei_probes.emplace_back(pad, id);
+  probes.emplace_back(pad, id);
 }
 
-void VideoCtx::remove_sei_probes() {
-  std::vector<std::pair<GstPad*, gulong>> probes;
+void VideoCtx::remove_probes() {
+  std::vector<std::pair<GstPad*, gulong>> armed;
   {
     std::lock_guard<std::mutex> lk(probe_mu);
     probes_severed = true;
-    probes.swap(sei_probes);
+    armed.swap(probes);
   }
   // Outside the lock: gst_pad_remove_probe blocks until any running callback
   // returns, and a callback that ever took probe_mu would otherwise deadlock.
-  for (const auto& [pad, id] : probes) {
+  for (const auto& [pad, id] : armed) {
     gst_pad_remove_probe(pad, id);
     gst_object_unref(pad);
   }
@@ -894,7 +909,7 @@ VideoCtx::~VideoCtx() {
   // Belt to the caller's braces: the pipeline should already be NULL and the
   // probes severed by the time we get here, but severing again is idempotent
   // and guards a VideoCtx freed on a path that skipped GstInserter teardown.
-  remove_sei_probes();
+  remove_probes();
   if (h264_parser) gst_h264_nal_parser_free(h264_parser);
 }
 
@@ -1009,7 +1024,6 @@ static Result<std::monostate> prepare_file_branch(
   video->pipeline = pipeline;
   video->reserved_video_pad = reserved_video_pad;
   video->mux_element = mux;
-  video->is_live = false;
   video->generate_sei = sei_0604 == Sei0604::Generate;
   if (video->generate_sei) video->h264_parser = gst_h264_nal_parser_new();
   g_signal_connect(parse, "pad-added", G_CALLBACK(on_video_pad_added), video.get());
@@ -1082,8 +1096,8 @@ static Result<std::monostate> prepare_rtsp_branch(
   video->pipeline = pipeline;
   video->reserved_video_pad = reserved_video_pad;
   video->mux_element = mux;
-  video->is_live = true;
   video->is_live_unbounded = true; // RTSP is always unbounded
+  attach_delivery_probe(video.get());
   video->video_bin = rtspsrc;
   video->generate_sei = sei_0604 == Sei0604::Generate;
   if (video->generate_sei) video->h264_parser = gst_h264_nal_parser_new();
@@ -1156,8 +1170,8 @@ static Result<std::monostate> prepare_pipeline_branch(
   video->pipeline = pipeline;
   video->reserved_video_pad = reserved_video_pad;
   video->mux_element = mux;
-  video->is_live = true;
   video->is_live_unbounded = (desc.find("num-buffers") == std::string::npos);
+  if (video->is_live_unbounded) attach_delivery_probe(video.get());
   video->video_bin = bin;
   video->generate_sei = sei_0604 == Sei0604::Generate;
   if (video->generate_sei) video->h264_parser = gst_h264_nal_parser_new();
