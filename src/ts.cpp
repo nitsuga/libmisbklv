@@ -186,7 +186,23 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
     } else {
       auto it = pes.find(pid);
       if (it != pes.end() && !it->second.empty())
+        // GCC 12/13 report a false -Wstringop-overflow here: inlining
+        // vector::_M_range_insert's reallocation path loses the iterator
+        // bounds, and the diagnostic invents "writing between 2 and SIZE_MAX
+        // bytes into a region of size 0" with a self-contradictory offset range
+        // ([-SIZE_MAX, -1] into an object of size [1, SIZE_MAX]). Neither half
+        // is reachable: `payload` is bounded to [0, 184] by the `off > i + kPkt`
+        // guard above, and `it->second` is non-empty by the condition on this
+        // very `if`, so the destination is never size 0. Suppress narrowly —
+        // re-check when the toolchain moves (issue #41).
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
         it->second.insert(it->second.end(), payload.begin(), payload.end());
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
     }
   }
   if (!frame_error) {
