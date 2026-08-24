@@ -8,14 +8,15 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-PR #40 (`d1-reorder-teardown`, libmisbklv#39) now carries the production fix for
+PR #40 (`d1-reorder-teardown`, libmisbklv#39) carries the production fix for
 the residual parrot-to-klv#57 live teardown corruption. The repair keeps the
 live-video request pad linked through a real EOS drain, preserves
 error/output/cancellation guarantees, and bounds NULL-state confirmation
 ([ADR 0034](../context/decisions/0034-live-request-pad-teardown.md)). The full
 release suite passes, as do five allocator-perturbed repeats each of the live
-test and Valgrind-backed teardown harness. The remaining integration witness is
-the downstream parrot-to-klv stress run after this PR lands or is pinned there.
+test and Valgrind-backed teardown harness; PR build, sanitizer, generated-drift,
+and link checks are green. The remaining integration witness is the downstream
+parrot-to-klv stress run after this PR lands or is pinned there.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
@@ -23,7 +24,8 @@ the downstream parrot-to-klv stress run after this PR lands or is pinned there.
 
 ## In progress
 
-- Update PR #40 with the production repair and confirm its CI checks.
+- Re-run the downstream parrot-to-klv stress witness after PR #40 lands or is
+  pinned there.
 
 ## Next
 
