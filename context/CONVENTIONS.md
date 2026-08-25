@@ -21,7 +21,7 @@ and direct the work. On disagreement, the OKF spec wins over this doc.
 
 | Path | Role |
 |------|------|
-| `../references/` | Raw sources (standards PDFs + `.txt` extracts), append-only. Agent reads, and deposits new snapshots on a directed ingest; never edits one that's already there. |
+| `../references/` | Raw sources (standards PDFs + `.txt` extracts), append-only; provenance and terms in [`../references/README.md`](../references/README.md). Agent reads, and deposits new snapshots on a directed ingest; never edits one that's already there. |
 | `context/` | This bundle. Agent-owned synthesis. |
 | `../docs/` | Human-facing authored guides (terse). Not agent-maintained. |
 | `../data/` | Ignored workspace for developer-provided media; not a test-data source. |
