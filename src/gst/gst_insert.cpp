@@ -3,6 +3,7 @@
 // coordination, finish/drain, and output-file cleanup.
 #include "gst_backend_internal.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -270,12 +271,19 @@ class GstInserter : public Inserter {
         cancelled = true;
         break;
       }
-      const auto remain = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                              deadline - std::chrono::steady_clock::now())
-                              .count();
-      const GstClockTime poll = remain > kFinishDrainPoll
-                                    ? kFinishDrainPoll
-                                    : static_cast<GstClockTime>(remain);
+      // One clock sample per pass. The previous form sampled again here and
+      // compared a signed `remain` against an unsigned GstClockTime: a deadline
+      // crossed between the two samples made `remain` negative, and the
+      // comparison's conversion to unsigned then selected the cap branch. That
+      // happened to be harmless (issue #34), but only by way of a conversion
+      // nobody should have to re-derive. Guarding here keeps `remain` positive,
+      // so the cast is unconditionally well defined.
+      const auto now = std::chrono::steady_clock::now();
+      if (now >= deadline) break;
+      const auto remain =
+          std::chrono::duration_cast<std::chrono::nanoseconds>(deadline - now).count();
+      const GstClockTime poll =
+          std::min(static_cast<GstClockTime>(remain), kFinishDrainPoll);
       GstMessage* m = gst_bus_timed_pop_filtered(
           bus, poll,
           static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));

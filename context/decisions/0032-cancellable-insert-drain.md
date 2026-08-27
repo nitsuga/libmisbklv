@@ -87,8 +87,15 @@ fails.
   honored the caller's stop between samples; `close(stop)` now honors it during
   the drain too. The [`0031`](./0031-live-streaming-surface.md) file-replay bridge
   is stoppable end to end.
-- `MediaBackend`/`Inserter` implementers gain a defaulted parameter — no existing
-  call site changes; the mock and gst backends both thread it.
+- `MediaBackend`/`Inserter` implementers gain a defaulted parameter. **No existing
+  call site changes, but this is source-breaking for an external implementer**:
+  a default argument eases callers only, so any class overriding the pure virtual
+  `Inserter::finish()` must update its own signature to match or it no longer
+  overrides. The mock and gst backends in this repository both thread it. The
+  break is accepted rather than absorbed behind a non-virtual forwarding facade:
+  the project is pre-1.0 with no release tags, and no external `MediaBackend` or
+  `Inserter` implementation is known (issue #35). It belongs in the release notes
+  at the first stability boundary.
 - Cancel latency is ≤100 ms (the poll interval), down from a 1 s poll — a non-
   issue for teardown, and it also tightens the pre-existing deadline check.
 - A cancelled insert discards its partial output, consistent with a failed one
