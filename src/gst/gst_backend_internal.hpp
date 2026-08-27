@@ -9,9 +9,11 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <stop_token>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -27,6 +29,9 @@ namespace misbklv::detail {
 Result<std::monostate> extract(std::string_view source, const PacketHandler& on_packet,
                                std::stop_token stop, ExtractOptions options);
 Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg);
+
+// "[::1]:5000" / "host:5000" -> host + port, or nullopt if malformed.
+std::optional<std::pair<std::string, int>> parse_host_port(std::string_view rest);
 
 // Builds the pipeline sink element for a sink spec string ("file:PATH",
 // "udp:host:port", "srt:uri"). Returns null on a malformed spec. Non-static so

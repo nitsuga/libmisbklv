@@ -8,8 +8,8 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-`chore/clang-format-config` establishes the repository's first formatter-clean
-baseline while preserving blame across the isolated formatting commit.
+`refactor/dedupe-host-port` removes the remaining actionable GStreamer backend
+duplication from issue #45 without abstracting the intentionally different wait loops.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
@@ -17,15 +17,14 @@ baseline while preserving blame across the isolated formatting commit.
 
 ## In progress
 
-- Validate the formatted handwritten tree, generated-output exclusion, local
-  release/sanitizer suites, and blame-ignore wiring before merge.
+- Validate the shared private UDP endpoint parser through both extraction and
+  insertion paths, then close issue #45.
 
 ## Next
 
 - **Registry breadth — 0903 side**: the remaining VMTI/VTarget items, as data
   needs them. (0601 is complete.)
-- **Remaining maintenance issues**: #45 extracts only the duplicated private
-  `parse_host_port()` helper; #50 benchmarks Generate-SEI end to end through
+- **Remaining maintenance issue**: #50 benchmarks Generate-SEI end to end through
   `mpegtsmux` after the merged core benchmark closed its other speculative work.
 - **An SRT-specific hermetic streaming test** — the udp live path is covered,
   SRT isn't. Live `extract()` ends on `udpsrc`'s idle-`timeout` message, which
