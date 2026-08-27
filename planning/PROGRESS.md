@@ -24,10 +24,11 @@ setup and error synchronization remain at their call sites.
 
 ## Next
 
-- **Issue #45**: extract only the duplicated private `parse_host_port()` helper;
-  leave the intentionally different video wait loops explicit.
-- **Issue #50**: benchmark the Generate-SEI path end to end through `mpegtsmux`;
-  the merged core benchmark already closed its other speculative items.
+- **Registry breadth — 0903 side**: the remaining VMTI/VTarget items, as data
+  needs them. (0601 is complete.)
+- **Remaining maintenance issues**: #45 extracts only the duplicated private
+  `parse_host_port()` helper; #50 benchmarks Generate-SEI end to end through
+  `mpegtsmux` after the merged core benchmark closed its other speculative work.
 - **An SRT-specific hermetic streaming test** — the udp live path is covered,
   SRT isn't. Live `extract()` ends on `udpsrc`'s idle-`timeout` message, which
   `srtsrc` has no equivalent for (its properties are `poll-timeout` / `latency` /
