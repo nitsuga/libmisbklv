@@ -15,15 +15,12 @@ KlvStream::KlvStream(std::unique_ptr<MediaBackend> backend, std::string source,
     auto result = backend_->extract(
         source_,
         [this](const KlvPacket& kp) {
-          push_frame(Frame{
-              std::vector<std::byte>(kp.bytes.begin(), kp.bytes.end()),
-              kp.pts_ns});
+          push_frame(Frame{std::vector<std::byte>(kp.bytes.begin(), kp.bytes.end()), kp.pts_ns});
         },
         stop_source_.get_token(), options_);
     {  // extract returned -> no more frames
       std::lock_guard<std::mutex> lk(mu_);
-      if (!stop_ && !stop_source_.stop_requested() && !result)
-        backend_error_ = result.error();
+      if (!stop_ && !stop_source_.stop_requested() && !result) backend_error_ = result.error();
       done_ = true;
     }
     not_empty_.notify_all();
@@ -58,8 +55,7 @@ bool KlvStream::pop_frame(Frame& out) {
   std::unique_lock<std::mutex> lk(mu_);
   not_empty_.wait(lk, [this] { return !queue_.empty() || done_ || stop_; });
   if (queue_.empty()) {
-    if (done_ && !stop_ && !error_ && backend_error_)
-      error_ = backend_error_;
+    if (done_ && !stop_ && !error_ && backend_error_) error_ = backend_error_;
     return false;  // done/stop and drained
   }
   out = std::move(queue_.front());
@@ -110,23 +106,18 @@ KlvSink::KlvSink(std::unique_ptr<MediaBackend> backend, InsertConfig cfg)
     open_error_ = ins.error();
 }
 
-KlvSink::KlvSink(InsertConfig cfg)
-    : KlvSink(make_gst_backend(), std::move(cfg)) {}
+KlvSink::KlvSink(InsertConfig cfg) : KlvSink(make_gst_backend(), std::move(cfg)) {}
 
-KlvSink::KlvSink(std::unique_ptr<MediaBackend> backend, std::string sink,
-                 bool realtime, std::string video_source, Sei0604 sei_0604)
-    : KlvSink(std::move(backend), InsertConfig{std::move(sink), realtime,
-                                               std::move(video_source),
-                                               sei_0604}) {}
+KlvSink::KlvSink(std::unique_ptr<MediaBackend> backend, std::string sink, bool realtime,
+                 std::string video_source, Sei0604 sei_0604)
+    : KlvSink(std::move(backend),
+              InsertConfig{std::move(sink), realtime, std::move(video_source), sei_0604}) {}
 
-KlvSink::KlvSink(std::string sink, bool realtime, std::string video_source,
-                 Sei0604 sei_0604)
-    : KlvSink(make_gst_backend(), std::move(sink), realtime,
-              std::move(video_source), sei_0604) {}
+KlvSink::KlvSink(std::string sink, bool realtime, std::string video_source, Sei0604 sei_0604)
+    : KlvSink(make_gst_backend(), std::move(sink), realtime, std::move(video_source), sei_0604) {}
 
 Result<std::monostate> KlvSink::emit(const Message& m) {
-  if (!inserter_)
-    return Result<std::monostate>::err(open_error_.value_or(Error::Backend));
+  if (!inserter_) return Result<std::monostate>::err(open_error_.value_or(Error::Backend));
   if (!m.edited()) {
     auto orig = m.original_bytes();
     if (!orig.empty()) return inserter_->push(orig, m.pts());
@@ -137,8 +128,7 @@ Result<std::monostate> KlvSink::emit(const Message& m) {
 }
 
 Result<std::monostate> KlvSink::close(std::stop_token stop) {
-  if (!inserter_)
-    return Result<std::monostate>::err(open_error_.value_or(Error::Backend));
+  if (!inserter_) return Result<std::monostate>::err(open_error_.value_or(Error::Backend));
   return inserter_->finish(std::move(stop));
 }
 

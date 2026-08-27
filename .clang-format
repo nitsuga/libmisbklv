@@ -1,0 +1,16 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+Standard: c++20
+
+# Match the repository's established style rather than LLVM's incidental
+# defaults. Keep include groups/order semantic and reviewable.
+AccessModifierOffset: -1
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
+ColumnLimit: 100
+IndentCaseLabels: true
+PointerAlignment: Left
+SortIncludes: Never
+SpacesBeforeTrailingComments: 2

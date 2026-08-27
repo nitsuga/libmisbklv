@@ -25,8 +25,7 @@ static void check(bool ok, const char* what) {
 
 static std::vector<std::byte> read_file(const char* path) {
   std::ifstream f(path, std::ios::binary);
-  std::vector<char> raw((std::istreambuf_iterator<char>(f)),
-                        std::istreambuf_iterator<char>());
+  std::vector<char> raw((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   std::vector<std::byte> out(raw.size());
   for (std::size_t i = 0; i < raw.size(); ++i)
     out[i] = static_cast<std::byte>(static_cast<unsigned char>(raw[i]));
@@ -92,8 +91,7 @@ int main(int argc, char** argv) {
   for (const auto& item : broad[0].items) ordinary_tags.insert(item.tag);
   bool every_descriptor = true;
   for (const auto& descriptor : gen::uas_0601.items)
-    if (descriptor.tag != 1 && !ordinary_tags.contains(descriptor.tag))
-      every_descriptor = false;
+    if (descriptor.tag != 1 && !ordinary_tags.contains(descriptor.tag)) every_descriptor = false;
   check(every_descriptor, "ordinary packet covers every registered ST 0601 item");
 
   bool every_special = true;
@@ -107,9 +105,9 @@ int main(int argc, char** argv) {
 
   bool widths_ok = true;
   for (const auto& descriptor : gen::uas_0601.items) {
-    if (!descriptor.variable || (descriptor.kind != ValueKind::UInt &&
-                                 descriptor.kind != ValueKind::Int &&
-                                 descriptor.kind != ValueKind::IMAPB))
+    if (!descriptor.variable ||
+        (descriptor.kind != ValueKind::UInt && descriptor.kind != ValueKind::Int &&
+         descriptor.kind != ValueKind::IMAPB))
       continue;
     const auto* item = find(broad[2], descriptor.tag);
     if (!item || item->value.empty() || item->value.size() >= descriptor.fixed_len)

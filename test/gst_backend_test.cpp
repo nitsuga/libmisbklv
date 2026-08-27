@@ -14,8 +14,7 @@ using namespace misbklv;
 
 static std::vector<std::byte> read_file(const char* path) {
   std::ifstream f(path, std::ios::binary);
-  std::vector<char> raw((std::istreambuf_iterator<char>(f)),
-                        std::istreambuf_iterator<char>());
+  std::vector<char> raw((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   std::vector<std::byte> out(raw.size());
   for (std::size_t i = 0; i < raw.size(); ++i)
     out[i] = static_cast<std::byte>(static_cast<unsigned char>(raw[i]));
@@ -41,8 +40,8 @@ int main(int argc, char** argv) {
     return 2;
   }
   const auto expected = read_file(argv[2]);
-  std::printf("extracted %zu packets, %zu bytes (expected %zu)\n", npkt,
-              extracted.size(), expected.size());
+  std::printf("extracted %zu packets, %zu bytes (expected %zu)\n", npkt, extracted.size(),
+              expected.size());
   std::printf("every unit is a whole KLV packet: %s\n", all_parse ? "yes" : "no");
   const bool match = (extracted == expected);
   std::printf("GST EXTRACT vs fixture: %s\n", match ? "byte-exact PASS" : "MISMATCH");

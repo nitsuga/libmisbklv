@@ -21,8 +21,7 @@ using namespace misbklv;
 
 static std::vector<std::byte> read_file(const char* path) {
   std::ifstream f(path, std::ios::binary);
-  std::vector<char> raw((std::istreambuf_iterator<char>(f)),
-                        std::istreambuf_iterator<char>());
+  std::vector<char> raw((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   std::vector<std::byte> out(raw.size());
   for (std::size_t i = 0; i < raw.size(); ++i)
     out[i] = static_cast<std::byte>(static_cast<unsigned char>(raw[i]));
@@ -32,10 +31,8 @@ static std::vector<std::byte> read_file(const char* path) {
 // Write deliberately unframed KLV elementary-stream bytes through the same
 // appsrc ! mpegtsmux path as production insertion. Unlike Inserter::push(),
 // this lets the extraction test put corrupt bytes before a real packet.
-static bool mux_chunks(const char* path,
-                       std::span<const std::byte> first,
-                       std::span<const std::byte> second,
-                       std::span<const std::byte> third) {
+static bool mux_chunks(const char* path, std::span<const std::byte> first,
+                       std::span<const std::byte> second, std::span<const std::byte> third) {
   gst_init(nullptr, nullptr);
   GstElement* pipeline = gst_pipeline_new("misbklv-resync-test");
   GstElement* src = gst_element_factory_make("appsrc", "src");
@@ -49,8 +46,8 @@ static bool mux_chunks(const char* path,
     return false;
   }
   GstCaps* caps = gst_caps_from_string("meta/x-klv, parsed=(boolean)true");
-  g_object_set(src, "caps", caps, "format", GST_FORMAT_TIME, "block", TRUE,
-               "is-live", FALSE, nullptr);
+  g_object_set(src, "caps", caps, "format", GST_FORMAT_TIME, "block", TRUE, "is-live", FALSE,
+               nullptr);
   g_object_set(sink, "location", path, nullptr);
   gst_caps_unref(caps);
   gst_bin_add_many(GST_BIN(pipeline), src, mux, sink, nullptr);
@@ -74,8 +71,7 @@ static bool mux_chunks(const char* path,
   if (gst_app_src_end_of_stream(GST_APP_SRC(src)) != GST_FLOW_OK) ok = false;
   GstBus* bus = gst_element_get_bus(pipeline);
   GstMessage* msg = gst_bus_timed_pop_filtered(
-      bus, 10 * GST_SECOND,
-      static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
+      bus, 10 * GST_SECOND, static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
   ok = ok && msg && GST_MESSAGE_TYPE(msg) == GST_MESSAGE_EOS;
   if (msg) gst_message_unref(msg);
   gst_object_unref(bus);
@@ -139,11 +135,11 @@ int main(int argc, char** argv) {
     return 2;
   }
   std::size_t over_limit_callbacks = 0;
-  auto over_limit = be->extract(argv[2], [&](const KlvPacket&) {
-    ++over_limit_callbacks;
-  }, {}, ExtractOptions{.max_packet_bytes = first_packet_size - 1});
-  const bool limit_ok = !over_limit && over_limit.error() == Error::ResourceLimit &&
-                        over_limit_callbacks == 0;
+  auto over_limit = be->extract(
+      argv[2], [&](const KlvPacket&) { ++over_limit_callbacks; }, {},
+      ExtractOptions{.max_packet_bytes = first_packet_size - 1});
+  const bool limit_ok =
+      !over_limit && over_limit.error() == Error::ResourceLimit && over_limit_callbacks == 0;
   std::printf("EXTRACT LIMIT: %s\n", limit_ok ? "PASS" : "MISMATCH");
   if (!limit_ok) return 1;
 
@@ -176,17 +172,15 @@ int main(int argc, char** argv) {
   const std::size_t cut1 = std::min<std::size_t>(3, partial.size());
   const std::size_t cut2 = std::min<std::size_t>(6, partial.size());
   const std::string truncated_path = std::string(argv[2]) + ".truncated.ts";
-  if (!mux_chunks(truncated_path.c_str(), partial.first(cut1),
-                  partial.subspan(cut1, cut2 - cut1), partial.subspan(cut2))) {
+  if (!mux_chunks(truncated_path.c_str(), partial.first(cut1), partial.subspan(cut1, cut2 - cut1),
+                  partial.subspan(cut2))) {
     std::fprintf(stderr, "truncated test mux failed\n");
     return 2;
   }
   std::size_t truncated_callbacks = 0;
-  auto truncated = be->extract(truncated_path, [&](const KlvPacket&) {
-    ++truncated_callbacks;
-  });
-  const bool truncated_ok = !truncated && truncated.error() == Error::Truncated &&
-                            truncated_callbacks == 0;
+  auto truncated = be->extract(truncated_path, [&](const KlvPacket&) { ++truncated_callbacks; });
+  const bool truncated_ok =
+      !truncated && truncated.error() == Error::Truncated && truncated_callbacks == 0;
   std::printf("EXTRACT TRUNCATED EOS: %s\n", truncated_ok ? "PASS" : "MISMATCH");
   return truncated_ok ? 0 : 1;
 }

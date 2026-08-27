@@ -57,12 +57,11 @@ int main(int argc, char** argv) {
     cfg.realtime = false;
     // Leaky queue: h264parse keeps firing the SEI probe on the streaming thread
     // even when the muxer backpressures, so a probe is in flight at teardown.
-    cfg.video_source =
-        "pipeline:videotestsrc is-live=true ! videoconvert ! "
-        "video/x-raw,format=I420,width=320,height=240,framerate=30/1 ! "
-        "openh264enc ! h264parse ! "
-        "queue leaky=downstream max-size-buffers=3 max-size-bytes=0 "
-        "max-size-time=0";
+    cfg.video_source = "pipeline:videotestsrc is-live=true ! videoconvert ! "
+                       "video/x-raw,format=I420,width=320,height=240,framerate=30/1 ! "
+                       "openh264enc ! h264parse ! "
+                       "queue leaky=downstream max-size-buffers=3 max-size-bytes=0 "
+                       "max-size-time=0";
     cfg.sei_0604 = Sei0604::Generate;
 
     // Jitter the teardown point across the ~33ms frame cycle.
@@ -71,14 +70,11 @@ int main(int argc, char** argv) {
       auto r = backend->open_insert(cfg);
       if (!r) continue;  // encoder/plugin absent on this host — skip this iter
       ++opened;
-      const auto deadline = std::chrono::steady_clock::now() +
-                            std::chrono::milliseconds(stream_ms);
+      const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(stream_ms);
       int k = 0;
       while (std::chrono::steady_clock::now() < deadline) {
-        auto pkt = make_pkt(1'700'000'000'000'000ULL +
-                            static_cast<std::uint64_t>(k) * 33'333);
-        if (!pkt.empty())
-          (void)(*r)->push(pkt, static_cast<std::int64_t>(k + 1) * 33'333'333LL);
+        auto pkt = make_pkt(1'700'000'000'000'000ULL + static_cast<std::uint64_t>(k) * 33'333);
+        if (!pkt.empty()) (void)(*r)->push(pkt, static_cast<std::int64_t>(k + 1) * 33'333'333LL);
         ++k;
         std::this_thread::sleep_for(15ms);
       }
@@ -88,17 +84,16 @@ int main(int argc, char** argv) {
     ++torn;
   }
 
-  std::fprintf(stderr, "teardown_probe_uaf: iters=%d opened=%d torn_down=%d\n",
-               iters, opened, torn);
+  std::fprintf(stderr, "teardown_probe_uaf: iters=%d opened=%d torn_down=%d\n", iters, opened,
+               torn);
   // If no pipeline ever opened (no H.264 encoder on this host) the teardown path
   // was never exercised — report skip rather than a false pass.
   if (opened == 0) {
     // Name the missing element so a plugin regression on CI surfaces as a
     // visible skip rather than a silent pass: this host lacks the openh264enc
     // (gstreamer1.0-plugins-bad) the pipeline above needs.
-    std::fprintf(stderr,
-                 "  SKIP: no H.264 encoder pipeline could be opened "
-                 "(openh264enc / gstreamer1.0-plugins-bad missing)\n");
+    std::fprintf(stderr, "  SKIP: no H.264 encoder pipeline could be opened "
+                         "(openh264enc / gstreamer1.0-plugins-bad missing)\n");
     return 0;
   }
   std::fprintf(stderr, "  ok: %d mid-stream teardowns, no crash\n", torn);

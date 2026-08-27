@@ -24,8 +24,7 @@
 
 namespace misbklv::detail {
 
-Result<std::monostate> extract(std::string_view source,
-                               const PacketHandler& on_packet,
+Result<std::monostate> extract(std::string_view source, const PacketHandler& on_packet,
                                std::stop_token stop, ExtractOptions options);
 Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg);
 
@@ -56,9 +55,8 @@ VideoSource parse_video_source(const std::string& raw);
 // caller owns both pads and already holds a ref on `source_pad`. Exposed only
 // through this private header so lock selection and timeout behavior can be
 // tested.
-bool push_live_eos_when_idle(
-    GstPad* source_pad, GstPad* mux_pad, std::stop_token stop,
-    std::chrono::steady_clock::duration lock_timeout);
+bool push_live_eos_when_idle(GstPad* source_pad, GstPad* mux_pad, std::stop_token stop,
+                             std::chrono::steady_clock::duration lock_timeout);
 
 enum class CodecLatch { Unknown, IsH264, NotH264 };
 
@@ -70,13 +68,13 @@ struct VideoCtx {
   GstPad* reserved_video_pad = nullptr;
   // Unbounded live branches never EOS on their own; finish() pushes EOS through
   // their final src pad while it remains linked so mpegtsmux can drain safely.
-  bool is_live_unbounded = false; // true if no num-buffers (pipeline) or RTSP
+  bool is_live_unbounded = false;  // true if no num-buffers (pipeline) or RTSP
   // Set by a persistent probe on the reserved mux sink pad. Unlike a probe
   // armed only during finish(), this remembers that a long-running branch has
   // already established a real mux stream even if it stalls at close time.
   std::atomic<bool> delivered_buffer{false};
-  GstElement* mux_element = nullptr;   // borrowed, owned by pipeline
-  GstElement* video_bin = nullptr;     // borrowed: rtspsrc or pipeline bin
+  GstElement* mux_element = nullptr;  // borrowed, owned by pipeline
+  GstElement* video_bin = nullptr;    // borrowed: rtspsrc or pipeline bin
   std::mutex mu;
   std::condition_variable cv;
   bool linked = false;
@@ -131,12 +129,10 @@ struct VideoCtx {
 // pipeline was NULL (borrowed, owned by the muxer); the video stream is linked
 // onto it once the demuxer exposes its pad, keeping video first in the PMT.
 // `mux` is the pipeline's mpegtsmux element (borrowed, stored in VideoCtx).
-Result<std::monostate> prepare_video_branch(
-    GstElement* pipeline, GstPad* reserved_video_pad, GstElement* mux,
-    const VideoSource& src, Sei0604 sei_0604,
-    std::unique_ptr<VideoCtx>& video);
+Result<std::monostate> prepare_video_branch(GstElement* pipeline, GstPad* reserved_video_pad,
+                                            GstElement* mux, const VideoSource& src,
+                                            Sei0604 sei_0604, std::unique_ptr<VideoCtx>& video);
 
-void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt,
-                             std::int64_t pts_ns);
+void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt, std::int64_t pts_ns);
 
 }  // namespace misbklv::detail

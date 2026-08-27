@@ -111,6 +111,16 @@ it by hand when a number is needed, and read it as ranges rather than point
 values (codec rows move ~15% run to run on a normal desktop):
 `./build/release/klv_bench test/fixtures/synthetic-basic.klv test/fixtures/synthetic-timed-0x06.ts [MiB]`
 
+Format changed C/C++ lines with `git clang-format origin/main` (preview with
+`git clang-format --diff origin/main`); the checked-in `.clang-format` owns the
+style. Handwritten C++ has a formatter-clean baseline; generated registry
+headers opt out in their directory because the generator owns their bytes.
+Do not turn an unrelated change into a whole-tree formatting sweep.
+
+The formatting-only baseline commit is listed in `.git-blame-ignore-revs`.
+GitHub honors it automatically; for the same local blame view, run
+`git config blame.ignoreRevsFile .git-blame-ignore-revs`.
+
 Two options: `MISBKLV_GSTREAMER` (default ON) builds the gstreamer media backend
 — the KLV core builds and tests without it, and that separation is load-bearing
 (see [`context/backend-scope.md`](context/backend-scope.md)). `MISBKLV_SANITIZE`

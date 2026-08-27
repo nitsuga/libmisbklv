@@ -50,8 +50,7 @@ int main(int argc, char** argv) {
   // PtsMarks by one entry pre-fix, forever, since drain() never completes a
   // frame and so never calls marks.at().
   auto be = make_gst_backend();
-  auto ins = be->open_insert({endpoint, /*realtime=*/true, /*video_source=*/"",
-                              Sei0604::Preserve});
+  auto ins = be->open_insert({endpoint, /*realtime=*/true, /*video_source=*/"", Sei0604::Preserve});
   if (!ins) {
     std::fprintf(stderr, "open_insert failed: %d\n", static_cast<int>(ins.error()));
     rx.join();
@@ -73,11 +72,11 @@ int main(int argc, char** argv) {
     rx.join();
     return 2;
   }
-  const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                          std::chrono::steady_clock::now() - t0)
-                          .count();
-  std::printf("streamed %d non-framing buffers over udp:%d in %lld ms\n", kBuffers,
-              port, static_cast<long long>(elapsed));
+  const auto elapsed =
+      std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
+          .count();
+  std::printf("streamed %d non-framing buffers over udp:%d in %lld ms\n", kBuffers, port,
+              static_cast<long long>(elapsed));
 
   rx.join();  // returns once the udpsrc idle timeout fires (post-stream)
   if (!extract_ok) {

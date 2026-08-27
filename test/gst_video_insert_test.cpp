@@ -49,8 +49,7 @@ using namespace misbklv;
 
 static std::vector<std::byte> read_file(const char* path) {
   std::ifstream f(path, std::ios::binary);
-  std::vector<char> raw((std::istreambuf_iterator<char>(f)),
-                        std::istreambuf_iterator<char>());
+  std::vector<char> raw((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   std::vector<std::byte> out(raw.size());
   for (std::size_t i = 0; i < raw.size(); ++i)
     out[i] = static_cast<std::byte>(static_cast<unsigned char>(raw[i]));
@@ -77,8 +76,8 @@ struct EsInfo {
 };
 
 struct Pes {
-  std::vector<std::byte> payload;      // concatenated PES payloads for one PID
-  std::vector<std::int64_t> pts_90k;   // one per PES packet that carried a PTS
+  std::vector<std::byte> payload;     // concatenated PES payloads for one PID
+  std::vector<std::int64_t> pts_90k;  // one per PES packet that carried a PTS
 };
 
 inline unsigned u8(std::span<const std::byte> b, std::size_t i) {
@@ -119,7 +118,7 @@ std::vector<EsInfo> read_pmt(std::span<const std::byte> ts) {
         }
       }
     } else if (table_id == 0x02 && pid == pmt_pid && out.empty()) {  // PMT
-      std::size_t j = i + 8 + 2;  // skip PCR_PID
+      std::size_t j = i + 8 + 2;                                     // skip PCR_PID
       const std::size_t pil = ((u8(p, j) & 0x0f) << 8) | u8(p, j + 1);
       j += 2 + pil;
       while (j + 5 <= end) {
@@ -129,8 +128,8 @@ std::vector<EsInfo> read_pmt(std::span<const std::byte> ts) {
         const std::size_t esil = ((u8(p, j + 3) & 0x0f) << 8) | u8(p, j + 4);
         for (std::size_t d = j + 5; d + 2 <= j + 5 + esil;) {  // descriptors
           const unsigned tag = u8(p, d), len = u8(p, d + 1);
-          if (tag == 0x05 && len >= 4 && u8(p, d + 2) == 'K' &&
-              u8(p, d + 3) == 'L' && u8(p, d + 4) == 'V' && u8(p, d + 5) == 'A')
+          if (tag == 0x05 && len >= 4 && u8(p, d + 2) == 'K' && u8(p, d + 3) == 'L' &&
+              u8(p, d + 4) == 'V' && u8(p, d + 5) == 'A')
             es.klva = true;
           d += 2 + len;
         }
@@ -161,8 +160,7 @@ Pes read_pes(std::span<const std::byte> ts, unsigned want_pid) {
     const std::int64_t pts = read_pts(cur);
     if (pts >= 0) out.pts_90k.push_back(pts);
     const std::size_t hdr = 9 + u8(cur, 8);
-    if (hdr <= cur.size())
-      out.payload.insert(out.payload.end(), cur.begin() + hdr, cur.end());
+    if (hdr <= cur.size()) out.payload.insert(out.payload.end(), cur.begin() + hdr, cur.end());
     cur.clear();
   };
   for (std::size_t off = 0; off + kPkt <= ts.size(); off += kPkt) {
@@ -183,8 +181,7 @@ Pes read_pes(std::span<const std::byte> ts, unsigned want_pid) {
 }
 
 bool is_video(unsigned stream_type) {  // mpeg1, mpeg2, h264, h265
-  return stream_type == 0x01 || stream_type == 0x02 || stream_type == 0x1b ||
-         stream_type == 0x24;
+  return stream_type == 0x01 || stream_type == 0x02 || stream_type == 0x1b || stream_type == 0x24;
 }
 
 // Compare a library extractor's per-packet timestamps against the ones pushed.
@@ -197,8 +194,7 @@ bool pts_series_ok(const char* who, const std::vector<std::int64_t>& got,
                    const std::vector<std::int64_t>& want) {
   constexpr std::int64_t kTol = 25'000;  // ns; one 90 kHz tick is 11 111 ns
   if (got.size() != want.size()) {
-    std::printf("  %s: %zu timestamps for %zu packets\n", who, got.size(),
-                want.size());
+    std::printf("  %s: %zu timestamps for %zu packets\n", who, got.size(), want.size());
     return false;
   }
   for (std::size_t i = 0; i < got.size(); ++i) {
@@ -208,8 +204,7 @@ bool pts_series_ok(const char* who, const std::vector<std::int64_t>& got,
     }
     const std::int64_t diff = (got[i] - got[0]) - (want[i] - want[0]);
     if (std::llabs(diff) > kTol) {
-      std::printf("  %s: packet %zu off by %lld ns\n", who, i,
-                  static_cast<long long>(diff));
+      std::printf("  %s: packet %zu off by %lld ns\n", who, i, static_cast<long long>(diff));
       return false;
     }
   }
@@ -242,8 +237,7 @@ std::vector<DecodedSei> decode_0604_seis(std::span<const std::byte> es) {
     const std::size_t ts = i + kIdLen + 1;  // skip identifier + Time Status byte
     // The three 0xFF emulation-prevention fillers must be where §7.4 puts them;
     // if they are not, this is not a well-formed Modified Precision Time Stamp.
-    if (u8(es, ts + 2) != 0xFF || u8(es, ts + 5) != 0xFF || u8(es, ts + 8) != 0xFF)
-      continue;
+    if (u8(es, ts + 2) != 0xFF || u8(es, ts + 5) != 0xFF || u8(es, ts + 8) != 0xFF) continue;
 
     const std::size_t data_off[8] = {0, 1, 3, 4, 6, 7, 9, 10};  // skip the fillers
     std::uint64_t v = 0;
@@ -274,8 +268,7 @@ bool run_pipeline(const std::string& desc, const std::string& out) {
   if (ok) {
     GstBus* bus = gst_element_get_bus(p);
     GstMessage* msg = gst_bus_timed_pop_filtered(
-        bus, 60 * GST_SECOND,
-        static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
+        bus, 60 * GST_SECOND, static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
     ok = msg && GST_MESSAGE_TYPE(msg) == GST_MESSAGE_EOS;
     if (msg) gst_message_unref(msg);
     gst_object_unref(bus);
@@ -293,10 +286,10 @@ bool make_video_ts(const char* encoder, const char* parser, const std::string& o
   GstElementFactory* f = gst_element_factory_find(encoder);
   if (!f) return false;
   gst_object_unref(f);
-  const std::string desc =
-      std::string("videotestsrc num-buffers=60 ! videoconvert ! ") +
-      "video/x-raw,format=I420,width=320,height=240,framerate=30/1 ! " + encoder +
-      " ! " + parser + " ! mpegtsmux ! filesink location=\"" + out + "\"";
+  const std::string desc = std::string("videotestsrc num-buffers=60 ! videoconvert ! ") +
+                           "video/x-raw,format=I420,width=320,height=240,framerate=30/1 ! " +
+                           encoder + " ! " + parser + " ! mpegtsmux ! filesink location=\"" + out +
+                           "\"";
   return run_pipeline(desc, out);
 }
 
@@ -307,18 +300,19 @@ bool remux_to_mp4(const std::string& ts, const std::string& mp4) {
   gst_object_unref(f);
   const std::string desc = "filesrc location=\"" + ts +
                            "\" ! tsdemux ! h264parse ! mp4mux ! filesink "
-                           "location=\"" + mp4 + "\"";
+                           "location=\"" +
+                           mp4 + "\"";
   GError* err = nullptr;
   GstElement* p = gst_parse_launch(desc.c_str(), &err);
-  if (err) { g_error_free(err); }
+  if (err) {
+    g_error_free(err);
+  }
   if (!p) return false;
-  bool ok = gst_element_set_state(p, GST_STATE_PLAYING) !=
-            GST_STATE_CHANGE_FAILURE;
+  bool ok = gst_element_set_state(p, GST_STATE_PLAYING) != GST_STATE_CHANGE_FAILURE;
   if (ok) {
     GstBus* bus = gst_element_get_bus(p);
     GstMessage* msg = gst_bus_timed_pop_filtered(
-        bus, 30 * GST_SECOND,
-        static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
+        bus, 30 * GST_SECOND, static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
     ok = msg && GST_MESSAGE_TYPE(msg) == GST_MESSAGE_EOS;
     if (msg) gst_message_unref(msg);
     gst_object_unref(bus);
@@ -336,10 +330,8 @@ bool remux_to_mp4(const std::string& ts, const std::string& mp4) {
 // used to identify ST 0604 SEI the source already carried, which this reader
 // cannot pull out of an MP4 directly.
 std::size_t run_case(MediaBackend& be, const std::string& source,
-                     const std::vector<std::byte>& input,
-                     const std::string& out_path,
-                     const std::string& reference_ts,
-                     Sei0604 sei_mode = Sei0604::Preserve) {
+                     const std::vector<std::byte>& input, const std::string& out_path,
+                     const std::string& reference_ts, Sei0604 sei_mode = Sei0604::Preserve) {
   std::span<const std::byte> buf = input;
   // KLV 100 ms apart, on the source's timeline from zero — the contract a video
   // branch imposes on the caller (kNoPts is rejected; checked below).
@@ -352,8 +344,7 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
       g_pass = false;
       return 0;
     }
-    check("kNoPts rejected",
-          !(*ins)->push(buf.subspan(0, packet_frame_length(buf)), kNoPts));
+    check("kNoPts rejected", !(*ins)->push(buf.subspan(0, packet_frame_length(buf)), kNoPts));
     std::size_t off = 0;
     while (off < input.size()) {
       const std::size_t n = packet_frame_length(buf.subspan(off));
@@ -374,8 +365,7 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
     }
   }
   const auto out_ts = read_file(out_path.c_str());
-  std::printf("  muxed %zu KLV packets + video -> %zu bytes\n", pushed.size(),
-              out_ts.size());
+  std::printf("  muxed %zu KLV packets + video -> %zu bytes\n", pushed.size(), out_ts.size());
 
   // --- 1. the PMT lists exactly one video ES and one KLV ES ------------------
   const auto es = read_pmt(out_ts);
@@ -388,7 +378,10 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
       video_type = e.stream_type;
     }
     if (is_video(e.stream_type)) ++nvideo;
-    if (e.stream_type == 0x06 && e.klva) { ++nklv; klv_pid = e.pid; }
+    if (e.stream_type == 0x06 && e.klva) {
+      ++nklv;
+      klv_pid = e.pid;
+    }
   }
   check("PMT: video + KLV, only", es.size() == 2 && nvideo == 1 && nklv == 1);
   // Video is announced *first*, KLV second (ADR 0020 § stream order): the
@@ -396,10 +389,8 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
   // the lower ES PID, and mpegtsmux orders the PMT by ES PID. Pinned so that
   // any regression toward the old metadata-first order is a deliberate change
   // here rather than a silent one, which is exactly how it went wrong once.
-  check("PMT: video announced first",
-        es.size() == 2 && is_video(es[0].stream_type) && !es[0].klva);
-  check("PMT: KLV second",
-        es.size() == 2 && es[1].stream_type == 0x06 && es[1].klva);
+  check("PMT: video announced first", es.size() == 2 && is_video(es[0].stream_type) && !es[0].klva);
+  check("PMT: KLV second", es.size() == 2 && es[1].stream_type == 0x06 && es[1].klva);
 
   // --- 2. KLV byte-exact through the mux ------------------------------------
   std::vector<std::byte> klv_back;
@@ -433,8 +424,8 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
       }
     const auto src_video = read_pes(src_bytes, src_video_pid);
     std::printf("  video ES: source %zu bytes / %zu PES, output %zu / %zu\n",
-                src_video.payload.size(), src_video.pts_90k.size(),
-                out_video.payload.size(), out_video.pts_90k.size());
+                src_video.payload.size(), src_video.pts_90k.size(), out_video.payload.size(),
+                out_video.pts_90k.size());
     check("video codec unchanged", video_type == src_video_type && video_type);
     if (sei_mode == Sei0604::Preserve) {
       // ADR 0024: Preserve does not touch the elementary stream, so the ADR 0020
@@ -450,8 +441,7 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
       check("video ES carried (rewritten)",
             !out_video.payload.empty() && out_video.payload != src_video.payload);
     }
-    check("video frame count kept",
-          out_video.pts_90k.size() == src_video.pts_90k.size());
+    check("video frame count kept", out_video.pts_90k.size() == src_video.pts_90k.size());
   } else {
     // Not an MPEG-TS: this reader can't pull the source's elementary stream, so
     // the source-comparison checks are skipped rather than reported as failures
@@ -500,9 +490,9 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
         // derived per packet, so only the shape is asserted here — the
         // derivation itself is driven with controlled input below.
         const bool lock_and_reserved_ok = (s.time_status & 0x9F) == 0x9F;
-        const bool defined_combination = s.time_status == 0x9F ||   // normal
-                                         s.time_status == 0xDF ||   // fwd jump
-                                         s.time_status == 0xFF;     // reverse
+        const bool defined_combination = s.time_status == 0x9F ||  // normal
+                                         s.time_status == 0xDF ||  // fwd jump
+                                         s.time_status == 0xFF;    // reverse
         if (!lock_and_reserved_ok || !defined_combination) ++wrong_status;
       } else if (std::find(from_source.begin(), from_source.end(), s.timestamp_us) !=
                  from_source.end()) {
@@ -513,8 +503,8 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
     }
     std::printf("  ST 0604 SEI [%s]: %zu in output (%zu ours, %zu from source,"
                 " %zu unaccounted); source had %zu, KLV has %zu timestamps\n",
-                sei_mode == Sei0604::Generate ? "Generate" : "Preserve", seen.size(),
-                ours, kept, foreign, from_source.size(), expected.size());
+                sei_mode == Sei0604::Generate ? "Generate" : "Preserve", seen.size(), ours, kept,
+                foreign, from_source.size(), expected.size());
 
     check("no SEI timestamp from nowhere", foreign == 0);
 
@@ -531,8 +521,7 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
       check("Generate: source ST 0604 replaced, not duplicated", kept == 0);
       if (wrong_status)
         std::printf("  %zu generated SEI(s) with a malformed Time Status\n", wrong_status);
-      check("generated SEI Time Status well-formed (ST 0603.5 Table 3)",
-            wrong_status == 0);
+      check("generated SEI Time Status well-formed (ST 0603.5 Table 3)", wrong_status == 0);
     }
   }
 
@@ -556,8 +545,8 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
     const std::int64_t want = (pushed[i] - pushed[0]) * 9 / 100'000;  // ns->90kHz
     const std::int64_t got = out_klv.pts_90k[i] - base;
     if (std::llabs(got - want) > 1) {  // muxer rounding
-      std::printf("  pts[%zu]: want %lld got %lld\n", i,
-                  static_cast<long long>(want), static_cast<long long>(got));
+      std::printf("  pts[%zu]: want %lld got %lld\n", i, static_cast<long long>(want),
+                  static_cast<long long>(got));
       pts_ok = false;
     }
   }
@@ -571,11 +560,8 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
   // the timing is in the file at all. Before ADR 0021 both reported kNoPts here.
   check("gst extract reports PTS", pts_series_ok("gst extract", gst_pts, pushed));
   std::vector<std::int64_t> ts_pts;
-  auto tr = extract_ts_klv(out_ts, [&](const KlvPacket& kp) {
-    ts_pts.push_back(kp.pts_ns);
-  });
-  check("extract_ts_klv reports PTS",
-        tr && pts_series_ok("extract_ts_klv", ts_pts, pushed));
+  auto tr = extract_ts_klv(out_ts, [&](const KlvPacket& kp) { ts_pts.push_back(kp.pts_ns); });
+  check("extract_ts_klv reports PTS", tr && pts_series_ok("extract_ts_klv", ts_pts, pushed));
 
   // --- 8. read -> edit -> write composes (ADR 0021) -------------------------
   // The facade's two halves over one timeline: read the file we just wrote as
@@ -591,7 +577,10 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
     KlvSink out(make_gst_backend(), "file:" + round_path, false, source);
     KlvStream in(make_gst_backend(), out_path);
     for (Message& m : in) {
-      if (!out.emit(m)) { emit_ok = false; break; }
+      if (!out.emit(m)) {
+        emit_ok = false;
+        break;
+      }
       ++emitted;
     }
     emit_ok = emit_ok && out.close();
@@ -599,11 +588,8 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
   check("round trip: re-emitted", emit_ok && emitted == pushed.size());
   if (emit_ok) {
     std::vector<std::int64_t> round_pts;
-    auto rr = be.extract(round_path, [&](const KlvPacket& kp) {
-      round_pts.push_back(kp.pts_ns);
-    });
-    check("round trip: timing kept",
-          rr && pts_series_ok("round trip", round_pts, pushed));
+    auto rr = be.extract(round_path, [&](const KlvPacket& kp) { round_pts.push_back(kp.pts_ns); });
+    check("round trip: timing kept", rr && pts_series_ok("round trip", round_pts, pushed));
   }
   std::remove(round_path.c_str());
   return out_video.pts_90k.size();
@@ -620,10 +606,9 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
 // 100 ms push spacing. Equal means linear — Normal. A short/long step is a
 // forward jump; a negative one is a reverse.
 std::vector<unsigned> statuses_for(MediaBackend& be, const std::string& source,
-                                   const std::vector<std::byte>& input,
-                                   const std::string& out_path,
+                                   const std::vector<std::byte>& input, const std::string& out_path,
                                    const std::vector<std::int64_t>& steps_us) {
-  constexpr std::int64_t kStepNs = 100'000'000;  // push spacing
+  constexpr std::int64_t kStepNs = 100'000'000;                // push spacing
   constexpr std::uint64_t kBaseUs = 1'600'000'000'000'000ULL;  // ~2020, plausible
 
   // One fixture packet as a template, re-parsed per push (Message is move-only)
@@ -669,8 +654,8 @@ void check_time_status_derivation(MediaBackend& be, const std::string& source,
   // This is the shape real usage has — a consumer pushing each sample at its own
   // presentation time.
   {
-    const auto got = statuses_for(be, source, input, out_path,
-                                  {0, 100'000, 100'000, 100'000, 100'000, 100'000});
+    const auto got =
+        statuses_for(be, source, input, out_path, {0, 100'000, 100'000, 100'000, 100'000, 100'000});
     check("linear time: SEI emitted", !got.empty());
     bool all_normal = !got.empty();
     for (unsigned s : got) all_normal = all_normal && s == 0x9F;
@@ -707,8 +692,7 @@ int main(int argc, char** argv) {
   std::setvbuf(stdout, nullptr, _IOLBF, 0);
 
   if (argc < 4) {
-    std::fprintf(stderr,
-                 "usage: gst_video_insert_test <video.ts> <input.klv> <out.ts>\n");
+    std::fprintf(stderr, "usage: gst_video_insert_test <video.ts> <input.klv> <out.ts>\n");
     return 2;
   }
   const std::string ts_source = argv[1];
@@ -753,7 +737,10 @@ int main(int argc, char** argv) {
     //     what's guaranteed here is that the path still exists — not that its
     //     old contents survive a failed open.)
     const std::string p = out_path + ".keepme.ts";
-    { std::ofstream f(p, std::ios::binary); f << "not ours to delete"; }
+    {
+      std::ofstream f(p, std::ios::binary);
+      f << "not ours to delete";
+    }
     auto r = be->open_insert({"file:" + p, false, argv[2]});
     check("pre-existing output not deleted", !r && file_exists(p));
     std::remove(p.c_str());
@@ -767,7 +754,10 @@ int main(int argc, char** argv) {
     //      must check existence with std::filesystem instead.
     namespace fs = std::filesystem;
     const std::string p = out_path + ".writeonly.ts";
-    { std::ofstream f(p, std::ios::binary); f << "write-only, not ours"; }
+    {
+      std::ofstream f(p, std::ios::binary);
+      f << "write-only, not ours";
+    }
     std::error_code ec;
     fs::permissions(p, fs::perms::owner_write, fs::perm_options::replace, ec);
     auto r = be->open_insert({"file:" + p, false, argv[2]});  // videoless -> fails
@@ -804,17 +794,21 @@ int main(int argc, char** argv) {
     auto bytes = read_file(mp4.c_str());
     std::size_t at = std::string::npos;
     for (std::size_t i = 0; i + 4 <= bytes.size(); ++i)
-      if (u8(bytes, i) == 'a' && u8(bytes, i + 1) == 'v' &&
-          u8(bytes, i + 2) == 'c' && u8(bytes, i + 3) == 'C') { at = i; break; }
+      if (u8(bytes, i) == 'a' && u8(bytes, i + 1) == 'v' && u8(bytes, i + 2) == 'c' &&
+          u8(bytes, i + 3) == 'C') {
+        at = i;
+        break;
+      }
     if (at == std::string::npos) {
       std::printf("  late failure: SKIPPED (no avcC box in the remuxed MP4)\n");
     } else {
       const char kFree[] = "free";  // same size, so the box layout still walks
-      for (std::size_t i = 0; i < 4; ++i)
-        bytes[at + i] = static_cast<std::byte>(kFree[i]);
+      for (std::size_t i = 0; i < 4; ++i) bytes[at + i] = static_cast<std::byte>(kFree[i]);
       const std::string broken = out_path + ".no-avcc.mp4";
-      { std::ofstream f(broken, std::ios::binary);
-        f.write(reinterpret_cast<const char*>(bytes.data()), bytes.size()); }
+      {
+        std::ofstream f(broken, std::ios::binary);
+        f.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+      }
 
       const std::string p = out_path + ".late.ts";
       std::remove(p.c_str());
@@ -830,7 +824,10 @@ int main(int argc, char** argv) {
       std::remove(p.c_str());
       // ...and the same case must still not delete a file it did not create.
       const std::string q = out_path + ".late-keepme.ts";
-      { std::ofstream f(q, std::ios::binary); f << "not ours to delete"; }
+      {
+        std::ofstream f(q, std::ios::binary);
+        f << "not ours to delete";
+      }
       auto ins2 = be->open_insert({"file:" + q, false, broken});
       if (ins2) {
         (*ins2)->finish();
@@ -851,8 +848,8 @@ int main(int argc, char** argv) {
   // Same battery with ST 0604 SEI generation requested (ADR 0024). The authored
   // source starts without timestamp SEI, so this proves insertion from KLV.
   std::printf("TS source, Sei0604::Generate\n");
-  const std::size_t gen_frames = run_case(*be, ts_source, input, out_path + ".sei.ts",
-                                          ts_source, Sei0604::Generate);
+  const std::size_t gen_frames =
+      run_case(*be, ts_source, input, out_path + ".sei.ts", ts_source, Sei0604::Generate);
   check("Generate: same frame count as Preserve", gen_frames == ts_frames && ts_frames);
   std::remove((out_path + ".sei.ts").c_str());
 
@@ -900,7 +897,8 @@ int main(int argc, char** argv) {
     std::remove(refused.c_str());
     auto bad = be->open_insert({"file:" + refused, false, src, Sei0604::Generate});
     check((std::string(label) + ": Generate rejected (not H.264)").c_str(), !bad);
-    check((std::string(label) + ": rejected session left no output").c_str(), !file_exists(refused));
+    check((std::string(label) + ": rejected session left no output").c_str(),
+          !file_exists(refused));
     std::remove(refused.c_str());
     std::remove(src.c_str());
   }
@@ -927,8 +925,7 @@ int main(int argc, char** argv) {
     std::printf("realtime drain cancellation (ADR 0032)\n");
     const std::string p = out_path + ".cancel.ts";
     std::remove(p.c_str());
-    auto ins = be->open_insert({"file:" + p, /*realtime=*/true, ts_source,
-                                Sei0604::Preserve});
+    auto ins = be->open_insert({"file:" + p, /*realtime=*/true, ts_source, Sei0604::Preserve});
     check("cancel: realtime insert opened", bool(ins));
     if (ins) {
       std::span<const std::byte> buf = input;
@@ -938,14 +935,13 @@ int main(int argc, char** argv) {
       const auto t0 = std::chrono::steady_clock::now();
       auto r = (*ins)->finish(ss.get_token());
       const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                               std::chrono::steady_clock::now() - t0);
+          std::chrono::steady_clock::now() - t0);
       // Cooperative cancellation returns ok (matches extract(), ADR 0019).
       check("cancel: finish returns ok", bool(r));
       // The whole point: it did not wait out the 2 s realtime drain. A generous
       // 1 s bound clears CI slop while still failing a regression to the old
       // blocking drain (which would take ~2 s).
-      std::printf("  finish() returned in %lld ms\n",
-                  static_cast<long long>(elapsed.count()));
+      std::printf("  finish() returned in %lld ms\n", static_cast<long long>(elapsed.count()));
       check("cancel: finish returned promptly (<1s)", elapsed.count() < 1000);
     }
     check("cancel: no output left behind", !file_exists(p));

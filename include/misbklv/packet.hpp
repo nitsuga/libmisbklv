@@ -13,9 +13,8 @@
 namespace misbklv {
 
 // The 16-byte ST 0601 UAS Datalink LS Universal Label.
-inline constexpr std::uint8_t kUas0601Key[16] = {
-    0x06, 0x0e, 0x2b, 0x34, 0x02, 0x0b, 0x01, 0x01,
-    0x0e, 0x01, 0x03, 0x01, 0x01, 0x00, 0x00, 0x00};
+inline constexpr std::uint8_t kUas0601Key[16] = {0x06, 0x0e, 0x2b, 0x34, 0x02, 0x0b, 0x01, 0x01,
+                                                 0x0e, 0x01, 0x03, 0x01, 0x01, 0x00, 0x00, 0x00};
 
 struct Item {
   std::uint16_t tag;
@@ -39,8 +38,8 @@ Result<Packet> parse_packet(std::span<const std::byte> buf);
 // total byte size; a matching partial UL or incomplete legal BER header/value
 // returns an empty optional. A non-UL/malformed prefix or BER length is
 // BadLength, and a declared total above `max_packet_bytes` is ResourceLimit.
-Result<std::optional<std::size_t>> inspect_packet_frame(
-    std::span<const std::byte> buf, std::size_t max_packet_bytes);
+Result<std::optional<std::size_t>> inspect_packet_frame(std::span<const std::byte> buf,
+                                                        std::size_t max_packet_bytes);
 
 // Byte length of the complete KLV packet at the front of `buf`, or 0 if `buf`
 // does not begin with the SMPTE UL prefix or does not yet hold a whole packet

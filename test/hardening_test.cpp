@@ -35,14 +35,15 @@ static void check(bool ok, const char* what) {
 
 static std::vector<std::byte> read_file(const char* path) {
   std::ifstream f(path, std::ios::binary);
-  std::vector<char> raw((std::istreambuf_iterator<char>(f)),
-                        std::istreambuf_iterator<char>());
+  std::vector<char> raw((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   std::vector<std::byte> out(raw.size());
   for (std::size_t i = 0; i < raw.size(); ++i)
     out[i] = static_cast<std::byte>(static_cast<unsigned char>(raw[i]));
   return out;
 }
-static std::byte B(int v) { return static_cast<std::byte>(v & 0xFF); }
+static std::byte B(int v) {
+  return static_cast<std::byte>(v & 0xFF);
+}
 
 static ItemDescriptor numeric_descriptor(ValueKind kind, bool is_signed = false,
                                          MappingParams map = {0.0, 100.0}) {
@@ -53,8 +54,7 @@ static ItemDescriptor numeric_descriptor(ValueKind kind, bool is_signed = false,
   return d;
 }
 
-template <class F>
-static void check_type_mismatch_no_throw(F&& f, const char* what) {
+template <class F> static void check_type_mismatch_no_throw(F&& f, const char* what) {
   bool threw = false;
   bool type_mismatch = false;
   try {
@@ -66,8 +66,7 @@ static void check_type_mismatch_no_throw(F&& f, const char* what) {
   check(!threw && type_mismatch, what);
 }
 
-static void check_bad_numeric_lengths(const ItemDescriptor& d, const Value& v,
-                                      const char* what) {
+static void check_bad_numeric_lengths(const ItemDescriptor& d, const Value& v, const char* what) {
   auto zero = codec::encode(d, v, 0);
   auto nine = codec::encode(d, v, 9);
   check(!zero && zero.error() == Error::BadLength, what);
@@ -75,8 +74,7 @@ static void check_bad_numeric_lengths(const ItemDescriptor& d, const Value& v,
 }
 
 static void check_encoded_bytes(const Result<ber::Bytes>& got,
-                                std::initializer_list<std::byte> want,
-                                const char* what) {
+                                std::initializer_list<std::byte> want, const char* what) {
   check(got && *got == ber::Bytes(want), what);
 }
 
@@ -95,30 +93,22 @@ static void test_typed_encode_validation() {
 
   // Every descriptor kind rejects a mismatched variant as an ordinary Result
   // error, rather than letting std::get throw.
-  check_type_mismatch_no_throw(
-      [&] { return codec::encode(uint_d, Value{std::int64_t{1}}, 1); },
-      "UInt wrong Value alternative -> TypeMismatch (no throw)");
-  check_type_mismatch_no_throw(
-      [&] { return codec::encode(int_d, Value{std::uint64_t{1}}, 1); },
-      "Int wrong Value alternative -> TypeMismatch (no throw)");
-  check_type_mismatch_no_throw(
-      [&] { return codec::encode(linear_d, Value{std::uint64_t{1}}, 1); },
-      "LinearLDS wrong Value alternative -> TypeMismatch (no throw)");
-  check_type_mismatch_no_throw(
-      [&] { return codec::encode(imapb_d, Value{std::uint64_t{1}}, 1); },
-      "IMAPB wrong Value alternative -> TypeMismatch (no throw)");
-  check_type_mismatch_no_throw(
-      [&] { return codec::encode(utf8_d, Value{std::uint64_t{1}}, 0); },
-      "Utf8 wrong Value alternative -> TypeMismatch (no throw)");
-  check_type_mismatch_no_throw(
-      [&] { return codec::encode(bytes_d, Value{std::uint64_t{1}}, 0); },
-      "Bytes wrong Value alternative -> TypeMismatch (no throw)");
-  check_type_mismatch_no_throw(
-      [&] { return codec::encode(nested_d, Value{std::uint64_t{1}}, 0); },
-      "NestedLS wrong Value alternative -> TypeMismatch (no throw)");
-  check_type_mismatch_no_throw(
-      [&] { return codec::encode(pack_d, Value{std::uint64_t{1}}, 0); },
-      "Pack wrong Value alternative -> TypeMismatch (no throw)");
+  check_type_mismatch_no_throw([&] { return codec::encode(uint_d, Value{std::int64_t{1}}, 1); },
+                               "UInt wrong Value alternative -> TypeMismatch (no throw)");
+  check_type_mismatch_no_throw([&] { return codec::encode(int_d, Value{std::uint64_t{1}}, 1); },
+                               "Int wrong Value alternative -> TypeMismatch (no throw)");
+  check_type_mismatch_no_throw([&] { return codec::encode(linear_d, Value{std::uint64_t{1}}, 1); },
+                               "LinearLDS wrong Value alternative -> TypeMismatch (no throw)");
+  check_type_mismatch_no_throw([&] { return codec::encode(imapb_d, Value{std::uint64_t{1}}, 1); },
+                               "IMAPB wrong Value alternative -> TypeMismatch (no throw)");
+  check_type_mismatch_no_throw([&] { return codec::encode(utf8_d, Value{std::uint64_t{1}}, 0); },
+                               "Utf8 wrong Value alternative -> TypeMismatch (no throw)");
+  check_type_mismatch_no_throw([&] { return codec::encode(bytes_d, Value{std::uint64_t{1}}, 0); },
+                               "Bytes wrong Value alternative -> TypeMismatch (no throw)");
+  check_type_mismatch_no_throw([&] { return codec::encode(nested_d, Value{std::uint64_t{1}}, 0); },
+                               "NestedLS wrong Value alternative -> TypeMismatch (no throw)");
+  check_type_mismatch_no_throw([&] { return codec::encode(pack_d, Value{std::uint64_t{1}}, 0); },
+                               "Pack wrong Value alternative -> TypeMismatch (no throw)");
   check_type_mismatch_no_throw(
       [&] {
         LocalSetBuilder b(gen::uas_0601);
@@ -128,14 +118,10 @@ static void test_typed_encode_validation() {
 
   // All numeric encoders reject the invalid widths before any shifting or
   // mapping arithmetic can occur.
-  check_bad_numeric_lengths(uint_d, Value{std::uint64_t{0}},
-                            "UInt widths 0 and 9 -> BadLength");
-  check_bad_numeric_lengths(int_d, Value{std::int64_t{0}},
-                            "Int widths 0 and 9 -> BadLength");
-  check_bad_numeric_lengths(linear_d, Value{0.0},
-                            "LinearLDS widths 0 and 9 -> BadLength");
-  check_bad_numeric_lengths(imapb_d, Value{0.0},
-                            "IMAPB widths 0 and 9 -> BadLength");
+  check_bad_numeric_lengths(uint_d, Value{std::uint64_t{0}}, "UInt widths 0 and 9 -> BadLength");
+  check_bad_numeric_lengths(int_d, Value{std::int64_t{0}}, "Int widths 0 and 9 -> BadLength");
+  check_bad_numeric_lengths(linear_d, Value{0.0}, "LinearLDS widths 0 and 9 -> BadLength");
+  check_bad_numeric_lengths(imapb_d, Value{0.0}, "IMAPB widths 0 and 9 -> BadLength");
 
   // Width one makes the precise signed/unsigned representable limits obvious.
   check(static_cast<bool>(codec::encode(uint_d, Value{std::uint64_t{0}}, 1)) &&
@@ -149,8 +135,8 @@ static void test_typed_encode_validation() {
         "Int width-1 boundaries succeed");
   auto int_low = codec::encode(int_d, Value{std::int64_t{-129}}, 1);
   auto int_high = codec::encode(int_d, Value{std::int64_t{128}}, 1);
-  check(!int_low && int_low.error() == Error::RangeError &&
-            !int_high && int_high.error() == Error::RangeError,
+  check(!int_low && int_low.error() == Error::RangeError && !int_high &&
+            int_high.error() == Error::RangeError,
         "Int width-1 overflow -> RangeError");
 
   // At eight bytes, both LinearLDS endpoints must avoid floating-point
@@ -165,38 +151,32 @@ static void test_typed_encode_validation() {
   const auto unsigned_min = codec::encode(unsigned_linear, Value{0.0}, 8);
   const auto unsigned_max = codec::encode(unsigned_linear, Value{100.0}, 8);
   check_encoded_bytes(signed_min,
-                      {B(0x80), B(0x00), B(0x00), B(0x00), B(0x00), B(0x00),
-                       B(0x00), B(0x01)},
+                      {B(0x80), B(0x00), B(0x00), B(0x00), B(0x00), B(0x00), B(0x00), B(0x01)},
                       "signed LinearLDS width-8 minimum avoids reserved INT64_MIN");
   check_encoded_bytes(signed_max,
-                      {B(0x7F), B(0xFF), B(0xFF), B(0xFF), B(0xFF), B(0xFF),
-                       B(0xFF), B(0xFF)},
+                      {B(0x7F), B(0xFF), B(0xFF), B(0xFF), B(0xFF), B(0xFF), B(0xFF), B(0xFF)},
                       "signed LinearLDS width-8 maximum is INT64_MAX");
   check_encoded_bytes(unsigned_min,
-                      {B(0x00), B(0x00), B(0x00), B(0x00), B(0x00), B(0x00),
-                       B(0x00), B(0x00)},
+                      {B(0x00), B(0x00), B(0x00), B(0x00), B(0x00), B(0x00), B(0x00), B(0x00)},
                       "unsigned LinearLDS width-8 minimum is all zeroes");
   check_encoded_bytes(unsigned_max,
-                      {B(0xFF), B(0xFF), B(0xFF), B(0xFF), B(0xFF), B(0xFF),
-                       B(0xFF), B(0xFF)},
+                      {B(0xFF), B(0xFF), B(0xFF), B(0xFF), B(0xFF), B(0xFF), B(0xFF), B(0xFF)},
                       "unsigned LinearLDS width-8 maximum is all ones");
 
-  for (double x : {-0.1, 100.1, std::numeric_limits<double>::quiet_NaN(),
-                   std::numeric_limits<double>::infinity(),
-                   -std::numeric_limits<double>::infinity()}) {
+  for (double x :
+       {-0.1, 100.1, std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::infinity(), -std::numeric_limits<double>::infinity()}) {
     auto r = codec::encode(linear_d, Value{x}, 2);
-    check(!r && r.error() == Error::RangeError,
-          "LinearLDS out-of-range/nonfinite -> RangeError");
+    check(!r && r.error() == Error::RangeError, "LinearLDS out-of-range/nonfinite -> RangeError");
   }
 
   // IMAPB preserves its ST 1201 structural-special behavior for the same input
   // classes, rather than turning them into RangeError.
-  for (double x : {-0.1, 100.1, std::numeric_limits<double>::quiet_NaN(),
-                   std::numeric_limits<double>::infinity(),
-                   -std::numeric_limits<double>::infinity()}) {
+  for (double x :
+       {-0.1, 100.1, std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::infinity(), -std::numeric_limits<double>::infinity()}) {
     auto r = codec::encode(imapb_d, Value{x}, 2);
-    check(r && codec::is_imap_special(*r),
-          "IMAPB out-of-range/nonfinite -> structural special");
+    check(r && codec::is_imap_special(*r), "IMAPB out-of-range/nonfinite -> structural special");
   }
 }
 
@@ -221,8 +201,7 @@ static void test_multibyte_tag() {
   if (!parsed) return;
   bool ok143 = false;
   for (const auto& it : parsed->items)
-    if (it.tag == 143 && it.value.size() == 3 && it.value[0] == B(0xAB))
-      ok143 = true;
+    if (it.tag == 143 && it.value.size() == 3 && it.value[0] == B(0xAB)) ok143 = true;
   check(ok143, "tag 143 round-trips with value intact");
 }
 
@@ -237,9 +216,9 @@ static void test_roc_trimmed(const std::vector<std::byte>& full_pkt) {
   LocalSetBuilder b(gen::uas_0601);
   std::size_t kept = 0;
   for (const auto& it : full->items) {
-    if (it.tag == 1) continue;                    // checksum re-emitted
+    if (it.tag == 1) continue;  // checksum re-emitted
     if (it.tag != 2 && it.tag != 5 && it.tag != 6) continue;
-    b.append_raw(it.tag, it.value);               // raw preserves exact bytes
+    b.append_raw(it.tag, it.value);  // raw preserves exact bytes
     ++kept;
   }
   auto trimmed = std::move(b).finalize(std::span{kUas0601Key}, /*enforce=*/false);
@@ -277,7 +256,7 @@ static void test_malformed() {
   // 8-byte BER length = 0xFFFFFFFFFFFFFFFF: the integer-overflow OOB case.
   std::vector<std::byte> huge;
   for (std::uint8_t k : kUas0601Key) huge.push_back(B(k));
-  huge.push_back(B(0x88));                       // long form, 8 length bytes
+  huge.push_back(B(0x88));  // long form, 8 length bytes
   for (int i = 0; i < 8; ++i) huge.push_back(B(0xFF));
   check(!parse_packet(huge), "8-byte huge length -> Truncated (no OOB)");
   check(packet_frame_length(huge) == 0, "frame_length rejects huge length");
@@ -295,8 +274,8 @@ static void test_malformed() {
   check(!parse_items(item), "item with huge length -> Truncated (no OOB)");
 
   // Zero-length + over-long numeric decode (shift-UB / rd_uint wrap guards).
-  const ItemDescriptor* sgn = gen::uas_0601.find(13);   // SensorLatitude, signed
-  const ItemDescriptor* u = gen::uas_0601.find(2);       // Precision Time, UInt
+  const ItemDescriptor* sgn = gen::uas_0601.find(13);  // SensorLatitude, signed
+  const ItemDescriptor* u = gen::uas_0601.find(2);     // Precision Time, UInt
   check(sgn && !codec::decode(*sgn, {}), "0-length signed decode -> BadLength");
   std::vector<std::byte> nine(9, B(0));
   check(u && !codec::decode(*u, nine), "9-byte UInt decode -> BadLength");
@@ -349,8 +328,7 @@ static void test_parser_boundaries() {
   // 65535 is the largest Item::tag and must retain its full identity.
   const std::vector<std::byte> max_tag{B(0x83), B(0xFF), B(0x7F), B(0x00)};
   auto parsed_max_tag = parse_items(max_tag);
-  check(parsed_max_tag && parsed_max_tag->size() == 1 &&
-            parsed_max_tag->front().tag == 65535,
+  check(parsed_max_tag && parsed_max_tag->size() == 1 && parsed_max_tag->front().tag == 65535,
         "parse_items accepts tag 65535");
 
   // 65537 must fail, rather than narrowing to uint16_t tag 1 (the checksum).
@@ -396,8 +374,7 @@ static void test_bounded_frame_inspection() {
 
   const std::vector<std::byte> invalid_prefix{B(0x06), B(0x0E), B(0x2B), B(0x35)};
   auto invalid = inspect_packet_frame(invalid_prefix, cap);
-  check(!invalid && invalid.error() == Error::BadLength,
-        "nonmatching UL prefix -> BadLength");
+  check(!invalid && invalid.error() == Error::BadLength, "nonmatching UL prefix -> BadLength");
 
   auto no_length = inspect_packet_frame(ul, cap);
   check(no_length && !*no_length, "valid UL with missing BER length -> incomplete");
@@ -405,8 +382,7 @@ static void test_bounded_frame_inspection() {
   split_length.push_back(B(0x82));
   split_length.push_back(B(0x00));
   auto partial_length = inspect_packet_frame(split_length, cap);
-  check(partial_length && !*partial_length,
-        "valid UL with split legal BER length -> incomplete");
+  check(partial_length && !*partial_length, "valid UL with split legal BER length -> incomplete");
 
   auto indefinite = ul;
   indefinite.push_back(B(0x80));
@@ -430,16 +406,14 @@ static void test_bounded_frame_inspection() {
   auto exact_cap = ul;
   exact_cap.insert(exact_cap.end(), {B(0x03), B(0x00), B(0x00), B(0x00)});
   auto complete = inspect_packet_frame(exact_cap, cap);
-  check(complete && *complete && **complete == cap,
-        "complete frame exactly at cap succeeds");
+  check(complete && *complete && **complete == cap, "complete frame exactly at cap succeeds");
   auto underfilled = exact_cap;
   underfilled.pop_back();
   auto incomplete = inspect_packet_frame(underfilled, cap);
   check(incomplete && !*incomplete, "within-cap declared frame missing bytes -> incomplete");
 
   // The compatibility framer stays unbounded and returns only a complete size.
-  check(packet_frame_length(exact_cap) == cap,
-        "packet_frame_length compatibility complete frame");
+  check(packet_frame_length(exact_cap) == cap, "packet_frame_length compatibility complete frame");
   check(packet_frame_length(underfilled) == 0,
         "packet_frame_length compatibility incomplete frame");
 }
@@ -481,8 +455,7 @@ std::array<std::byte, 188> ts_packet(std::uint16_t pid, bool pusi, std::uint8_t 
 // A complete PES: 00 00 01 <stream_id> <len_hi> <len_lo> + payload. stream_id
 // 0xC0 (private_stream_2) has no optional PES header, so the payload starts
 // right after the 6-byte header — see unwrap_pes() in src/ts.cpp.
-std::vector<std::byte> pes_packet(std::uint8_t stream_id,
-                                  std::span<const std::byte> payload) {
+std::vector<std::byte> pes_packet(std::uint8_t stream_id, std::span<const std::byte> payload) {
   std::vector<std::byte> pes;
   pes.push_back(B(0x00));
   pes.push_back(B(0x00));
@@ -499,8 +472,7 @@ std::vector<std::byte> pes_packet(std::uint8_t stream_id,
 // fragmentation flags 0xDF for one complete cell) — mirroring the fixture
 // generator's construction. unwrap_pes() strips the header and trusts its
 // 16-bit length, so each fragment gets a cell header of its own.
-std::vector<std::byte> au_cell_pes(std::uint8_t seq,
-                                   std::span<const std::byte> klv_fragment) {
+std::vector<std::byte> au_cell_pes(std::uint8_t seq, std::span<const std::byte> klv_fragment) {
   std::vector<std::byte> cell;
   cell.push_back(B(0x00));
   cell.push_back(B(seq));
@@ -512,8 +484,7 @@ std::vector<std::byte> au_cell_pes(std::uint8_t seq,
 }
 
 // Packetize one PES into 188-byte TS packets on `pid`, advancing `cc`.
-std::vector<std::byte> packetize_pes(std::uint16_t pid,
-                                     const std::vector<std::byte>& pes,
+std::vector<std::byte> packetize_pes(std::uint16_t pid, const std::vector<std::byte>& pes,
                                      std::uint8_t& cc) {
   std::vector<std::byte> out;
   std::size_t off = 0;
@@ -561,9 +532,8 @@ std::vector<std::byte> klv_packet(const std::vector<std::byte>& items) {
 // Run the extractor, collecting delivered packets.
 Result<std::monostate> run_extract(const std::vector<std::byte>& ts,
                                    std::vector<std::vector<std::byte>>& out) {
-  return extract_ts_klv(ts, [&](const KlvPacket& kp) {
-    out.emplace_back(kp.bytes.begin(), kp.bytes.end());
-  });
+  return extract_ts_klv(
+      ts, [&](const KlvPacket& kp) { out.emplace_back(kp.bytes.begin(), kp.bytes.end()); });
 }
 
 }  // namespace
@@ -572,8 +542,7 @@ static void test_ts_klv_robustness() {
   std::printf("(6) extract_ts_klv malformed-input robustness\n");
   constexpr std::uint16_t kPid = 0x0101;
   std::uint8_t cc = 0;
-  auto append_pes = [&](std::vector<std::byte>& stream,
-                        const std::vector<std::byte>& pes) {
+  auto append_pes = [&](std::vector<std::byte>& stream, const std::vector<std::byte>& pes) {
     auto packets = packetize_pes(kPid, pes, cc);
     stream.insert(stream.end(), packets.begin(), packets.end());
   };
@@ -581,11 +550,10 @@ static void test_ts_klv_robustness() {
   // Two distinguishable, well-formed local sets (tags 2 + 5 TLVs).
   const std::vector<std::byte> items_a = {
       B(0x02), B(0x04), B(0x00), B(0x00), B(0x00), B(0x2A),  // Precision Time Stamp
-      B(0x05), B(0x01), B(0x7F),                              // Frame Center Elevation
+      B(0x05), B(0x01), B(0x7F),                             // Frame Center Elevation
   };
   const std::vector<std::byte> items_b = {
-      B(0x02), B(0x04), B(0x00), B(0x00), B(0x00), B(0x3C),
-      B(0x05), B(0x01), B(0x55),
+      B(0x02), B(0x04), B(0x00), B(0x00), B(0x00), B(0x3C), B(0x05), B(0x01), B(0x55),
   };
   const auto pkt_a = klv_packet(items_a);
   const auto pkt_b = klv_packet(items_b);
@@ -606,8 +574,7 @@ static void test_ts_klv_robustness() {
   auto r1 = run_extract(ts1, out1);
   check(!r1 && r1.error() == Error::BadLength,
         "extract_ts_klv corrupt declared BER length -> BadLength");
-  check(out1.size() == 1 && out1[0] == pkt_a,
-        "packet before the corruption stays delivered");
+  check(out1.size() == 1 && out1[0] == pkt_a, "packet before the corruption stays delivered");
 
   // (2) Declared frame over the 16 MiB reassembly cap: a tiny buffer with a
   // huge declared length must fail with ResourceLimit, not wait forever.
@@ -650,8 +617,7 @@ static void test_ts_klv_robustness() {
   std::vector<std::vector<std::byte>> out4;
   auto r4 = run_extract(ts4, out4);
   check(static_cast<bool>(r4), "extract_ts_klv packet split across PES succeeds");
-  check(out4.size() == 1 && out4[0] == pkt_a,
-        "split KLV packet reassembled byte-exact");
+  check(out4.size() == 1 && out4[0] == pkt_a, "split KLV packet reassembled byte-exact");
 
   // 0x15 variant of (4): each fragment rides in its own RP 217 AU cell, so
   // each PES payload has a cell header and only the first starts with the UL.
@@ -666,8 +632,7 @@ static void test_ts_klv_robustness() {
   std::vector<std::vector<std::byte>> out6;
   auto r6 = run_extract(ts6, out6);
   check(static_cast<bool>(r6), "extract_ts_klv 0x15 AU cell split across PES succeeds");
-  check(out6.size() == 1 && out6[0] == pkt_a,
-        "split 0x15 KLV packet reassembled byte-exact");
+  check(out6.size() == 1 && out6[0] == pkt_a, "split 0x15 KLV packet reassembled byte-exact");
 }
 
 int main(int argc, char** argv) {

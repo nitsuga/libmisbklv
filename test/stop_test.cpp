@@ -27,8 +27,7 @@ static void check(bool ok, const char* what) {
 }
 static std::vector<std::byte> read_file(const char* p) {
   std::ifstream f(p, std::ios::binary);
-  std::vector<char> raw((std::istreambuf_iterator<char>(f)),
-                        std::istreambuf_iterator<char>());
+  std::vector<char> raw((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   std::vector<std::byte> out(raw.size());
   for (std::size_t i = 0; i < raw.size(); ++i)
     out[i] = static_cast<std::byte>(static_cast<unsigned char>(raw[i]));
@@ -42,8 +41,7 @@ class StreamingMock : public MediaBackend {
   std::atomic<int> emitted{0};
 
   Result<std::monostate> extract(std::string_view, const PacketHandler& on_packet,
-                                 std::stop_token stop = {},
-                                 ExtractOptions = {}) override {
+                                 std::stop_token stop = {}, ExtractOptions = {}) override {
     while (!stop.stop_requested()) {
       on_packet(KlvPacket{std::span<const std::byte>(pkt_), kNoPts});
       emitted.fetch_add(1, std::memory_order_relaxed);
@@ -84,8 +82,8 @@ class FailingBackend : public MediaBackend {
 
 class UnsupportedInsertBackend : public MediaBackend {
  public:
-  Result<std::monostate> extract(std::string_view, const PacketHandler&,
-                                 std::stop_token = {}, ExtractOptions = {}) override {
+  Result<std::monostate> extract(std::string_view, const PacketHandler&, std::stop_token = {},
+                                 ExtractOptions = {}) override {
     return Result<std::monostate>::ok({});
   }
   Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig&) override {
@@ -100,7 +98,10 @@ int main(int argc, char** argv) {
   }
   const char* path = argv[1];
   const auto pkt = read_file(path);
-  if (pkt.empty()) { std::fprintf(stderr, "no fixture: %s\n", path); return 2; }
+  if (pkt.empty()) {
+    std::fprintf(stderr, "no fixture: %s\n", path);
+    return 2;
+  }
 
   // --- (1) KlvStream: break early out of the range-for over an endless source -
   std::printf("(1) KlvStream early break\n");
@@ -114,8 +115,8 @@ int main(int argc, char** argv) {
     }
     check(!stream.error(), "early break has no spurious stream error while alive");
   }  // ~KlvStream must cancel the extract and return promptly (not hang)
-  const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                      clock_t_::now() - t0).count();
+  const auto ms =
+      std::chrono::duration_cast<std::chrono::milliseconds>(clock_t_::now() - t0).count();
   check(read == 3, "read exactly 3 messages then broke");
   check(ms < 2000, "break + destroy completed promptly (no wait for stream end)");
   std::printf("    (destroyed in %lld ms)\n", static_cast<long long>(ms));
@@ -145,9 +146,9 @@ int main(int argc, char** argv) {
     check(messages == 1 && !stream.error(), "normal MockBackend EOS yields message and no error");
   }
   {
-    KlvStream stream(std::make_unique<FailingBackend>(std::vector<ber::Bytes>{pkt},
-                                                       Error::ResourceLimit),
-                     "failing");
+    KlvStream stream(
+        std::make_unique<FailingBackend>(std::vector<ber::Bytes>{pkt}, Error::ResourceLimit),
+        "failing");
     int messages = 0;
     for (Message& m : stream) {
       (void)m;
@@ -210,12 +211,10 @@ int main(int argc, char** argv) {
   {
     auto fresh = Message::create(RegistryId::Uas0601);
     KlvSink sink(std::make_unique<UnsupportedInsertBackend>(), "unsupported");
-    const auto emitted = fresh ? sink.emit(*fresh)
-                               : Result<std::monostate>::err(Error::Backend);
+    const auto emitted = fresh ? sink.emit(*fresh) : Result<std::monostate>::err(Error::Backend);
     const auto closed = sink.close();
-    check(sink.error() == Error::Unsupported && !emitted &&
-              emitted.error() == Error::Unsupported && !closed &&
-              closed.error() == Error::Unsupported,
+    check(sink.error() == Error::Unsupported && !emitted && emitted.error() == Error::Unsupported &&
+              !closed && closed.error() == Error::Unsupported,
           "KlvSink exposes open_insert Unsupported through error/emit/close");
   }
 

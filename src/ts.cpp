@@ -27,8 +27,7 @@ bool starts_with_ul(std::span<const std::byte> s) {
 
 // Unwrap a full PES packet into its KLV payload (empty if not KLV/parseable).
 std::span<const std::byte> unwrap_pes(std::span<const std::byte> pes) {
-  if (pes.size() < 9 || u8(pes, 0) != 0 || u8(pes, 1) != 0 || u8(pes, 2) != 1)
-    return {};
+  if (pes.size() < 9 || u8(pes, 0) != 0 || u8(pes, 1) != 0 || u8(pes, 2) != 1) return {};
   const std::uint8_t stream_id = u8(pes, 3);
   const std::size_t pes_len = (u8(pes, 4) << 8) | u8(pes, 5);
   const std::size_t poff = ((u8(pes, 6) & 0xC0) == 0x80) ? 9 + u8(pes, 8) : 6;
@@ -114,10 +113,7 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
       // payload that carries it.
       const std::int64_t pts90 = pes_pts_90k(it->second);
       frame_error = framer.feed(
-          klv,
-          (pts90 < 0 || origin_90k < 0)
-              ? kNoPts
-              : (pts90 - origin_90k) * 100'000 / 9,
+          klv, (pts90 < 0 || origin_90k < 0) ? kNoPts : (pts90 - origin_90k) * 100'000 / 9,
           on_packet);
     }
     it->second.clear();
@@ -131,7 +127,7 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
     const bool pusi = (b1 >> 6) & 1;
     const std::uint8_t afc = (u8(ts, i + 3) >> 4) & 3;
     std::size_t off = i + 4;
-    if (afc & 2) off += 1 + u8(ts, off);  // adaptation field
+    if (afc & 2) off += 1 + u8(ts, off);         // adaptation field
     if (!(afc & 1) || off > i + kPkt) continue;  // no payload
     auto payload = ts.subspan(off, (i + kPkt) - off);
     if (pusi) {
@@ -141,15 +137,15 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
     } else {
       auto it = pes.find(pid);
       if (it != pes.end() && !it->second.empty())
-        // GCC 12/13 report a false -Wstringop-overflow here: inlining
-        // vector::_M_range_insert's reallocation path loses the iterator
-        // bounds, and the diagnostic invents "writing between 2 and SIZE_MAX
-        // bytes into a region of size 0" with a self-contradictory offset range
-        // ([-SIZE_MAX, -1] into an object of size [1, SIZE_MAX]). Neither half
-        // is reachable: `payload` is bounded to [0, 184] by the `off > i + kPkt`
-        // guard above, and `it->second` is non-empty by the condition on this
-        // very `if`, so the destination is never size 0. Suppress narrowly —
-        // re-check when the toolchain moves (issue #41).
+      // GCC 12/13 report a false -Wstringop-overflow here: inlining
+      // vector::_M_range_insert's reallocation path loses the iterator
+      // bounds, and the diagnostic invents "writing between 2 and SIZE_MAX
+      // bytes into a region of size 0" with a self-contradictory offset range
+      // ([-SIZE_MAX, -1] into an object of size [1, SIZE_MAX]). Neither half
+      // is reachable: `payload` is bounded to [0, 184] by the `off > i + kPkt`
+      // guard above, and `it->second` is non-empty by the condition on this
+      // very `if`, so the destination is never size 0. Suppress narrowly —
+      // re-check when the toolchain moves (issue #41).
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-overflow"

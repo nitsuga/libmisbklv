@@ -45,14 +45,12 @@ inline constexpr auto kLiveEosLockTimeout = std::chrono::seconds(5);
 
 }  // namespace
 
-bool push_live_eos_when_idle(
-    GstPad* source_pad, GstPad* mux_pad, std::stop_token stop,
-    std::chrono::steady_clock::duration lock_timeout) {
+bool push_live_eos_when_idle(GstPad* source_pad, GstPad* mux_pad, std::stop_token stop,
+                             std::chrono::steady_clock::duration lock_timeout) {
   if (!source_pad || !mux_pad) return false;
   const auto deadline = std::chrono::steady_clock::now() + lock_timeout;
   bool sent = false;
-  while (!stop.stop_requested() &&
-         std::chrono::steady_clock::now() < deadline) {
+  while (!stop.stop_requested() && std::chrono::steady_clock::now() < deadline) {
     // Acquire in the event's source-to-sink order. Checking only source_pad is
     // insufficient: a branch ghost-src lock can remain free while a mux chain
     // function holds the downstream lock. Both are recursive, so the event can
@@ -122,8 +120,8 @@ GstElement* make_sink(const std::string& spec, const InsertConfig& cfg) {
     GstElement* s = gst_element_factory_make("udpsink", "sink");
     if (!s) return nullptr;
     g_object_set(s, "host", host.c_str(), "port", port, nullptr);
-    g_object_set(s, "auto-multicast", TRUE, "ttl-mc", cfg.udp_ttl_mcast,
-                 "loop", cfg.udp_loop ? TRUE : FALSE, nullptr);
+    g_object_set(s, "auto-multicast", TRUE, "ttl-mc", cfg.udp_ttl_mcast, "loop",
+                 cfg.udp_loop ? TRUE : FALSE, nullptr);
     // Only pin the egress interface when asked; "" keeps the stack default.
     // udpsink's multicast-iface is null by default, and GStreamer treats "" as
     // a set-but-empty value, so leave it unset unless the caller gave a name.
@@ -148,8 +146,7 @@ class GstInserter : public Inserter {
   // `removable_sink` is the sink's file path iff this session created it and
   // may delete it again. It stays empty for a non-file sink and for a caller's
   // pre-existing path (ADR 0022).
-  GstInserter(GstElement* pipeline, GstElement* appsrc,
-              std::unique_ptr<VideoCtx> video = nullptr,
+  GstInserter(GstElement* pipeline, GstElement* appsrc, std::unique_ptr<VideoCtx> video = nullptr,
               std::string removable_sink = {})
       : pipeline_(pipeline), appsrc_(appsrc), video_(std::move(video)),
         removable_sink_(std::move(removable_sink)) {}
@@ -164,12 +161,10 @@ class GstInserter : public Inserter {
     discard_output();
   }
 
-  Result<std::monostate> push(std::span<const std::byte> pkt,
-                              std::int64_t pts_ns) override {
+  Result<std::monostate> push(std::span<const std::byte> pkt, std::int64_t pts_ns) override {
     // With video passthrough both branches must share the source timeline. The
     // synthetic ~30fps KLV-only counter is therefore a caller error here.
-    if (video_ && pts_ns == kNoPts)
-      return Result<std::monostate>::err(Error::Unsupported);
+    if (video_ && pts_ns == kNoPts) return Result<std::monostate>::err(Error::Unsupported);
     // Generate mode records the ST 0601 Item 2 sensor timestamp against this
     // KLV PTS; the video pad probe consumes that mapping later.
     if (video_ && video_->generate_sei && pts_ns != kNoPts)
@@ -178,24 +173,18 @@ class GstInserter : public Inserter {
     GstBuffer* buf = gst_buffer_new_allocate(nullptr, pkt.size(), nullptr);
     gst_buffer_fill(buf, 0, pkt.data(), pkt.size());
     // KLV-only output with kNoPts retains the historic ~30fps pacing counter.
-    GST_BUFFER_PTS(buf) = (pts_ns == kNoPts) ? pts_
-                                             : static_cast<GstClockTime>(pts_ns);
+    GST_BUFFER_PTS(buf) = (pts_ns == kNoPts) ? pts_ : static_cast<GstClockTime>(pts_ns);
     GST_BUFFER_DURATION(buf) = kFrameDur;
     pts_ += kFrameDur;
-    const GstFlowReturn ret =
-        gst_app_src_push_buffer(GST_APP_SRC(appsrc_), buf);
+    const GstFlowReturn ret = gst_app_src_push_buffer(GST_APP_SRC(appsrc_), buf);
     return ret == GST_FLOW_OK ? Result<std::monostate>::ok({})
                               : Result<std::monostate>::err(Error::Backend);
   }
 
-  Result<std::monostate> push(std::vector<std::byte>&& pkt,
-                              std::int64_t pts_ns) override {
-    if (video_ && pts_ns == kNoPts)
-      return Result<std::monostate>::err(Error::Unsupported);
+  Result<std::monostate> push(std::vector<std::byte>&& pkt, std::int64_t pts_ns) override {
+    if (video_ && pts_ns == kNoPts) return Result<std::monostate>::err(Error::Unsupported);
     if (video_ && video_->generate_sei && pts_ns != kNoPts)
-      record_sensor_timestamp(*video_,
-                              std::span<const std::byte>(pkt.data(), pkt.size()),
-                              pts_ns);
+      record_sensor_timestamp(*video_, std::span<const std::byte>(pkt.data(), pkt.size()), pts_ns);
     GstBuffer* buf = nullptr;
     if (pkt.empty()) {
       buf = gst_buffer_new();
@@ -203,17 +192,13 @@ class GstInserter : public Inserter {
       // Transfer ownership of the vector's storage to GStreamer without copying.
       auto* vec = new std::vector<std::byte>(std::move(pkt));
       buf = gst_buffer_new_wrapped_full(
-          static_cast<GstMemoryFlags>(0), vec->data(), vec->size(), 0,
-          vec->size(), vec, [](gpointer data) {
-            delete static_cast<std::vector<std::byte>*>(data);
-          });
+          static_cast<GstMemoryFlags>(0), vec->data(), vec->size(), 0, vec->size(), vec,
+          [](gpointer data) { delete static_cast<std::vector<std::byte>*>(data); });
     }
-    GST_BUFFER_PTS(buf) = (pts_ns == kNoPts) ? pts_
-                                              : static_cast<GstClockTime>(pts_ns);
+    GST_BUFFER_PTS(buf) = (pts_ns == kNoPts) ? pts_ : static_cast<GstClockTime>(pts_ns);
     GST_BUFFER_DURATION(buf) = kFrameDur;
     pts_ += kFrameDur;
-    const GstFlowReturn ret =
-        gst_app_src_push_buffer(GST_APP_SRC(appsrc_), buf);
+    const GstFlowReturn ret = gst_app_src_push_buffer(GST_APP_SRC(appsrc_), buf);
     return ret == GST_FLOW_OK ? Result<std::monostate>::ok({})
                               : Result<std::monostate>::err(Error::Backend);
   }
@@ -224,31 +209,25 @@ class GstInserter : public Inserter {
   // unlink or release the mux request pad while PLAYING: mpegtsmux can still be
   // traversing its request-pad list on a streaming thread (issue #39).
   Result<std::monostate> finish(std::stop_token stop) override {
-    const GstFlowReturn klv_eos =
-        gst_app_src_end_of_stream(GST_APP_SRC(appsrc_));
+    const GstFlowReturn klv_eos = gst_app_src_end_of_stream(GST_APP_SRC(appsrc_));
     bool live_video_eos = true;
     if (video_ && video_->is_live_unbounded && video_->reserved_video_pad) {
       GstPad* peer = gst_pad_get_peer(video_->reserved_video_pad);
       if (peer) {
-        bool ready =
-            video_->delivered_buffer.load(std::memory_order_acquire);
+        bool ready = video_->delivered_buffer.load(std::memory_order_acquire);
         if (!ready) {
-          const auto ready_deadline =
-              std::chrono::steady_clock::now() + kLiveEosReadyTimeout;
-          while (!stop.stop_requested() &&
-                 std::chrono::steady_clock::now() < ready_deadline) {
+          const auto ready_deadline = std::chrono::steady_clock::now() + kLiveEosReadyTimeout;
+          while (!stop.stop_requested() && std::chrono::steady_clock::now() < ready_deadline) {
             GstCaps* caps = gst_pad_get_current_caps(peer);
             const bool negotiated = caps && !gst_caps_is_empty(caps);
             if (caps) gst_caps_unref(caps);
-            ready = negotiated && video_->delivered_buffer.load(
-                                      std::memory_order_acquire);
+            ready = negotiated && video_->delivered_buffer.load(std::memory_order_acquire);
             if (ready) break;
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
           }
         }
-        live_video_eos =
-            ready && push_live_eos_when_idle(peer, video_->reserved_video_pad,
-                                             stop, kLiveEosLockTimeout);
+        live_video_eos = ready && push_live_eos_when_idle(peer, video_->reserved_video_pad, stop,
+                                                          kLiveEosLockTimeout);
         gst_object_unref(peer);
       } else {
         live_video_eos = false;
@@ -260,8 +239,8 @@ class GstInserter : public Inserter {
     GstBus* bus = gst_element_get_bus(pipeline_);
     bool ok = false;
     bool cancelled = stop.stop_requested();
-    const auto deadline = std::chrono::steady_clock::now() +
-                          std::chrono::nanoseconds(kFinishDrainTimeout);
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::nanoseconds(kFinishDrainTimeout);
     // Cap each poll short so a cancellation is noticed promptly. A realtime
     // file replay drains at wall-clock speed, so this is where a Ctrl-C after
     // the final KLV packet must take effect (ADR 0032).
@@ -286,11 +265,9 @@ class GstInserter : public Inserter {
       if (now >= deadline) break;
       const auto remain =
           std::chrono::duration_cast<std::chrono::nanoseconds>(deadline - now).count();
-      const GstClockTime poll =
-          std::min(static_cast<GstClockTime>(remain), kFinishDrainPoll);
+      const GstClockTime poll = std::min(static_cast<GstClockTime>(remain), kFinishDrainPoll);
       GstMessage* m = gst_bus_timed_pop_filtered(
-          bus, poll,
-          static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
+          bus, poll, static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
       if (!m) continue;
       if (GST_MESSAGE_TYPE(m) == GST_MESSAGE_EOS) {
         ok = true;
@@ -300,16 +277,14 @@ class GstInserter : public Inserter {
       GError* err = nullptr;
       gchar* dbg = nullptr;
       gst_message_parse_error(m, &err, &dbg);
-      g_warning("misbklv: pipeline error during finish: %s",
-                err ? err->message : "unknown");
+      g_warning("misbklv: pipeline error during finish: %s", err ? err->message : "unknown");
       if (err) g_error_free(err);
       g_free(dbg);
       gst_message_unref(m);
       break;
     }
     if (!ok && !cancelled && std::chrono::steady_clock::now() >= deadline)
-      g_warning("misbklv: pipeline did not drain within %" G_GUINT64_FORMAT
-                "s of EOS; giving up",
+      g_warning("misbklv: pipeline did not drain within %" G_GUINT64_FORMAT "s of EOS; giving up",
                 static_cast<guint64>(kFinishDrainTimeout / GST_SECOND));
     gst_object_unref(bus);
 
@@ -343,15 +318,14 @@ class GstInserter : public Inserter {
   bool quiesce_to_null() {
     if (!pipeline_) return true;
     if (video_) video_->remove_probes();
-    if (gst_element_set_state(pipeline_, GST_STATE_NULL) ==
-        GST_STATE_CHANGE_FAILURE) {
+    if (gst_element_set_state(pipeline_, GST_STATE_NULL) == GST_STATE_CHANGE_FAILURE) {
       g_warning("misbklv: failed to request NULL pipeline state");
       return false;
     }
     GstState cur = GST_STATE_VOID_PENDING;
     GstState pending = GST_STATE_VOID_PENDING;
-    const GstStateChangeReturn state = gst_element_get_state(
-        pipeline_, &cur, &pending, kNullStateTimeout);
+    const GstStateChangeReturn state =
+        gst_element_get_state(pipeline_, &cur, &pending, kNullStateTimeout);
     if (state == GST_STATE_CHANGE_FAILURE || cur != GST_STATE_NULL) {
       g_warning("misbklv: pipeline did not reach NULL within %" G_GUINT64_FORMAT
                 "s; continuing bounded teardown",
@@ -382,8 +356,7 @@ class GstInserter : public Inserter {
 Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg) {
   using R = Result<std::unique_ptr<Inserter>>;
   VideoSource vsrc = parse_video_source(cfg.video_source);
-  if (vsrc.kind == VideoSourceKind::Unsupported)
-    return R::err(Error::Unsupported);
+  if (vsrc.kind == VideoSourceKind::Unsupported) return R::err(Error::Unsupported);
   if (vsrc.kind == VideoSourceKind::File) {
     if (vsrc.spec.empty()) return R::err(Error::Unsupported);
     // Validate before building: filesink creates a file as soon as the pipeline
@@ -436,8 +409,8 @@ Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg) {
   GstCaps* caps = gst_caps_from_string("meta/x-klv, parsed=(boolean)true");
   // realtime makes appsrc live and lets the sink render on the clock, pacing
   // UDP/SRT output to its per-buffer PTS instead of pushing as fast as possible.
-  g_object_set(appsrc, "caps", caps, "format", GST_FORMAT_TIME, "block", TRUE,
-               "is-live", cfg.realtime ? TRUE : FALSE, nullptr);
+  g_object_set(appsrc, "caps", caps, "format", GST_FORMAT_TIME, "block", TRUE, "is-live",
+               cfg.realtime ? TRUE : FALSE, nullptr);
   gst_caps_unref(caps);
   if (cfg.realtime) g_object_set(sink, "sync", TRUE, nullptr);
   gst_bin_add_many(GST_BIN(pipeline), appsrc, mux, sink, nullptr);
@@ -465,12 +438,10 @@ Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg) {
     GstPad* klv_pad = gst_element_request_pad_simple(mux, "sink_%d");
     if (!klv_pad) return fail(pipeline, Error::Backend);
     GstPad* srcpad = gst_element_get_static_pad(appsrc, "src");
-    const bool klv_linked =
-        srcpad && gst_pad_link(srcpad, klv_pad) == GST_PAD_LINK_OK;
+    const bool klv_linked = srcpad && gst_pad_link(srcpad, klv_pad) == GST_PAD_LINK_OK;
     if (srcpad) gst_object_unref(srcpad);
     gst_object_unref(klv_pad);
-    if (!klv_linked || !gst_element_link(mux, sink))
-      return fail(pipeline, Error::Backend);
+    if (!klv_linked || !gst_element_link(mux, sink)) return fail(pipeline, Error::Backend);
   } else if (!gst_element_link_many(appsrc, mux, sink, nullptr)) {
     return fail(pipeline, Error::Backend);
   }
@@ -480,15 +451,13 @@ Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig& cfg) {
     // Dynamic pads are linked by the video unit through parsers where required;
     // nothing is decoded, preserving codec passthrough.
     auto prepared =
-        prepare_video_branch(pipeline, reserved_video_pad, mux, vsrc,
-                             cfg.sei_0604, video);
+        prepare_video_branch(pipeline, reserved_video_pad, mux, vsrc, cfg.sei_0604, video);
     if (!prepared) return fail(pipeline, prepared.error());
   }
   if (gst_element_set_state(pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
     return fail(pipeline, Error::Backend);
-  return R::ok(std::make_unique<GstInserter>(
-      pipeline, appsrc, std::move(video),
-      sink_preexisted ? std::string() : sink_path));
+  return R::ok(std::make_unique<GstInserter>(pipeline, appsrc, std::move(video),
+                                             sink_preexisted ? std::string() : sink_path));
 }
 
 }  // namespace misbklv::detail

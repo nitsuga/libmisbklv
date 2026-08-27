@@ -23,8 +23,7 @@ using namespace misbklv;
 
 static std::vector<std::byte> read_file(const char* path) {
   std::ifstream f(path, std::ios::binary);
-  std::vector<char> raw((std::istreambuf_iterator<char>(f)),
-                        std::istreambuf_iterator<char>());
+  std::vector<char> raw((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   std::vector<std::byte> out(raw.size());
   for (std::size_t i = 0; i < raw.size(); ++i)
     out[i] = static_cast<std::byte>(static_cast<unsigned char>(raw[i]));
@@ -71,7 +70,8 @@ static int test_centroid_default_width() {
     const auto& p = (*packs)[0];
     check(p.target_id == 7, "target id round-trips");
     const Item* c = nullptr;
-    for (const auto& it : p.items) if (it.tag == 1) c = &it;
+    for (const auto& it : p.items)
+      if (it.tag == 1) c = &it;
     check(c != nullptr, "centroid item present in parsed pack");
     if (c) {
       check(c->value.size() == 6, "centroid emitted at 6 bytes (V6)");
@@ -97,23 +97,42 @@ int main(int argc, char** argv) {
   std::printf("fixture: %s (%zu bytes)\n", path, data.size());
 
   auto pkt = parse_packet(data);
-  if (!pkt) { std::fprintf(stderr, "parse failed\n"); return 2; }
+  if (!pkt) {
+    std::fprintf(stderr, "parse failed\n");
+    return 2;
+  }
   const Registry* vmti = registry_by_key(pkt->ul_key);
-  if (vmti != &gen::vmti_0903) { std::fprintf(stderr, "not VMTI\n"); return 2; }
+  if (vmti != &gen::vmti_0903) {
+    std::fprintf(stderr, "not VMTI\n");
+    return 2;
+  }
 
   // locate Item 101 and route to the VTarget registry
   const Item* v101 = nullptr;
-  for (const auto& it : pkt->items) if (it.tag == 101) v101 = &it;
-  if (!v101) { std::fprintf(stderr, "no Item 101\n"); return 2; }
+  for (const auto& it : pkt->items)
+    if (it.tag == 101) v101 = &it;
+  if (!v101) {
+    std::fprintf(stderr, "no Item 101\n");
+    return 2;
+  }
   const ItemDescriptor* d101 = vmti->find(101);
-  if (!d101 || d101->kind != ValueKind::Pack) { std::fprintf(stderr, "101 not Pack\n"); return 2; }
+  if (!d101 || d101->kind != ValueKind::Pack) {
+    std::fprintf(stderr, "101 not Pack\n");
+    return 2;
+  }
   const Registry* vt = registry_for(d101->child);
-  if (vt != &gen::vtarget_0903) { std::fprintf(stderr, "child routing wrong\n"); return 2; }
+  if (vt != &gen::vtarget_0903) {
+    std::fprintf(stderr, "child routing wrong\n");
+    return 2;
+  }
   std::printf("Item 101 -> Series of '%s' packs (routing OK)\n", std::string(vt->id).c_str());
 
   // --- parse the Series --------------------------------------------------
   auto packs = parse_vtarget_series(v101->value);
-  if (!packs) { std::fprintf(stderr, "series parse failed\n"); return 2; }
+  if (!packs) {
+    std::fprintf(stderr, "series parse failed\n");
+    return 2;
+  }
   std::printf("vTargetSeries: %zu VTarget packs\n", packs->size());
   for (const auto& p : *packs) {
     std::printf("  target %llu:\n", static_cast<unsigned long long>(p.target_id));
@@ -142,13 +161,22 @@ int main(int argc, char** argv) {
   LocalSetBuilder b(*vmti);
   for (const auto& it : pkt->items) {
     if (it.tag == 1) continue;
-    if (it.tag == 101) { b.append_raw(101, series); continue; }
+    if (it.tag == 101) {
+      b.append_raw(101, series);
+      continue;
+    }
     const ItemDescriptor* d = vmti->find(it.tag);
-    if (d) { auto v = codec::decode(*d, it.value); (void)b.set(it.tag, *v, it.value.size()); }
-    else b.append_raw(it.tag, it.value);
+    if (d) {
+      auto v = codec::decode(*d, it.value);
+      (void)b.set(it.tag, *v, it.value.size());
+    } else
+      b.append_raw(it.tag, it.value);
   }
   auto rebuilt = std::move(b).finalize(vmti->ul_key, /*enforce_mandatory=*/false);
-  if (!rebuilt) { std::fprintf(stderr, "finalize failed\n"); return 2; }
+  if (!rebuilt) {
+    std::fprintf(stderr, "finalize failed\n");
+    return 2;
+  }
   const bool pkt_ok = (*rebuilt == data);
   std::printf("packet re-encode: %s\n", pkt_ok ? "byte-exact" : "MISMATCH");
 

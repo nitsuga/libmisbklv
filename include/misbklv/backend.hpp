@@ -75,20 +75,23 @@ enum class Sei0604 {
 };
 
 struct InsertConfig {
-  std::string sink;        // "file:out.ts" | "udp:host:port" | "srt:uri"
-  bool realtime = false;   // pace output against the clock (live sinks; B4)
+  std::string sink;       // "file:out.ts" | "udp:host:port" | "srt:uri"
+  bool realtime = false;  // pace output against the clock (live sinks; B4)
   // v1 signals 0x06 async (0x15 sync deferred, ADR 0008).
 
   // Optional video passthrough (ADR 0020, extended ADR 0031). Accepts:
   // - "" (default): KLV-only, no video.
-  // - "file:PATH" or bare path that exists: file source via filesrc ! demuxer ! parser (container sniff ADR 0025).
+  // - "file:PATH" or bare path that exists: file source via filesrc ! demuxer ! parser (container
+  // sniff ADR 0025).
   //   Bare path is backward compatible; prefer "file:" prefix (may be deprecated).
   // - "rtsp[s]://...": live RTSP source via rtspsrc ! rtph264depay/265 ! h264parse/h265parse.
-  // - "pipeline:<gst-launch desc>": explicit GstBin escape hatch built via gst_parse_bin_from_description with ghost src pad; the bin must expose a static src pad immediately (no dynamic demuxers like tsdemux requiring pad-added). Use for videotestsrc, udpsrc without demux, or test fixtures.
-  // Empty keeps KLV-only pipeline. See ADR 0031.
+  // - "pipeline:<gst-launch desc>": explicit GstBin escape hatch built via
+  // gst_parse_bin_from_description with ghost src pad; the bin must expose a static src pad
+  // immediately (no dynamic demuxers like tsdemux requiring pad-added). Use for videotestsrc,
+  // udpsrc without demux, or test fixtures. Empty keeps KLV-only pipeline. See ADR 0031.
   //
-  // ABNF: video_source = "" / file-path / "file:" path / "rtsp:" uri / "rtsps:" uri / "pipeline:" gst-desc
-  // where file-path is a bare path (backward compat; prefer "file:").
+  // ABNF: video_source = "" / file-path / "file:" path / "rtsp:" uri / "rtsps:" uri / "pipeline:"
+  // gst-desc where file-path is a bare path (backward compat; prefer "file:").
   //
   // The stream is parsed, never decoded: whatever codec the source carries
   // (H.264, H.265, MPEG-2, ...) is what the output carries. Every non-video stream in
@@ -108,7 +111,8 @@ struct InsertConfig {
   // PTS order, interleaved with the video's progress — do not enqueue metadata
   // far ahead of its corresponding video.
   //
-  // realtime + video_source is supported: file source replays on pipeline clock, live source is normal mode (ADR 0031); kNoPts still rejected with video_source.
+  // realtime + video_source is supported: file source replays on pipeline clock, live source is
+  // normal mode (ADR 0031); kNoPts still rejected with video_source.
   std::string video_source;
 
   // What to do about ST 0604 Precision Time Stamp SEI in the passthrough video
@@ -146,10 +150,8 @@ class Inserter {
   // Ownership-transferring overload for zero-copy emit: by default forwards to
   // the span overload. GStreamer backend overrides to wrap the vector storage
   // without copying (gst_buffer_new_wrapped).
-  virtual Result<std::monostate> push(std::vector<std::byte>&& klv_packet,
-                                      std::int64_t pts_ns) {
-    return push(std::span<const std::byte>(klv_packet.data(), klv_packet.size()),
-                pts_ns);
+  virtual Result<std::monostate> push(std::vector<std::byte>&& klv_packet, std::int64_t pts_ns) {
+    return push(std::span<const std::byte>(klv_packet.data(), klv_packet.size()), pts_ns);
   }
   // EOS + flush + close. `stop` cancels the post-EOS drain early (cooperative,
   // polled from the calling thread — e.g. a SIGINT handler that flips a flag a
@@ -173,8 +175,7 @@ class MediaBackend {
   // `stop` cancels a live extract early (cooperative, polled from another thread —
   // e.g. a KlvStream consumer that breaks); a default token is never signaled, so
   // extract runs to the natural end (ADR 0019).
-  virtual Result<std::monostate> extract(std::string_view source,
-                                         const PacketHandler& on_packet,
+  virtual Result<std::monostate> extract(std::string_view source, const PacketHandler& on_packet,
                                          std::stop_token stop = {},
                                          ExtractOptions options = {}) = 0;
   virtual Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig&) = 0;

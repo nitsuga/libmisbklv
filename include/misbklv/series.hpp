@@ -26,8 +26,7 @@ Result<std::vector<VTargetPack>> parse_vtarget_series(std::span<const std::byte>
 
 // Build one VTarget Pack body: BER-OID targetId + already-serialized LS item
 // bytes (e.g. from LocalSetBuilder::serialize_items()).
-ber::Bytes build_vtarget_pack(std::uint64_t target_id,
-                              std::span<const std::byte> item_bytes);
+ber::Bytes build_vtarget_pack(std::uint64_t target_id, std::span<const std::byte> item_bytes);
 
 // Assemble a Series value from element bodies (each length-prefixed, §9.1.3).
 ber::Bytes build_series(const std::vector<ber::Bytes>& elements);

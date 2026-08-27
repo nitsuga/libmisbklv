@@ -24,8 +24,7 @@ Result<std::vector<VTargetPack>> parse_vtarget_series(std::span<const std::byte>
   return Result<std::vector<VTargetPack>>::ok(std::move(packs));
 }
 
-ber::Bytes build_vtarget_pack(std::uint64_t target_id,
-                              std::span<const std::byte> item_bytes) {
+ber::Bytes build_vtarget_pack(std::uint64_t target_id, std::span<const std::byte> item_bytes) {
   ber::Bytes out;
   ber::write_oid(out, target_id);
   out.insert(out.end(), item_bytes.begin(), item_bytes.end());

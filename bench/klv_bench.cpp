@@ -41,8 +41,7 @@ volatile std::uint64_t g_sink = 0;
 
 std::vector<std::byte> read_file(const char* path) {
   std::ifstream f(path, std::ios::binary);
-  std::vector<char> raw((std::istreambuf_iterator<char>(f)),
-                        std::istreambuf_iterator<char>());
+  std::vector<char> raw((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   std::vector<std::byte> out(raw.size());
   for (std::size_t i = 0; i < raw.size(); ++i)
     out[i] = static_cast<std::byte>(static_cast<unsigned char>(raw[i]));
@@ -50,8 +49,7 @@ std::vector<std::byte> read_file(const char* path) {
 }
 
 // Median nanoseconds per iteration over `reps` runs of `iters` iterations.
-template <class F>
-double median_ns_per_iter(int reps, std::size_t iters, F&& body) {
+template <class F> double median_ns_per_iter(int reps, std::size_t iters, F&& body) {
   // Warm up before the clock starts, so the first rep is not paying for cold
   // caches and a ramping clock. This does not make the rows stable — codec rows
   // still move around 15% run to run on an ordinary desktop — so read the output
@@ -63,8 +61,7 @@ double median_ns_per_iter(int reps, std::size_t iters, F&& body) {
     const auto t0 = std::chrono::steady_clock::now();
     for (std::size_t i = 0; i < iters; ++i) body();
     const auto t1 = std::chrono::steady_clock::now();
-    const auto ns =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count();
+    const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count();
     per_iter.push_back(static_cast<double>(ns) / static_cast<double>(iters));
   }
   std::sort(per_iter.begin(), per_iter.end());
@@ -76,8 +73,7 @@ void report(const char* what, double ns) {
 }
 
 void report_throughput(const char* what, double ns, std::size_t bytes) {
-  const double mib_per_s = (static_cast<double>(bytes) / (1024.0 * 1024.0)) /
-                           (ns / 1e9);
+  const double mib_per_s = (static_cast<double>(bytes) / (1024.0 * 1024.0)) / (ns / 1e9);
   std::printf("  %-42s %10.1f ns/op  %8.1f MiB/s\n", what, ns, mib_per_s);
 }
 
@@ -101,8 +97,7 @@ const ItemDescriptor* first_of_kind(const Registry& reg, ValueKind kind,
                                     std::uint8_t want_width = 0) {
   const ItemDescriptor* fallback = nullptr;
   for (const auto& d : reg.items) {
-    if (d.kind != kind || d.tag == 1 || d.fixed_len < 1 || d.fixed_len > 8)
-      continue;
+    if (d.kind != kind || d.tag == 1 || d.fixed_len < 1 || d.fixed_len > 8) continue;
     if (want_width && d.fixed_len == want_width) return &d;
     if (!fallback) fallback = &d;
   }
@@ -119,8 +114,8 @@ void bench_codec(const Registry& reg) {
   constexpr std::uint8_t kWantWidth = 2;
   std::printf("codec decode+encode, one item, %u-byte where the registry allows\n",
               static_cast<unsigned>(kWantWidth));
-  const ValueKind kinds[] = {ValueKind::UInt, ValueKind::Int,
-                             ValueKind::LinearLDS, ValueKind::IMAPB};
+  const ValueKind kinds[] = {ValueKind::UInt, ValueKind::Int, ValueKind::LinearLDS,
+                             ValueKind::IMAPB};
   const char* names[] = {"UInt", "Int", "LinearLDS", "IMAPB"};
   for (std::size_t k = 0; k < std::size(kinds); ++k) {
     const ItemDescriptor* d = first_of_kind(reg, kinds[k], kWantWidth);
@@ -136,8 +131,7 @@ void bench_codec(const Registry& reg) {
 
     char label[96];
     std::snprintf(label, sizeof(label), "%s (tag %u, %u bytes)%s", names[k],
-                  static_cast<unsigned>(d->tag),
-                  static_cast<unsigned>(d->fixed_len),
+                  static_cast<unsigned>(d->tag), static_cast<unsigned>(d->fixed_len),
                   d->fixed_len == kWantWidth ? "" : "  <- width differs");
     const double ns = median_ns_per_iter(5, 200000, [&] {
       auto v = codec::decode(*d, raw);
@@ -169,8 +163,7 @@ void bench_message(std::span<const std::byte> klv) {
     auto out = parsed->encode();
     if (out) g_sink += out->size();
   });
-  report_throughput("Message::encode (unedited passthrough)", encode_ns,
-                    klv.size());
+  report_throughput("Message::encode (unedited passthrough)", encode_ns, klv.size());
 
   auto edited = Message::parse(klv);
   const ItemDescriptor* uint_item =
@@ -182,16 +175,14 @@ void bench_message(std::span<const std::byte> klv) {
   auto set_ok = edited->set(uint_item->tag, Value{std::uint64_t{1}});
   if (!set_ok) {
     std::printf("  (set(tag %u) failed with error %d; skipping rebuild row)\n",
-                static_cast<unsigned>(uint_item->tag),
-                static_cast<int>(set_ok.error()));
+                static_cast<unsigned>(uint_item->tag), static_cast<int>(set_ok.error()));
     return;
   }
   const double reencode_ns = median_ns_per_iter(5, 20000, [&] {
     auto out = edited->encode();
     if (out) g_sink += out->size();
   });
-  report_throughput("Message::encode (one edit, rebuilds)", reencode_ns,
-                    klv.size());
+  report_throughput("Message::encode (one edit, rebuilds)", reencode_ns, klv.size());
 }
 
 // --- (3) gst-free TS extraction ---------------------------------------------
@@ -211,11 +202,9 @@ void bench_ts_extract(const std::vector<std::byte>& ts_repeated) {
     });
     if (!r) g_sink += 1;
   });
-  report_throughput("extract_ts_klv (2 passes: origin + frame)", ns,
-                    ts_repeated.size());
+  report_throughput("extract_ts_klv (2 passes: origin + frame)", ns, ts_repeated.size());
   std::printf("  (%zu packets extracted)\n", packets);
 }
-
 
 }  // namespace
 

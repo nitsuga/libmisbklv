@@ -19,8 +19,7 @@ using namespace misbklv;
 
 static std::vector<std::byte> read_file(const char* path) {
   std::ifstream f(path, std::ios::binary);
-  std::vector<char> raw((std::istreambuf_iterator<char>(f)),
-                        std::istreambuf_iterator<char>());
+  std::vector<char> raw((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   std::vector<std::byte> out(raw.size());
   for (std::size_t i = 0; i < raw.size(); ++i)
     out[i] = static_cast<std::byte>(static_cast<unsigned char>(raw[i]));
@@ -43,8 +42,7 @@ int main(int argc, char** argv) {
   // --- decode ---------------------------------------------------------------
   auto parsed = parse_packet(original);
   if (!parsed) {
-    std::fprintf(stderr, "parse failed: error %d\n",
-                 static_cast<int>(parsed.error()));
+    std::fprintf(stderr, "parse failed: error %d\n", static_cast<int>(parsed.error()));
     return 2;
   }
   std::printf("parsed %zu items\n", parsed->items.size());
@@ -54,12 +52,10 @@ int main(int argc, char** argv) {
     auto v = codec::decode(*d, it.value);
     if (!v) continue;
     if (d->kind == ValueKind::LinearLDS)
-      std::printf("  tag %3u  %-24s = %.6f %s\n", it.tag,
-                  std::string(d->name).c_str(), std::get<double>(*v),
-                  std::string(d->units).c_str());
+      std::printf("  tag %3u  %-24s = %.6f %s\n", it.tag, std::string(d->name).c_str(),
+                  std::get<double>(*v), std::string(d->units).c_str());
     else if (d->kind == ValueKind::UInt)
-      std::printf("  tag %3u  %-24s = %llu\n", it.tag,
-                  std::string(d->name).c_str(),
+      std::printf("  tag %3u  %-24s = %llu\n", it.tag, std::string(d->name).c_str(),
                   static_cast<unsigned long long>(std::get<std::uint64_t>(*v)));
   }
 
@@ -72,8 +68,7 @@ int main(int argc, char** argv) {
       auto v = codec::decode(*d, it.value);
       auto r = b.set(it.tag, *v, it.value.size());  // preserve source length
       if (!r) {
-        std::fprintf(stderr, "set(tag %u) failed: %d\n", it.tag,
-                     static_cast<int>(r.error()));
+        std::fprintf(stderr, "set(tag %u) failed: %d\n", it.tag, static_cast<int>(r.error()));
         return 2;
       }
     } else {
@@ -82,8 +77,7 @@ int main(int argc, char** argv) {
   }
   auto rebuilt = std::move(b).finalize(std::span{kUas0601Key});
   if (!rebuilt) {
-    std::fprintf(stderr, "finalize failed: %d\n",
-                 static_cast<int>(rebuilt.error()));
+    std::fprintf(stderr, "finalize failed: %d\n", static_cast<int>(rebuilt.error()));
     return 2;
   }
 
@@ -98,12 +92,10 @@ int main(int argc, char** argv) {
   for (std::size_t i = 0; i < n; ++i)
     if ((*rebuilt)[i] != original[i]) {
       std::printf("  first diff at offset %zu: got 0x%02X want 0x%02X\n", i,
-                  std::to_integer<unsigned>((*rebuilt)[i]),
-                  std::to_integer<unsigned>(original[i]));
+                  std::to_integer<unsigned>((*rebuilt)[i]), std::to_integer<unsigned>(original[i]));
       break;
     }
   if (rebuilt->size() != original.size())
-    std::printf("  size differs: %zu vs %zu\n", rebuilt->size(),
-                original.size());
+    std::printf("  size differs: %zu vs %zu\n", rebuilt->size(), original.size());
   return 1;
 }

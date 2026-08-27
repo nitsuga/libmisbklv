@@ -18,8 +18,7 @@ using namespace misbklv;
 
 static std::vector<std::byte> read_file(const char* path) {
   std::ifstream f(path, std::ios::binary);
-  std::vector<char> raw((std::istreambuf_iterator<char>(f)),
-                        std::istreambuf_iterator<char>());
+  std::vector<char> raw((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   std::vector<std::byte> out(raw.size());
   for (std::size_t i = 0; i < raw.size(); ++i)
     out[i] = static_cast<std::byte>(static_cast<unsigned char>(raw[i]));
@@ -51,16 +50,16 @@ int main(int argc, char** argv) {
     return 2;
   }
   const auto expected = read_file(argv[2]);
-  std::printf("extracted %zu packets, %zu bytes (expected %zu)\n", npkt,
-              out.size(), expected.size());
+  std::printf("extracted %zu packets, %zu bytes (expected %zu)\n", npkt, out.size(),
+              expected.size());
   std::printf("every unit is a whole KLV packet: %s\n", all_parse ? "yes" : "no");
   // An untimed synthetic carrier correctly yields kNoPts throughout — that is
   // data, not a defect. What must never happen is a
   // partially or non-monotonically timestamped stream, which is what a
   // mis-attributed mark would look like.
-  std::printf("timestamps: %zu/%zu packets, %s, first=%lld last=%lld ns\n", timed,
-              npkt, monotonic ? "non-decreasing" : "OUT OF ORDER",
-              static_cast<long long>(first), static_cast<long long>(last));
+  std::printf("timestamps: %zu/%zu packets, %s, first=%lld last=%lld ns\n", timed, npkt,
+              monotonic ? "non-decreasing" : "OUT OF ORDER", static_cast<long long>(first),
+              static_cast<long long>(last));
   const bool pts_ok = monotonic && (timed == 0 || timed == npkt);
   const bool match = (out == expected);
   std::printf("TS EXTRACT vs reference: %s\n", match ? "byte-exact PASS" : "MISMATCH");

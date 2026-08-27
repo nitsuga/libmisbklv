@@ -21,8 +21,7 @@ using namespace misbklv;
 
 static std::vector<std::byte> read_file(const char* path) {
   std::ifstream f(path, std::ios::binary);
-  std::vector<char> raw((std::istreambuf_iterator<char>(f)),
-                        std::istreambuf_iterator<char>());
+  std::vector<char> raw((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   std::vector<std::byte> out(raw.size());
   for (std::size_t i = 0; i < raw.size(); ++i)
     out[i] = static_cast<std::byte>(static_cast<unsigned char>(raw[i]));
@@ -31,8 +30,7 @@ static std::vector<std::byte> read_file(const char* path) {
 
 // Reserialize a flat set of items against `reg` (typed codec where registered,
 // raw otherwise), preserving source lengths. Returns the bare TLV bytes.
-static ber::Bytes rebuild_items(const Registry& reg,
-                                const std::vector<Item>& items) {
+static ber::Bytes rebuild_items(const Registry& reg, const std::vector<Item>& items) {
   LocalSetBuilder b(reg);
   for (const auto& it : items) {
     const ItemDescriptor* d = reg.find(it.tag);
@@ -75,8 +73,7 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "childRegistry routing wrong\n");
     return 2;
   }
-  std::printf("Item 74 -> child registry '%s' (routing OK)\n",
-              std::string(child->id).c_str());
+  std::printf("Item 74 -> child registry '%s' (routing OK)\n", std::string(child->id).c_str());
 
   // --- recursively parse the nested VMTI LS ---------------------------------
   auto vmti = parse_items(v74->value);
@@ -90,20 +87,17 @@ int main(int argc, char** argv) {
     if (!d) continue;
     auto v = codec::decode(*d, it.value);
     if (d->kind == ValueKind::IMAPB || d->kind == ValueKind::LinearLDS)
-      std::printf("  VMTI tag %2u  %-32s = %.4f %s\n", it.tag,
-                  std::string(d->name).c_str(), std::get<double>(*v),
-                  std::string(d->units).c_str());
+      std::printf("  VMTI tag %2u  %-32s = %.4f %s\n", it.tag, std::string(d->name).c_str(),
+                  std::get<double>(*v), std::string(d->units).c_str());
     else
-      std::printf("  VMTI tag %2u  %-32s = %llu\n", it.tag,
-                  std::string(d->name).c_str(),
+      std::printf("  VMTI tag %2u  %-32s = %llu\n", it.tag, std::string(d->name).c_str(),
                   static_cast<unsigned long long>(std::get<std::uint64_t>(*v)));
   }
 
   // --- recursive rebuild: inner set, then outer packet ----------------------
   ber::Bytes inner = rebuild_items(*child, *vmti);
-  const bool inner_ok =
-      inner.size() == v74->value.size() &&
-      std::equal(inner.begin(), inner.end(), v74->value.begin());
+  const bool inner_ok = inner.size() == v74->value.size() &&
+                        std::equal(inner.begin(), inner.end(), v74->value.begin());
   std::printf("nested VMTI re-encode: %s\n", inner_ok ? "byte-exact" : "MISMATCH");
 
   LocalSetBuilder ob(gen::uas_0601);
@@ -124,8 +118,7 @@ int main(int argc, char** argv) {
   auto rebuilt = std::move(ob).finalize(std::span{kUas0601Key},
                                         /*enforce_mandatory=*/false);
   if (!rebuilt) {
-    std::fprintf(stderr, "outer finalize failed: %d\n",
-                 static_cast<int>(rebuilt.error()));
+    std::fprintf(stderr, "outer finalize failed: %d\n", static_cast<int>(rebuilt.error()));
     return 2;
   }
   const bool outer_ok = (*rebuilt == data);

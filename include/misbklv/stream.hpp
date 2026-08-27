@@ -35,8 +35,7 @@ namespace misbklv {
 class KlvStream {
  public:
   explicit KlvStream(std::string source, ExtractOptions options = {});
-  KlvStream(std::unique_ptr<MediaBackend> backend, std::string source,
-            ExtractOptions options = {});
+  KlvStream(std::unique_ptr<MediaBackend> backend, std::string source, ExtractOptions options = {});
   ~KlvStream();
 
   KlvStream(const KlvStream&) = delete;
@@ -47,13 +46,19 @@ class KlvStream {
    public:
     explicit Iterator(KlvStream* s) : s_(s) {}
     Message& operator*() { return *s_->current_; }
-    Iterator& operator++() { s_->pull(); return *this; }
+    Iterator& operator++() {
+      s_->pull();
+      return *this;
+    }
     bool operator!=(Sentinel) const { return s_->current_.has_value(); }
 
    private:
     KlvStream* s_;
   };
-  Iterator begin() { pull(); return Iterator(this); }
+  Iterator begin() {
+    pull();
+    return Iterator(this);
+  }
   Sentinel end() { return {}; }
 
   // Terminal extraction or Message parse error, for inspection after iteration.
@@ -61,7 +66,10 @@ class KlvStream {
   std::optional<Error> error() const;
 
  private:
-  struct Frame { std::vector<std::byte> bytes; std::int64_t pts; };
+  struct Frame {
+    std::vector<std::byte> bytes;
+    std::int64_t pts;
+  };
   void pull();  // pop next frame -> parse into current_, or reset at end
 
   std::unique_ptr<MediaBackend> backend_;
@@ -74,11 +82,11 @@ class KlvStream {
   std::condition_variable not_full_, not_empty_;
   std::deque<Frame> queue_;
   static constexpr std::size_t kCap = 32;
-  bool done_ = false;   // extract returned
-  bool stop_ = false;   // destructor or a terminal parse error stopped the producer
+  bool done_ = false;                   // extract returned
+  bool stop_ = false;                   // destructor or a terminal parse error stopped the producer
   std::optional<Error> error_;          // terminal error exposed after iteration
   std::optional<Error> backend_error_;  // pending until queued frames drain
-  std::stop_source stop_source_;  // cancels the backend extract (ADR 0019)
+  std::stop_source stop_source_;        // cancels the backend extract (ADR 0019)
   std::thread producer_;
 
   void push_frame(Frame f);
@@ -101,12 +109,10 @@ class KlvStream {
 // both file and live video (ADR 0031).
 class KlvSink {
  public:
-  explicit KlvSink(std::string sink, bool realtime = false,
-                   std::string video_source = {},
+  explicit KlvSink(std::string sink, bool realtime = false, std::string video_source = {},
                    Sei0604 sei_0604 = Sei0604::Preserve);
-  KlvSink(std::unique_ptr<MediaBackend> backend, std::string sink,
-          bool realtime = false, std::string video_source = {},
-          Sei0604 sei_0604 = Sei0604::Preserve);
+  KlvSink(std::unique_ptr<MediaBackend> backend, std::string sink, bool realtime = false,
+          std::string video_source = {}, Sei0604 sei_0604 = Sei0604::Preserve);
 
   // Same, taking the config whole — clearer than four positional arguments once
   // more than the sink is set.

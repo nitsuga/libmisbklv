@@ -10,8 +10,8 @@
 namespace misbklv {
 namespace {
 
-constexpr std::byte kSmpteUlPrefix[] = {
-    std::byte{0x06}, std::byte{0x0e}, std::byte{0x2b}, std::byte{0x34}};
+constexpr std::byte kSmpteUlPrefix[] = {std::byte{0x06}, std::byte{0x0e}, std::byte{0x2b},
+                                        std::byte{0x34}};
 
 }  // namespace
 
@@ -31,10 +31,8 @@ Result<std::vector<Item>> parse_items(std::span<const std::byte> buf) {
     // Overflow-safe: `pos + ilen->value` could wrap for a crafted huge length
     // (8-byte BER len), passing a naive `> end` check and then over-reading in
     // subspan. `pos <= end` here, so `end - pos` can't underflow.
-    if (ilen->value > end - pos)
-      return Result<std::vector<Item>>::err(Error::Truncated);
-    items.push_back(
-        {static_cast<std::uint16_t>(tag->value), buf.subspan(pos, ilen->value)});
+    if (ilen->value > end - pos) return Result<std::vector<Item>>::err(Error::Truncated);
+    items.push_back({static_cast<std::uint16_t>(tag->value), buf.subspan(pos, ilen->value)});
     pos += ilen->value;
   }
   return Result<std::vector<Item>>::ok(std::move(items));
@@ -60,18 +58,16 @@ Result<Packet> parse_packet(std::span<const std::byte> buf) {
   return Result<Packet>::ok(std::move(pkt));
 }
 
-Result<std::optional<std::size_t>> inspect_packet_frame(
-    std::span<const std::byte> buf, std::size_t max_packet_bytes) {
-  const std::size_t prefix_bytes =
-      std::min<std::size_t>(buf.size(), std::size(kSmpteUlPrefix));
+Result<std::optional<std::size_t>> inspect_packet_frame(std::span<const std::byte> buf,
+                                                        std::size_t max_packet_bytes) {
+  const std::size_t prefix_bytes = std::min<std::size_t>(buf.size(), std::size(kSmpteUlPrefix));
   for (std::size_t i = 0; i < prefix_bytes; ++i)
     if (buf[i] != kSmpteUlPrefix[i])
       return Result<std::optional<std::size_t>>::err(Error::BadLength);
   if (prefix_bytes < std::size(kSmpteUlPrefix))
     return Result<std::optional<std::size_t>>::ok(std::nullopt);
 
-  if (buf.size() < 17)
-    return Result<std::optional<std::size_t>>::ok(std::nullopt);
+  if (buf.size() < 17) return Result<std::optional<std::size_t>>::ok(std::nullopt);
 
   const auto first_length_byte = std::to_integer<std::uint8_t>(buf[16]);
   std::size_t length_bytes = 0;
@@ -82,20 +78,16 @@ Result<std::optional<std::size_t>> inspect_packet_frame(
     length_bytes = first_length_byte & 0x7F;
     if (length_bytes == 0 || length_bytes > 8)
       return Result<std::optional<std::size_t>>::err(Error::BadLength);
-    if (buf.size() - 17 < length_bytes)
-      return Result<std::optional<std::size_t>>::ok(std::nullopt);
+    if (buf.size() - 17 < length_bytes) return Result<std::optional<std::size_t>>::ok(std::nullopt);
     for (std::size_t i = 0; i < length_bytes; ++i)
-      value_length = (value_length << 8) |
-                     std::to_integer<std::uint8_t>(buf[17 + i]);
+      value_length = (value_length << 8) | std::to_integer<std::uint8_t>(buf[17 + i]);
   }
 
   const std::size_t header_size = 17 + length_bytes;
-  if (header_size > max_packet_bytes ||
-      value_length > max_packet_bytes - header_size)
+  if (header_size > max_packet_bytes || value_length > max_packet_bytes - header_size)
     return Result<std::optional<std::size_t>>::err(Error::ResourceLimit);
   const std::size_t total_size = header_size + static_cast<std::size_t>(value_length);
-  if (total_size > buf.size())
-    return Result<std::optional<std::size_t>>::ok(std::nullopt);
+  if (total_size > buf.size()) return Result<std::optional<std::size_t>>::ok(std::nullopt);
   return Result<std::optional<std::size_t>>::ok(total_size);
 }
 
