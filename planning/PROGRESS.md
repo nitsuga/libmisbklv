@@ -8,10 +8,8 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-Issue #48 is being closed by `refactor/shared-klv-framer`: both extraction paths
-now feed one private `KlvFramer` for resynchronization, bounded frame inspection,
-timestamp attribution, retained bytes, and timestamp-mark pruning. Transport
-setup and error synchronization remain at their call sites.
+`chore/clang-format-config` establishes the repository's first formatter
+configuration without reformatting the pre-existing tree.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
@@ -19,8 +17,8 @@ setup and error synchronization remain at their call sites.
 
 ## In progress
 
-- Validate and review the shared framer through both the gst-free and GStreamer
-  extraction suites, then merge and close issue #48.
+- Validate `.clang-format` against representative core, GStreamer, public-header,
+  and test files, then land the contributor command with it.
 
 ## Next
 

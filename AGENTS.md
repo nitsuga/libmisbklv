@@ -111,6 +111,11 @@ it by hand when a number is needed, and read it as ranges rather than point
 values (codec rows move ~15% run to run on a normal desktop):
 `./build/release/klv_bench test/fixtures/synthetic-basic.klv test/fixtures/synthetic-timed-0x06.ts [MiB]`
 
+Format changed C/C++ lines with `git clang-format origin/main` (preview with
+`git clang-format --diff origin/main`); the checked-in `.clang-format` owns the
+style. The existing tree predates that baseline, so do not turn an unrelated
+change into a whole-file or whole-tree formatting sweep.
+
 Two options: `MISBKLV_GSTREAMER` (default ON) builds the gstreamer media backend
 — the KLV core builds and tests without it, and that separation is load-bearing
 (see [`context/backend-scope.md`](context/backend-scope.md)). `MISBKLV_SANITIZE`
