@@ -33,6 +33,10 @@ lands or is pinned there.
 
 - Re-run the downstream parrot-to-klv stress witness after PR #40 lands or is
   pinned there.
+- `fix/ts-marks-prune` (issue #48) carries the missing `marks.prune()` in
+  `extract_ts_klv`, closing a divergence from the live extractor's `drain()`
+  that let a non-framing KLV PID grow the mark queue per PES. Whether to
+  centralize the twice-written framer is left open on the issue.
 
 ## Next
 

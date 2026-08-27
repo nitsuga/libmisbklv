@@ -163,6 +163,12 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
       if (pos) {
         reasm.erase(reasm.begin(), reasm.begin() + pos);
         stream_off += pos;
+        // Bound marks the same way reassembly is bounded, as the live
+        // extractor's drain() does. A KLV PID that never frames still resyncs
+        // past garbage above, so stream_off advances without any on_packet()
+        // call (and thus without any marks.at()) to consume the queue. Without
+        // this, a non-framing feed grows marks by one entry per PES forever.
+        marks.prune(stream_off);
       }
     }
     it->second.clear();
