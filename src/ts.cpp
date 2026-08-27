@@ -2,22 +2,18 @@
 #include "misbklv/ts.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cstdint>
 #include <optional>
 #include <unordered_map>
 #include <vector>
 
-#include "misbklv/backend.hpp"  // kDefaultMaxKlvPacketBytes
-#include "misbklv/packet.hpp"   // inspect_packet_frame
-#include "pts_marks.hpp"
+#include "misbklv/backend.hpp"  // kNoPts
+#include "klv_framer.hpp"
 
 namespace misbklv {
 namespace {
 
 constexpr std::uint8_t kSmpteUl[4] = {0x06, 0x0e, 0x2b, 0x34};
-constexpr std::array<std::byte, 4> kSmpteUlPrefix = {
-    std::byte{0x06}, std::byte{0x0e}, std::byte{0x2b}, std::byte{0x34}};
 constexpr std::size_t kPkt = 188;
 
 std::uint8_t u8(std::span<const std::byte> s, std::size_t i) {
@@ -95,10 +91,8 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
                                       const PacketHandler& on_packet) {
   std::unordered_map<std::uint16_t, std::vector<std::byte>> pes;  // PID -> current PES
   int klv_pid = -1;
-  std::vector<std::byte> reasm;  // reassembled KLV for the KLV PID
   const std::int64_t origin_90k = earliest_pts_90k(ts);
-  detail::PtsMarks marks;   // PES timestamps -> KLV packet timestamps
-  std::size_t stream_off = 0;  // absolute offset of reasm[0] in the KLV stream
+  detail::KlvFramer framer;
   std::optional<Error> frame_error;  // first framing failure, returned at the end
 
   auto flush = [&](std::uint16_t pid) {
@@ -119,57 +113,12 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
       // with the UL — the UL prefix only selects the PID, once, at the first
       // payload that carries it.
       const std::int64_t pts90 = pes_pts_90k(it->second);
-      marks.mark(stream_off + reasm.size(),
-                 (pts90 < 0 || origin_90k < 0)
-                     ? kNoPts
-                     : (pts90 - origin_90k) * 100'000 / 9);
-      reasm.insert(reasm.end(), klv.begin(), klv.end());
-      // Frame as much of `reasm` as is complete, resyncing over garbage the
-      // way the live extractor's drain() does: skip to the next SMPTE UL
-      // prefix, drop anything before it, and fail the whole extract on
-      // malformed framing or an over-cap declared length instead of stalling
-      // forever on a corrupt packet_frame_length()==0.
-      std::size_t pos = 0;
-      while (pos < reasm.size()) {
-        std::span<const std::byte> rest(reasm.data() + pos, reasm.size() - pos);
-        const auto ul = std::search(rest.begin(), rest.end(),
-                                    kSmpteUlPrefix.begin(), kSmpteUlPrefix.end());
-        if (ul == rest.end()) {
-          // Retain only the longest actual suffix (up to 3 bytes) that could
-          // complete a UL prefix in the next payload; arbitrary trailing
-          // garbage must not accumulate.
-          std::size_t suffix = 0;
-          for (std::size_t n = std::min<std::size_t>(3, rest.size()); n > 0; --n) {
-            if (std::equal(rest.end() - n, rest.end(), kSmpteUlPrefix.begin())) {
-              suffix = n;
-              break;
-            }
-          }
-          pos += rest.size() - suffix;
-          break;
-        }
-        pos += static_cast<std::size_t>(ul - rest.begin());
-        rest = std::span<const std::byte>(reasm.data() + pos, reasm.size() - pos);
-        auto frame = inspect_packet_frame(rest, kDefaultMaxKlvPacketBytes);
-        if (!frame) {  // malformed framing / over-cap declared length
-          frame_error = frame.error();
-          break;
-        }
-        if (!*frame) break;  // incomplete: keep the remainder in reasm
-        const std::size_t n = **frame;
-        on_packet(KlvPacket{rest.subspan(0, n), marks.at(stream_off + pos)});
-        pos += n;
-      }
-      if (pos) {
-        reasm.erase(reasm.begin(), reasm.begin() + pos);
-        stream_off += pos;
-        // Bound marks the same way reassembly is bounded, as the live
-        // extractor's drain() does. A KLV PID that never frames still resyncs
-        // past garbage above, so stream_off advances without any on_packet()
-        // call (and thus without any marks.at()) to consume the queue. Without
-        // this, a non-framing feed grows marks by one entry per PES forever.
-        marks.prune(stream_off);
-      }
+      frame_error = framer.feed(
+          klv,
+          (pts90 < 0 || origin_90k < 0)
+              ? kNoPts
+              : (pts90 - origin_90k) * 100'000 / 9,
+          on_packet);
     }
     it->second.clear();
   };

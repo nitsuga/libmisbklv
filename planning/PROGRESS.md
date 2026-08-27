@@ -8,22 +8,10 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-PR #40 (`d1-reorder-teardown`, libmisbklv#39) carries the production fix for
-the residual parrot-to-klv#57 live teardown corruption. The repair keeps the
-live-video request pad linked through a real EOS drain, preserves
-error/output/cancellation guarantees, and bounds NULL-state confirmation
-([ADR 0034](../context/decisions/0034-live-request-pad-teardown.md)). The full
-release suite and allocator-perturbed live/Valgrind teardown stress pass; PR
-build, sanitizer, generated-drift, and link checks are green. The API guide,
-public header comments, ADR 0020/0031
-supersession, and backend scope now match the landed live-video surface. Review
-follow-up makes first delivery persistent across close-time stalls, bounds EOS
-stream-lock acquisition on the actual mux sink pad, and adds mux-lock,
-never-delivered, stalled-close, and failed-NULL regressions. ADR 0034 records
-that the acquisition deadline ends at synchronous handler entry and that a
-timeout discards incomplete file output.
-The remaining work is the downstream parrot-to-klv stress witness after this PR
-lands or is pinned there.
+Issue #48 is being closed by `refactor/shared-klv-framer`: both extraction paths
+now feed one private `KlvFramer` for resynchronization, bounded frame inspection,
+timestamp attribution, retained bytes, and timestamp-mark pruning. Transport
+setup and error synchronization remain at their call sites.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
@@ -31,16 +19,15 @@ lands or is pinned there.
 
 ## In progress
 
-- Re-run the downstream parrot-to-klv stress witness after PR #40 lands or is
-  pinned there.
-- `bench/klv-bench` (issue #50) adds the timing harness the parked performance
-  work was gated on, and its first numbers argue against doing most of that
-  work. See the issue for the measurements and what they close.
+- Validate and review the shared framer through both the gst-free and GStreamer
+  extraction suites, then merge and close issue #48.
 
 ## Next
 
-- **Registry breadth — 0903 side**: the remaining VMTI/VTarget items, as data
-  needs them. (0601 is complete.)
+- **Issue #45**: extract only the duplicated private `parse_host_port()` helper;
+  leave the intentionally different video wait loops explicit.
+- **Issue #50**: benchmark the Generate-SEI path end to end through `mpegtsmux`;
+  the merged core benchmark already closed its other speculative items.
 - **An SRT-specific hermetic streaming test** — the udp live path is covered,
   SRT isn't. Live `extract()` ends on `udpsrc`'s idle-`timeout` message, which
   `srtsrc` has no equivalent for (its properties are `poll-timeout` / `latency` /

@@ -3,80 +3,29 @@
 // live cancellation/termination. Private implementation of MediaBackend.
 #include "gst_backend_internal.hpp"
 
-#include <algorithm>
-#include <array>
 #include <atomic>
 #include <cstring>
 #include <optional>
-#include <span>
-#include <vector>
 
 #include <gst/app/app.h>
 
-#include "misbklv/packet.hpp"
-#include "../pts_marks.hpp"
+#include "../klv_framer.hpp"
 
 namespace misbklv::detail {
 namespace {
 
-constexpr std::array<std::byte, 4> kSmpteUlPrefix = {
-    std::byte{0x06}, std::byte{0x0e}, std::byte{0x2b}, std::byte{0x34}};
-
 // Reassembly + framing state shared with appsink callbacks. The callbacks run
 // on a streaming thread while extract() blocks on the bus.
 struct ExtractCtx {
+  explicit ExtractCtx(std::size_t max_packet_bytes)
+      : framer(max_packet_bytes) {}
+
   GstElement* sink = nullptr;
   const PacketHandler* on_packet = nullptr;
-  std::size_t max_packet_bytes = kDefaultMaxKlvPacketBytes;
-  std::vector<std::byte> reassembly;
+  KlvFramer framer;
   std::atomic<bool> received_bytes{false};
   Error frame_error = Error::Backend;
   std::atomic<bool> has_frame_error{false};
-  PtsMarks marks;
-  std::size_t stream_off = 0;
-
-  void drain() {
-    if (has_frame_error.load(std::memory_order_acquire)) return;
-    std::size_t pos = 0;
-    while (pos < reassembly.size()) {
-      auto rest = std::span<const std::byte>(reassembly).subspan(pos);
-      const auto ul = std::search(rest.begin(), rest.end(), kSmpteUlPrefix.begin(),
-                                  kSmpteUlPrefix.end());
-      if (ul == rest.end()) {
-        // Retain only the longest actual suffix that could complete a UL prefix
-        // in the next buffer; arbitrary trailing garbage must not accumulate.
-        std::size_t suffix = 0;
-        for (std::size_t n = std::min<std::size_t>(3, rest.size()); n > 0; --n) {
-          if (std::equal(rest.end() - n, rest.end(), kSmpteUlPrefix.begin())) {
-            suffix = n;
-            break;
-          }
-        }
-        pos += rest.size() - suffix;
-        break;
-      }
-      pos += static_cast<std::size_t>(ul - rest.begin());
-      rest = std::span<const std::byte>(reassembly).subspan(pos);
-      auto frame = inspect_packet_frame(rest, max_packet_bytes);
-      if (!frame) {
-        frame_error = frame.error();
-        has_frame_error.store(true, std::memory_order_release);
-        break;
-      }
-      if (!*frame) break;
-      const std::size_t n = **frame;
-      (*on_packet)(KlvPacket{rest.subspan(0, n), marks.at(stream_off + pos)});
-      pos += n;
-    }
-    if (pos) {
-      reassembly.erase(reassembly.begin(), reassembly.begin() + pos);
-      stream_off += pos;
-      // Bound marks_ the same way reassembly is bounded: a feed whose KLV PID
-      // never frames still resyncs past garbage above, so stream_off advances
-      // even though no on_packet() call (and thus no marks.at()) ever fires.
-      marks.prune(stream_off);
-    }
-  }
 };
 
 void on_pad_added(GstElement*, GstPad* pad, gpointer user) {
@@ -121,11 +70,13 @@ GstFlowReturn on_new_sample(GstElement* sink, gpointer user) {
       if (GST_CLOCK_TIME_IS_VALID(rt)) pts_ns = static_cast<std::int64_t>(rt);
     }
     if (mi.size != 0) ctx->received_bytes.store(true, std::memory_order_release);
-    ctx->marks.mark(ctx->stream_off + ctx->reassembly.size(), pts_ns);
     const auto* p = reinterpret_cast<const std::byte*>(mi.data);
-    ctx->reassembly.insert(ctx->reassembly.end(), p, p + mi.size);
+    auto frame_error = ctx->framer.feed({p, mi.size}, pts_ns, *ctx->on_packet);
     gst_buffer_unmap(buf, &mi);
-    ctx->drain();
+    if (frame_error) {
+      ctx->frame_error = *frame_error;
+      ctx->has_frame_error.store(true, std::memory_order_release);
+    }
   }
   gst_sample_unref(sample);
   return ctx->has_frame_error.load(std::memory_order_acquire) ? GST_FLOW_ERROR
@@ -217,10 +168,9 @@ Result<std::monostate> extract(std::string_view source,
   gst_bin_add_many(GST_BIN(pipeline), src, demux, sink, nullptr);
   gst_element_link(src, demux);
 
-  ExtractCtx ctx;
+  ExtractCtx ctx(options.max_packet_bytes);
   ctx.sink = sink;
   ctx.on_packet = &on_packet;
-  ctx.max_packet_bytes = options.max_packet_bytes;
   g_signal_connect(demux, "pad-added", G_CALLBACK(on_pad_added), &ctx);
   g_signal_connect(sink, "new-sample", G_CALLBACK(on_new_sample), &ctx);
 
@@ -277,8 +227,9 @@ Result<std::monostate> extract(std::string_view source,
   if (cancelled || stop.stop_requested()) return Result<std::monostate>::ok({});
   if (ctx.has_frame_error.load(std::memory_order_acquire))
     failure = ctx.frame_error;
-  if (!failure && natural_end && !ctx.reassembly.empty()) {
-    auto frame = inspect_packet_frame(ctx.reassembly, ctx.max_packet_bytes);
+  if (!failure && natural_end && !ctx.framer.remainder().empty()) {
+    auto frame = inspect_packet_frame(ctx.framer.remainder(),
+                                      options.max_packet_bytes);
     if (!frame)
       failure = frame.error();
     else if (!*frame)
