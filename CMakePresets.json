@@ -7,16 +7,9 @@
   },
   "configurePresets": [
     {
-      "name": "base",
-      "hidden": true,
-      "displayName": "Base (hidden)",
-      "description": "Hidden base for shared defaults (MISBKLV_GSTREAMER=ON for full builds; sanitize overrides to OFF core-only per ci.yml)"
-    },
-    {
       "name": "release",
       "displayName": "Release",
       "description": "Release build with GStreamer (default ON, optional dep per backend-scope.md; binaryDir: build/release)",
-      "inherits": "base",
       "binaryDir": "${sourceDir}/build/release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
@@ -33,7 +26,6 @@
       "name": "debug",
       "displayName": "Debug",
       "description": "Debug build with GStreamer (default ON; binaryDir: build/debug)",
-      "inherits": "base",
       "binaryDir": "${sourceDir}/build/debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
