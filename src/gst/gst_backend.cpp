@@ -5,6 +5,43 @@
 #include "gst_backend_internal.hpp"
 
 namespace misbklv {
+namespace detail {
+
+std::optional<std::pair<std::string, int>> parse_host_port(std::string_view rest) {
+  std::string_view host;
+  std::string_view port_view;
+  if (rest.starts_with('[')) {
+    // Bracketed IPv6: [::1]:5000 or [ff02::1%eth0]:5000.
+    const auto close = rest.find(']');
+    if (close == std::string_view::npos || close + 1 >= rest.size() || rest[close + 1] != ':')
+      return std::nullopt;
+    host = rest.substr(1, close - 1);
+    port_view = rest.substr(close + 2);
+  } else {
+    const auto colon = rest.rfind(':');
+    if (colon == std::string_view::npos) return std::nullopt;
+    host = rest.substr(0, colon);
+    // Reject a bare IPv6 literal: its colons make the last-colon split
+    // ambiguous, so refuse rather than mis-parse.
+    if (host.find(':') != std::string_view::npos) return std::nullopt;
+    port_view = rest.substr(colon + 1);
+  }
+  if (host.empty() || port_view.empty()) return std::nullopt;
+
+  const std::string port_string(port_view);
+  try {
+    // Validate the port is a positive in-range integer.
+    std::size_t parsed = 0;
+    const int port = std::stoi(port_string, &parsed);
+    if (parsed != port_string.size() || port <= 0 || port > 65535) return std::nullopt;
+    return std::pair{std::string(host), port};
+  } catch (...) {
+    return std::nullopt;
+  }
+}
+
+}  // namespace detail
+
 namespace {
 
 class GstBackend : public MediaBackend {

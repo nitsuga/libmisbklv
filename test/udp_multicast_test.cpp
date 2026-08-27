@@ -16,6 +16,7 @@
 
 using namespace misbklv;
 using misbklv::detail::make_sink;
+using misbklv::detail::parse_host_port;
 
 static int failures = 0;
 
@@ -57,6 +58,21 @@ static void expect_udp_props(const char* spec, const InsertConfig& cfg, int want
 
 int main() {
   gst_init(nullptr, nullptr);
+
+  std::puts("== UDP endpoint parser ==");
+  {
+    const auto host = parse_host_port("example.test:5000");
+    check(host && host->first == "example.test" && host->second == 5000,
+          "hostname and port parsed");
+    const auto ipv6 = parse_host_port("[ff02::1%eth0]:65535");
+    check(ipv6 && ipv6->first == "ff02::1%eth0" && ipv6->second == 65535,
+          "bracketed scoped IPv6 parsed");
+    check(!parse_host_port("::1:5000"), "bare IPv6 rejected as ambiguous");
+    check(!parse_host_port("example.test:"), "empty port rejected");
+    check(!parse_host_port("example.test:0"), "zero port rejected");
+    check(!parse_host_port("example.test:65536"), "out-of-range port rejected");
+    check(!parse_host_port("example.test:5000x"), "trailing port characters rejected");
+  }
 
   std::puts("== defaults (must match today's exact behavior) ==");
   {
