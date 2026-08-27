@@ -9,6 +9,7 @@
 #include <cstring>
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <gst/base/gsttypefindhelper.h>
@@ -38,7 +39,7 @@ inline constexpr std::int64_t kTimeLinearToleranceUs = 50'000;
 bool caps_are_video(GstCaps* caps) {
   if (!caps || gst_caps_is_empty(caps)) return false;
   const gchar* name = gst_structure_get_name(gst_caps_get_structure(caps, 0));
-  return name && std::strncmp(name, "video/", 6) == 0;
+  return name && std::string_view(name).starts_with("video/");
 }
 
 std::string caps_media_type(GstCaps* caps) {
@@ -56,7 +57,7 @@ CapsCodec caps_codec(GstCaps* caps) {
   if (!s) return CapsCodec::Unknown;
   if (gst_structure_has_name(s, "video/x-h264")) return CapsCodec::H264;
   const gchar* n = gst_structure_get_name(s);
-  if (n && std::strncmp(n, "video/", 6) == 0) return CapsCodec::KnownNonH264;
+  if (n && std::string_view(n).starts_with("video/")) return CapsCodec::KnownNonH264;
   return CapsCodec::Unknown;
 }
 

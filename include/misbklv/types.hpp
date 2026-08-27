@@ -2,8 +2,10 @@
 // Core KLV data-model types (ADR 0005) + registry descriptor schema (ADR 0010).
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <string_view>
 #include <variant>
@@ -97,19 +99,8 @@ struct Registry {
   std::span<const std::uint8_t> ul_key;     // 16-byte UL for a standalone packet
 
   const ItemDescriptor* find(std::uint16_t tag) const {
-    const ItemDescriptor* lo = items.data();
-    const ItemDescriptor* hi = lo + items.size();
-    while (lo < hi) {
-      const ItemDescriptor* mid = lo + (hi - lo) / 2;
-      if (mid->tag < tag) {
-        lo = mid + 1;
-      } else if (mid->tag > tag) {
-        hi = mid;
-      } else {
-        return mid;
-      }
-    }
-    return nullptr;
+    const auto it = std::ranges::lower_bound(items, tag, {}, &ItemDescriptor::tag);
+    return (it != items.end() && it->tag == tag) ? &*it : nullptr;
   }
 };
 

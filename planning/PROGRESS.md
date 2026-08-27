@@ -33,10 +33,10 @@ lands or is pinned there.
 
 - Re-run the downstream parrot-to-klv stress witness after PR #40 lands or is
   pinned there.
-- `fix/ts-marks-prune` (issue #48) carries the missing `marks.prune()` in
-  `extract_ts_klv`, closing a divergence from the live extractor's `drain()`
-  that let a non-framing KLV PID grow the mark queue per PES. Whether to
-  centralize the twice-written framer is left open on the issue.
+- `cleanup/stdlib-and-presets` (issues #46, #47) carries the review-narrowed
+  cleanup: `Registry::find` on `std::ranges::lower_bound`, `starts_with` for the
+  two caps-name prefix tests, and the removal of the empty configure `base`
+  preset.
 
 ## Next
 
