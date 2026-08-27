@@ -33,11 +33,9 @@ lands or is pinned there.
 
 - Re-run the downstream parrot-to-klv stress witness after PR #40 lands or is
   pinned there.
-- `adr0032-followups` (issues #34, #35) closes the two review findings left over
-  from [ADR 0032](../context/decisions/0032-cancellable-insert-drain.md): the
-  drain loop now takes one clock sample per pass, and the ADR states the
-  `finish()` override break plainly instead of implying implementers are
-  unaffected.
+- `bench/klv-bench` (issue #50) adds the timing harness the parked performance
+  work was gated on, and its first numbers argue against doing most of that
+  work. See the issue for the measurements and what they close.
 
 ## Next
 

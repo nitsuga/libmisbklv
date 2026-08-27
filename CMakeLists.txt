@@ -251,6 +251,20 @@ add_test(NAME ts_extract_timed_0x06 COMMAND ts_extract_test ${_timed_06} ${_basi
 add_test(NAME ts_extract_untimed_0x06 COMMAND ts_extract_test ${_untimed_06} ${_basic})
 add_test(NAME ts_extract_timed_0x15 COMMAND ts_extract_test ${_timed_15} ${_basic})
 
+# --- Benchmark (issue #50) ---------------------------------------------------
+# Timing harness for the paths #50 parks work behind. Deliberately NOT an
+# add_test: a timing threshold in CI measures the runner, not the library. Built
+# by default so it cannot bit-rot; run it by hand when a number is needed:
+#   ./build/release/klv_bench test/fixtures/synthetic-basic.klv \
+#                             test/fixtures/synthetic-timed-0x06.ts [MiB]
+add_executable(klv_bench bench/klv_bench.cpp)
+if(TARGET misbklv-gst)
+  target_link_libraries(klv_bench PRIVATE misbklv-gst)
+  target_compile_definitions(klv_bench PRIVATE MISBKLV_BENCH_GST=1)
+else()
+  target_link_libraries(klv_bench PRIVATE misbklv)
+endif()
+
 # --- Install / export --------------------------------------------------------
 # Core:  find_package(misbklv)                 -> misbklv::misbklv
 # Facade: find_package(misbklv COMPONENTS gst) -> misbklv::gst (needs gstreamer)
