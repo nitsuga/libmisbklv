@@ -3,6 +3,7 @@
 // coordination, finish/drain, and output-file cleanup.
 #include "gst_backend_internal.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -264,18 +265,29 @@ class GstInserter : public Inserter {
     // Cap each poll short so a cancellation is noticed promptly. A realtime
     // file replay drains at wall-clock speed, so this is where a Ctrl-C after
     // the final KLV packet must take effect (ADR 0032).
-    while (!cancelled && klv_eos == GST_FLOW_OK && live_video_eos &&
-           std::chrono::steady_clock::now() < deadline) {
+    // The deadline is owned by the explicit guard below, not by this condition,
+    // so exactly one clock sample decides each pass. The previous form sampled
+    // in both places and compared a signed `remain` against an unsigned
+    // GstClockTime: a deadline crossed between the two samples made `remain`
+    // negative, and the comparison's conversion to unsigned then selected the
+    // cap branch. That was harmless (issue #34), but only by way of a
+    // conversion nobody should have to re-derive. One sample keeps `remain`
+    // positive by construction, so the cast is unconditionally well defined.
+    while (!cancelled && klv_eos == GST_FLOW_OK && live_video_eos) {
+      // Checked before the deadline: if the caller has asked to stop and the
+      // drain has also timed out, the stop wins and this reports cancellation
+      // rather than a drain failure. Both discard a partial sink file (ADR
+      // 0022); cancellation returns ok, a timeout does not.
       if (stop.stop_requested()) {
         cancelled = true;
         break;
       }
-      const auto remain = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                              deadline - std::chrono::steady_clock::now())
-                              .count();
-      const GstClockTime poll = remain > kFinishDrainPoll
-                                    ? kFinishDrainPoll
-                                    : static_cast<GstClockTime>(remain);
+      const auto now = std::chrono::steady_clock::now();
+      if (now >= deadline) break;
+      const auto remain =
+          std::chrono::duration_cast<std::chrono::nanoseconds>(deadline - now).count();
+      const GstClockTime poll =
+          std::min(static_cast<GstClockTime>(remain), kFinishDrainPoll);
       GstMessage* m = gst_bus_timed_pop_filtered(
           bus, poll,
           static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));

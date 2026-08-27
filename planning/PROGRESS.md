@@ -33,10 +33,11 @@ lands or is pinned there.
 
 - Re-run the downstream parrot-to-klv stress witness after PR #40 lands or is
   pinned there.
-- `cleanup/stdlib-and-presets` (issues #46, #47) carries the review-narrowed
-  cleanup: `Registry::find` on `std::ranges::lower_bound`, `starts_with` for the
-  two caps-name prefix tests, and the removal of the empty configure `base`
-  preset.
+- `adr0032-followups` (issues #34, #35) closes the two review findings left over
+  from [ADR 0032](../context/decisions/0032-cancellable-insert-drain.md): the
+  drain loop now takes one clock sample per pass, and the ADR states the
+  `finish()` override break plainly instead of implying implementers are
+  unaffected.
 
 ## Next
 
