@@ -7,12 +7,21 @@
 // Reports the median of several reps rather than the mean: a background process
 // on the machine skews the mean and leaves the median alone.
 //
+// Covers the core paths only. A gst-extraction row was tried and removed: the
+// only way this harness can reach a realistic input size is to concatenate
+// copies of a ~1.5 KiB fixture, which restarts continuity counters, PCR and PTS
+// at every boundary. `extract_ts_klv` is indifferent to that — it selects the
+// KLV PID by content and never reads a continuity counter — but a demuxer is
+// not, and measured recovery from thousands of injected discontinuities is not
+// steady-state demux. A representative gst number needs a fixture generated at
+// length with coherent CC/PCR/PTS, which belongs in the fixture generator
+// rather than here (issue #50).
+//
 // argv: <fixture.klv> <fixture.ts> [target_MiB]
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
-#include <filesystem>
 #include <fstream>
 #include <span>
 #include <string>
@@ -22,10 +31,6 @@
 #include "misbklv/message.hpp"
 #include "misbklv/registries.hpp"
 #include "misbklv/ts.hpp"
-
-#ifdef MISBKLV_BENCH_GST
-#include "misbklv/gst_backend.hpp"
-#endif
 
 using namespace misbklv;
 
@@ -211,39 +216,6 @@ void bench_ts_extract(const std::vector<std::byte>& ts_repeated) {
   std::printf("  (%zu packets extracted)\n", packets);
 }
 
-#ifdef MISBKLV_BENCH_GST
-// --- (4) gst extraction over the same bytes ---------------------------------
-// The comparison #50 asks for. This includes gstreamer pipeline setup and
-// teardown, so it is not a like-for-like against (3) on small inputs — the
-// larger the stream, the more of this row is steady-state demux.
-void bench_gst_extract(const std::vector<std::byte>& ts_repeated) {
-  const auto tmp = std::filesystem::temp_directory_path() /
-                   "misbklv_bench_input.ts";
-  {
-    std::ofstream f(tmp, std::ios::binary);
-    f.write(reinterpret_cast<const char*>(ts_repeated.data()),
-            static_cast<std::streamsize>(ts_repeated.size()));
-  }
-  std::printf("gst extract over the same %.1f MiB (pipeline setup included)\n",
-              static_cast<double>(ts_repeated.size()) / (1024.0 * 1024.0));
-  std::size_t packets = 0;
-  const double ns = median_ns_per_iter(3, 1, [&] {
-    packets = 0;
-    auto backend = make_gst_backend();
-    auto r = backend->extract(
-        "file:" + tmp.string(),
-        [&](const KlvPacket& kp) {
-          ++packets;
-          g_sink += kp.bytes.size();
-        });
-    if (!r) g_sink += 1;
-  });
-  report_throughput("GstBackend::extract", ns, ts_repeated.size());
-  std::printf("  (%zu packets extracted)\n", packets);
-  std::error_code ec;
-  std::filesystem::remove(tmp, ec);
-}
-#endif
 
 }  // namespace
 
@@ -282,10 +254,6 @@ int main(int argc, char** argv) {
   bench_message(klv);
   std::printf("\n");
   bench_ts_extract(ts_repeated);
-#ifdef MISBKLV_BENCH_GST
-  std::printf("\n");
-  bench_gst_extract(ts_repeated);
-#endif
   std::printf("\nsink=%llu (ignore; keeps the work live)\n",
               static_cast<unsigned long long>(g_sink));
   return 0;

@@ -258,12 +258,7 @@ add_test(NAME ts_extract_timed_0x15 COMMAND ts_extract_test ${_timed_15} ${_basi
 #   ./build/release/klv_bench test/fixtures/synthetic-basic.klv \
 #                             test/fixtures/synthetic-timed-0x06.ts [MiB]
 add_executable(klv_bench bench/klv_bench.cpp)
-if(TARGET misbklv-gst)
-  target_link_libraries(klv_bench PRIVATE misbklv-gst)
-  target_compile_definitions(klv_bench PRIVATE MISBKLV_BENCH_GST=1)
-else()
-  target_link_libraries(klv_bench PRIVATE misbklv)
-endif()
+target_link_libraries(klv_bench PRIVATE misbklv)  # core only; see the file header
 
 # --- Install / export --------------------------------------------------------
 # Core:  find_package(misbklv)                 -> misbklv::misbklv
