@@ -47,9 +47,10 @@ std::vector<std::byte> read_file(const char* path) {
 // Median nanoseconds per iteration over `reps` runs of `iters` iterations.
 template <class F>
 double median_ns_per_iter(int reps, std::size_t iters, F&& body) {
-  // Warm up before the clock starts. Without this the first row measured reads
-  // high on an idle machine — that is CPU frequency ramp-up and cold caches,
-  // not the code under test.
+  // Warm up before the clock starts, so the first rep is not paying for cold
+  // caches and a ramping clock. This does not make the rows stable — codec rows
+  // still move around 15% run to run on an ordinary desktop — so read the output
+  // as ranges across several runs, not as point values.
   for (std::size_t i = 0; i < std::min<std::size_t>(iters, 1000); ++i) body();
   std::vector<double> per_iter;
   per_iter.reserve(reps);
@@ -75,32 +76,51 @@ void report_throughput(const char* what, double ns, std::size_t bytes) {
   std::printf("  %-42s %10.1f ns/op  %8.1f MiB/s\n", what, ns, mib_per_s);
 }
 
-// First item of `kind` whose encode width the numeric codecs accept. `variable`
-// is deliberately not filtered on: every IMAPB item in the 0601 registry is
+// An item of `kind` whose encode width the numeric codecs accept, preferring
+// `want_width` so kinds can be compared without a width confound.
+//
+// Width matters more than it looks: rd_uint loops over the bytes, so an 8-byte
+// item costs materially more than a 1-byte one *within* a kind. Comparing a
+// 3-byte IMAPB against a 2-byte LinearLDS would therefore fold width into what
+// is supposed to be a per-kind number. The 0601 registry happens to offer a
+// 2-byte item for UInt, LinearLDS and IMAPB, so those three are directly
+// comparable; Int has only 1, 4 and 8-byte items and is reported at its own
+// width, labeled as such.
+//
+// `variable` is deliberately not filtered on: every IMAPB item in 0601 is
 // variable-width with a `fixed_len` default, so excluding them would drop the
-// one kind this benchmark exists to measure. `fixed_len` is the encode width in
-// both cases (see ItemDescriptor). Tag 1 is skipped — it is the checksum, which
+// one kind this benchmark exists to measure. `fixed_len` is the encode width
+// either way (see ItemDescriptor). Tag 1 is skipped — the checksum, which
 // Message::set() rejects as read-only, and the edit row below reuses this.
-const ItemDescriptor* first_of_kind(const Registry& reg, ValueKind kind) {
-  for (const auto& d : reg.items)
-    if (d.kind == kind && d.tag != 1 && d.fixed_len >= 1 && d.fixed_len <= 8)
-      return &d;
-  return nullptr;
+const ItemDescriptor* first_of_kind(const Registry& reg, ValueKind kind,
+                                    std::uint8_t want_width = 0) {
+  const ItemDescriptor* fallback = nullptr;
+  for (const auto& d : reg.items) {
+    if (d.kind != kind || d.tag == 1 || d.fixed_len < 1 || d.fixed_len > 8)
+      continue;
+    if (want_width && d.fixed_len == want_width) return &d;
+    if (!fallback) fallback = &d;
+  }
+  return fallback;
 }
 
 // --- (1) per-kind codec round trip ------------------------------------------
-// The measurement issue #49 is gated on: IMAPB recomputes ceil/log2/exp2 per
-// item, UInt does not, so the gap between these two rows is the cost that
-// precomputing the scaling factors would remove.
+// The measurement issue #49 is gated on. IMAPB recomputes ceil/log2/exp2 per
+// item and LinearLDS does not, while both decode to a double and re-encode, so
+// with the width held equal the gap between those two rows is what precomputing
+// the ST 1201 scaling factors could remove.
 void bench_codec(const Registry& reg) {
-  std::printf("codec decode+encode, by value kind (one item)\n");
+  // 2 bytes: the one width UInt, LinearLDS and IMAPB all offer in 0601.
+  constexpr std::uint8_t kWantWidth = 2;
+  std::printf("codec decode+encode, one item, %u-byte where the registry allows\n",
+              static_cast<unsigned>(kWantWidth));
   const ValueKind kinds[] = {ValueKind::UInt, ValueKind::Int,
                              ValueKind::LinearLDS, ValueKind::IMAPB};
   const char* names[] = {"UInt", "Int", "LinearLDS", "IMAPB"};
   for (std::size_t k = 0; k < std::size(kinds); ++k) {
-    const ItemDescriptor* d = first_of_kind(reg, kinds[k]);
+    const ItemDescriptor* d = first_of_kind(reg, kinds[k], kWantWidth);
     if (!d) {
-      std::printf("  %-42s (no fixed-width item in registry)\n", names[k]);
+      std::printf("  %-42s (no item of this kind in registry)\n", names[k]);
       continue;
     }
     // A mid-range payload: the top two bits stay clear so an IMAPB item is a
@@ -110,9 +130,10 @@ void bench_codec(const Registry& reg) {
     raw[0] = std::byte{0x40};
 
     char label[96];
-    std::snprintf(label, sizeof(label), "%s (tag %u, %u bytes)", names[k],
+    std::snprintf(label, sizeof(label), "%s (tag %u, %u bytes)%s", names[k],
                   static_cast<unsigned>(d->tag),
-                  static_cast<unsigned>(d->fixed_len));
+                  static_cast<unsigned>(d->fixed_len),
+                  d->fixed_len == kWantWidth ? "" : "  <- width differs");
     const double ns = median_ns_per_iter(5, 200000, [&] {
       auto v = codec::decode(*d, raw);
       if (!v) return;
