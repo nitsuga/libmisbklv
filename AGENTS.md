@@ -105,6 +105,12 @@ presets CI uses). Fallback without presets:
 Normal builds consume committed generated fixtures and need no Python. Python
 3.11+ is needed only for the optional registry/fixture regeneration targets.
 
+`klv_bench` is a timing harness, built by default and deliberately **not** a
+CTest case — a timing threshold in CI measures the runner, not the library. Run
+it by hand when a number is needed, and read it as ranges rather than point
+values (codec rows move ~15% run to run on a normal desktop):
+`./build/release/klv_bench test/fixtures/synthetic-basic.klv test/fixtures/synthetic-timed-0x06.ts [MiB]`
+
 Two options: `MISBKLV_GSTREAMER` (default ON) builds the gstreamer media backend
 — the KLV core builds and tests without it, and that separation is load-bearing
 (see [`context/backend-scope.md`](context/backend-scope.md)). `MISBKLV_SANITIZE`
