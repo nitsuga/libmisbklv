@@ -113,8 +113,13 @@ values (codec rows move ~15% run to run on a normal desktop):
 
 Format changed C/C++ lines with `git clang-format origin/main` (preview with
 `git clang-format --diff origin/main`); the checked-in `.clang-format` owns the
-style. The existing tree predates that baseline, so do not turn an unrelated
-change into a whole-file or whole-tree formatting sweep.
+style. Handwritten C++ has a formatter-clean baseline; generated registry
+headers opt out in their directory because the generator owns their bytes.
+Do not turn an unrelated change into a whole-tree formatting sweep.
+
+The formatting-only baseline commit is listed in `.git-blame-ignore-revs`.
+GitHub honors it automatically; for the same local blame view, run
+`git config blame.ignoreRevsFile .git-blame-ignore-revs`.
 
 Two options: `MISBKLV_GSTREAMER` (default ON) builds the gstreamer media backend
 — the KLV core builds and tests without it, and that separation is load-bearing

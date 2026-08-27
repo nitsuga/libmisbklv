@@ -8,8 +8,8 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-`chore/clang-format-config` establishes the repository's first formatter
-configuration without reformatting the pre-existing tree.
+`chore/clang-format-config` establishes the repository's first formatter-clean
+baseline while preserving blame across the isolated formatting commit.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
@@ -17,8 +17,8 @@ configuration without reformatting the pre-existing tree.
 
 ## In progress
 
-- Validate `.clang-format` against representative core, GStreamer, public-header,
-  and test files, then land the contributor command with it.
+- Validate the formatted handwritten tree, generated-output exclusion, local
+  release/sanitizer suites, and blame-ignore wiring before merge.
 
 ## Next
 
