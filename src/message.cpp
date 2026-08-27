@@ -72,19 +72,24 @@ Result<std::monostate> Message::set(std::uint16_t tag, Value v) {
   if (!d) return Result<std::monostate>::err(Error::UnknownTag);
   std::size_t len = d->fixed_len;  // new tag: descriptor width
   for (const auto& it : pkt_.items)
-    if (it.tag == tag) { len = it.value.size(); break; }  // else preserve source width
+    if (it.tag == tag) {
+      len = it.value.size();
+      break;
+    }  // else preserve source width
   auto enc = codec::encode(*d, v, len);
   if (!enc) return Result<std::monostate>::err(enc.error());
   for (auto& e : edits_)
-    if (e.first == tag) { e.second = std::move(*enc); return Result<std::monostate>::ok({}); }
+    if (e.first == tag) {
+      e.second = std::move(*enc);
+      return Result<std::monostate>::ok({});
+    }
   edits_.emplace_back(tag, std::move(*enc));
   return Result<std::monostate>::ok({});
 }
 
 Result<ber::Bytes> Message::encode() const {
   if (edits_.empty() && pkt_.total_size != 0)
-    return Result<ber::Bytes>::ok(
-        ber::Bytes(bytes_.begin(), bytes_.begin() + pkt_.total_size));
+    return Result<ber::Bytes>::ok(ber::Bytes(bytes_.begin(), bytes_.begin() + pkt_.total_size));
 
   LocalSetBuilder b(*reg_);
   for (const auto& it : pkt_.items) {

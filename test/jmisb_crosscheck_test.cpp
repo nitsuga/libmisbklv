@@ -29,7 +29,8 @@ static void ck_enc(const Registry& reg, std::uint16_t tag, double x,
   for (int w : want)
     if (ok && std::to_integer<int>((*enc)[i++]) != w) ok = false;
   std::printf("  %-22s enc(%.10g) -> ", label, x);
-  if (enc) for (auto b : *enc) std::printf("%02X", std::to_integer<unsigned>(b));
+  if (enc)
+    for (auto b : *enc) std::printf("%02X", std::to_integer<unsigned>(b));
   std::printf("  %s\n", ok ? "OK" : "FAIL");
   if (!ok) ++failures;
 }
@@ -43,21 +44,21 @@ static void ck_enc_u(const Registry& reg, std::uint16_t tag, std::uint64_t x,
   for (int w : want)
     if (ok && std::to_integer<int>((*enc)[i++]) != w) ok = false;
   std::printf("  %-22s enc(0x%llX) -> ", label, static_cast<unsigned long long>(x));
-  if (enc) for (auto b : *enc) std::printf("%02X", std::to_integer<unsigned>(b));
+  if (enc)
+    for (auto b : *enc) std::printf("%02X", std::to_integer<unsigned>(b));
   std::printf("  %s\n", ok ? "OK" : "FAIL");
   if (!ok) ++failures;
 }
 
-static void ck_dec(const Registry& reg, std::uint16_t tag,
-                   std::vector<int> bytes, double want, const char* label) {
+static void ck_dec(const Registry& reg, std::uint16_t tag, std::vector<int> bytes, double want,
+                   const char* label) {
   const ItemDescriptor* d = reg.find(tag);
   ber::Bytes raw;
   for (int b : bytes) raw.push_back(static_cast<std::byte>(b));
   auto v = codec::decode(*d, raw);
   double got = std::get<double>(*v);
   const bool ok = std::fabs(got - want) < 1e-6;
-  std::printf("  %-22s dec -> %.10f (want %.10f)  %s\n", label, got, want,
-              ok ? "OK" : "FAIL");
+  std::printf("  %-22s dec -> %.10f (want %.10f)  %s\n", label, got, want, ok ? "OK" : "FAIL");
   if (!ok) ++failures;
 }
 

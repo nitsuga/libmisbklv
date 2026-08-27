@@ -24,8 +24,7 @@ using namespace misbklv;
 
 static std::vector<std::byte> read_file(const char* path) {
   std::ifstream f(path, std::ios::binary);
-  std::vector<char> raw((std::istreambuf_iterator<char>(f)),
-                        std::istreambuf_iterator<char>());
+  std::vector<char> raw((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   std::vector<std::byte> out(raw.size());
   for (std::size_t i = 0; i < raw.size(); ++i)
     out[i] = static_cast<std::byte>(static_cast<unsigned char>(raw[i]));
@@ -80,13 +79,10 @@ int main(int argc, char** argv) {
     }
     auto rb = std::move(b).finalize(std::span{kUas0601Key}, /*enforce_mandatory=*/false);
     if (!rb) {
-      std::fprintf(stderr, "packet %zu: finalize error %d\n", npkt,
-                   static_cast<int>(rb.error()));
+      std::fprintf(stderr, "packet %zu: finalize error %d\n", npkt, static_cast<int>(rb.error()));
       return 2;
     }
-    const bool match =
-        rb->size() == sz &&
-        std::equal(rb->begin(), rb->end(), original.begin());
+    const bool match = rb->size() == sz && std::equal(rb->begin(), rb->end(), original.begin());
     ++npkt;
     if (match) {
       ++npass;
@@ -96,8 +92,7 @@ int main(int argc, char** argv) {
       for (std::size_t i = 0; i < std::min(rb->size(), sz); ++i)
         if ((*rb)[i] != original[i]) {
           std::printf("    first diff at +%zu: got 0x%02X want 0x%02X\n", i,
-                      std::to_integer<unsigned>((*rb)[i]),
-                      std::to_integer<unsigned>(original[i]));
+                      std::to_integer<unsigned>((*rb)[i]), std::to_integer<unsigned>(original[i]));
           break;
         }
     }
@@ -110,8 +105,7 @@ int main(int argc, char** argv) {
   for (auto [tag, cnt] : tag_hist) {
     const ItemDescriptor* d = gen::uas_0601.find(tag);
     std::printf("  tag %3u  x%-3d  %s%s\n", tag, cnt,
-                d ? std::string(d->name).c_str() : "(unregistered)",
-                d ? "" : "  [RAW]");
+                d ? std::string(d->name).c_str() : "(unregistered)", d ? "" : "  [RAW]");
   }
   std::printf("unregistered tags round-tripped raw: %zu\n", unregistered.size());
 

@@ -19,15 +19,13 @@ namespace misbklv::detail {
 
 class KlvFramer {
  public:
-  explicit KlvFramer(
-      std::size_t max_packet_bytes = kDefaultMaxKlvPacketBytes)
+  explicit KlvFramer(std::size_t max_packet_bytes = kDefaultMaxKlvPacketBytes)
       : max_packet_bytes_(max_packet_bytes) {}
 
   // Append one timestamped transport unit and emit every complete packet.
   // Returns the first malformed or over-cap frame; an incomplete frame stays
   // buffered for the next feed.
-  std::optional<Error> feed(std::span<const std::byte> bytes,
-                            std::int64_t pts_ns,
+  std::optional<Error> feed(std::span<const std::byte> bytes, std::int64_t pts_ns,
                             const PacketHandler& on_packet) {
     marks_.mark(stream_off_ + reassembly_.size(), pts_ns);
     reassembly_.insert(reassembly_.end(), bytes.begin(), bytes.end());
@@ -36,8 +34,8 @@ class KlvFramer {
     std::size_t pos = 0;
     while (pos < reassembly_.size()) {
       auto rest = std::span<const std::byte>(reassembly_).subspan(pos);
-      const auto ul = std::search(rest.begin(), rest.end(), kSmpteUlPrefix.begin(),
-                                  kSmpteUlPrefix.end());
+      const auto ul =
+          std::search(rest.begin(), rest.end(), kSmpteUlPrefix.begin(), kSmpteUlPrefix.end());
       if (ul == rest.end()) {
         // Retain only the longest actual suffix that could complete a UL prefix
         // in the next unit; arbitrary trailing garbage must not accumulate.

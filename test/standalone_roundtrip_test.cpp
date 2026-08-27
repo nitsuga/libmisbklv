@@ -22,8 +22,7 @@ using namespace misbklv;
 
 static std::vector<std::byte> read_file(const char* path) {
   std::ifstream f(path, std::ios::binary);
-  std::vector<char> raw((std::istreambuf_iterator<char>(f)),
-                        std::istreambuf_iterator<char>());
+  std::vector<char> raw((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   std::vector<std::byte> out(raw.size());
   for (std::size_t i = 0; i < raw.size(); ++i)
     out[i] = static_cast<std::byte>(static_cast<unsigned char>(raw[i]));
@@ -51,8 +50,7 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "VMTI key wrongly matched 0601\n");
     return 2;
   }
-  std::printf("UL key -> registry '%s' (standalone dispatch OK)\n",
-              std::string(reg->id).c_str());
+  std::printf("UL key -> registry '%s' (standalone dispatch OK)\n", std::string(reg->id).c_str());
 
   // --- decode ---------------------------------------------------------------
   std::printf("%zu items\n", pkt->items.size());
@@ -61,12 +59,10 @@ int main(int argc, char** argv) {
     if (!d) continue;
     auto v = codec::decode(*d, it.value);
     if (d->kind == ValueKind::IMAPB || d->kind == ValueKind::LinearLDS)
-      std::printf("  tag %2u  %-32s = %.4f %s\n", it.tag,
-                  std::string(d->name).c_str(), std::get<double>(*v),
-                  std::string(d->units).c_str());
+      std::printf("  tag %2u  %-32s = %.4f %s\n", it.tag, std::string(d->name).c_str(),
+                  std::get<double>(*v), std::string(d->units).c_str());
     else if (d->kind == ValueKind::UInt)
-      std::printf("  tag %2u  %-32s = %llu\n", it.tag,
-                  std::string(d->name).c_str(),
+      std::printf("  tag %2u  %-32s = %llu\n", it.tag, std::string(d->name).c_str(),
                   static_cast<unsigned long long>(std::get<std::uint64_t>(*v)));
   }
 

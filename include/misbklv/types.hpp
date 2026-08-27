@@ -26,14 +26,13 @@ enum class Error : std::uint8_t {
   Backend,      // pipeline / I/O failure
   Unsupported,  // not implemented in this backend / config
   // Typed encode validation; appended to preserve the existing numeric codes.
-  TypeMismatch,  // Value variant does not match the ItemDescriptor::kind
+  TypeMismatch,   // Value variant does not match the ItemDescriptor::kind
   ResourceLimit,  // configured parser/backend resource limit exceeded
   ReadOnly,       // caller tried to set an auto-managed item (e.g. the checksum)
 };
 
 // Minimal Result<T> — the full map/and_then API is deferred (ADR 0007).
-template <class T>
-class Result {
+template <class T> class Result {
  public:
   static Result ok(T v) { return Result(std::move(v)); }
   static Result err(Error e) { return Result(e); }
@@ -84,19 +83,19 @@ struct ItemDescriptor {
   std::string_view name;
   std::string_view units;
   ValueKind kind;
-  bool variable;            // length is variable in the standard (else fixed_len bytes)
-  std::uint8_t fixed_len;   // encode width: the default when variable, else the fixed width
-  bool is_signed;           // LinearLDS / Int
-  MappingParams map;        // LinearLDS / IMAPB only
+  bool variable;           // length is variable in the standard (else fixed_len bytes)
+  std::uint8_t fixed_len;  // encode width: the default when variable, else the fixed width
+  bool is_signed;          // LinearLDS / Int
+  MappingParams map;       // LinearLDS / IMAPB only
   std::span<const SpecialValue> specials;
   std::uint8_t flags;
-  RegistryId child;         // NestedLS / Pack: the sub-registry to descend into
+  RegistryId child;  // NestedLS / Pack: the sub-registry to descend into
 };
 
 struct Registry {
   std::string_view id;
-  std::span<const ItemDescriptor> items;    // sorted by tag
-  std::span<const std::uint8_t> ul_key;     // 16-byte UL for a standalone packet
+  std::span<const ItemDescriptor> items;  // sorted by tag
+  std::span<const std::uint8_t> ul_key;   // 16-byte UL for a standalone packet
 
   const ItemDescriptor* find(std::uint16_t tag) const {
     const auto it = std::ranges::lower_bound(items, tag, {}, &ItemDescriptor::tag);
@@ -105,10 +104,10 @@ struct Registry {
 };
 
 // --- Typed view variant (ADR 0005; tag set = ValueKind, ADR 0010) ----------
-using Value = std::variant<std::uint64_t,             // UInt
-                           std::int64_t,              // Int
-                           double,                    // LinearLDS / IMAPB
-                           std::string_view,          // Utf8
+using Value = std::variant<std::uint64_t,              // UInt
+                           std::int64_t,               // Int
+                           double,                     // LinearLDS / IMAPB
+                           std::string_view,           // Utf8
                            std::span<const std::byte>  // Bytes / opaque
                            >;
 

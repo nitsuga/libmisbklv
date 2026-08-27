@@ -19,7 +19,10 @@ static void check(bool ok, const char* what) {
 }
 
 int main(int argc, char** argv) {
-  if (argc < 3) { std::fprintf(stderr, "usage: api_test <in.ts> <out.ts>\n"); return 2; }
+  if (argc < 3) {
+    std::fprintf(stderr, "usage: api_test <in.ts> <out.ts>\n");
+    return 2;
+  }
   constexpr auto kSensorLatitude = tags::Uas0601::SensorLatitude;  // named ST 0601 tag
 
   // --- read + edit + emit ---------------------------------------------------
@@ -55,7 +58,6 @@ int main(int argc, char** argv) {
     if (std::fabs(got[i] - (orig[i] + 1.0)) > 0.01) all_edited = false;
   check(all_edited, "each SensorLatitude is source + 1.0");
 
-  std::printf("%s (%zu frames)\n", failures == 0 ? "API: all PASS" : "API: FAIL",
-              got.size());
+  std::printf("%s (%zu frames)\n", failures == 0 ? "API: all PASS" : "API: FAIL", got.size());
   return failures == 0 ? 0 : 1;
 }

@@ -10,8 +10,7 @@ namespace misbklv::codec {
 namespace {
 
 void wr_uint(Bytes& out, std::uint64_t v, int len) {
-  for (int i = len - 1; i >= 0; --i)
-    out.push_back(static_cast<std::byte>((v >> (8 * i)) & 0xFF));
+  for (int i = len - 1; i >= 0; --i) out.push_back(static_cast<std::byte>((v >> (8 * i)) & 0xFF));
 }
 
 bool valid_numeric_width(std::size_t len) {
@@ -73,19 +72,17 @@ void linear_encode(const ItemDescriptor& d, double x, Bytes& out, int len) {
     // within the signed 64-bit range and avoid emitting the reserved code.
     const std::uint64_t encoded =
         !std::isfinite(rounded) || rounded <= -imax ? negative_max
-        : rounded >= imax                          ? positive_max
-                                                   : static_cast<std::uint64_t>(
-                                                         static_cast<std::int64_t>(rounded));
+        : rounded >= imax                           ? positive_max
+                          : static_cast<std::uint64_t>(static_cast<std::int64_t>(rounded));
     wr_uint(out, encoded, len);
   } else {
     const double denom =
         (len >= 8) ? 18446744073709551615.0 : static_cast<double>((1ull << (8 * len)) - 1);
     const double rounded = std::round((x - d.map.min) * denom / (d.map.max - d.map.min));
     // As above, the all-ones 64-bit value rounds to 2^64 as a double.
-    const std::uint64_t encoded =
-        !std::isfinite(rounded) || rounded <= 0.0 ? 0
-        : rounded >= 0x1p64                       ? std::numeric_limits<std::uint64_t>::max()
-                                                  : static_cast<std::uint64_t>(rounded);
+    const std::uint64_t encoded = !std::isfinite(rounded) || rounded <= 0.0 ? 0
+                                  : rounded >= 0x1p64 ? std::numeric_limits<std::uint64_t>::max()
+                                                      : static_cast<std::uint64_t>(rounded);
     wr_uint(out, encoded, len);
   }
 }
@@ -98,8 +95,8 @@ ImapB imapb_params(double a, double b, int len) {
   const double bPow = std::ceil(std::log2(b - a));  // ST 1201 §8, eq. bPow
   const double dPow = 8.0 * len - 1.0;
   ImapB p;
-  p.sF = std::exp2(dPow - bPow);                     // forward scaling factor
-  p.sR = std::exp2(bPow - dPow);                     // reverse scaling factor
+  p.sF = std::exp2(dPow - bPow);  // forward scaling factor
+  p.sR = std::exp2(bPow - dPow);  // reverse scaling factor
   p.zoff = (a < 0.0 && b > 0.0) ? (p.sF * a - std::floor(p.sF * a)) : 0.0;
   p.a = a;
   return p;
@@ -112,11 +109,16 @@ enum class ImapSpecial { None, PosInf, NegInf, NaNv, BelowMin, AboveMax, Reserve
 ImapSpecial imapb_special_of(std::uint8_t b0) {
   if ((b0 & 0xC0) != 0xC0) return ImapSpecial::None;  // top 2 bits not both set
   switch (b0 >> 3) {                                  // top 5 bits (Table 2)
-    case 0x19: return ImapSpecial::PosInf;            // 11001
-    case 0x1D: return ImapSpecial::NegInf;            // 11101
-    case 0x1A: case 0x1E: case 0x1B: case 0x1F:       // +-QNaN / +-SNaN
+    case 0x19:
+      return ImapSpecial::PosInf;  // 11001
+    case 0x1D:
+      return ImapSpecial::NegInf;  // 11101
+    case 0x1A:
+    case 0x1E:
+    case 0x1B:
+    case 0x1F:  // +-QNaN / +-SNaN
       return ImapSpecial::NaNv;
-    case 0x1C:                                        // 11100 -> MISB (Table 3)
+    case 0x1C:  // 11100 -> MISB (Table 3)
       return (b0 & 0x01) ? ImapSpecial::AboveMax : ImapSpecial::BelowMin;
     default:
       return ImapSpecial::Reserved;
@@ -152,14 +154,19 @@ double imapb_decode(const ItemDescriptor& d, std::span<const std::byte> raw) {
   if (!(d.map.min < d.map.max)) return std::numeric_limits<double>::quiet_NaN();
   if (!raw.empty()) {
     switch (imapb_special_of(std::to_integer<std::uint8_t>(raw[0]))) {
-      case ImapSpecial::PosInf: return std::numeric_limits<double>::infinity();
-      case ImapSpecial::NegInf: return -std::numeric_limits<double>::infinity();
+      case ImapSpecial::PosInf:
+        return std::numeric_limits<double>::infinity();
+      case ImapSpecial::NegInf:
+        return -std::numeric_limits<double>::infinity();
       case ImapSpecial::NaNv:
       case ImapSpecial::Reserved:  // forward-compat: surface as NaN, don't crash
         return std::numeric_limits<double>::quiet_NaN();
-      case ImapSpecial::BelowMin: return d.map.min;  // ST 1201 default reverse
-      case ImapSpecial::AboveMax: return d.map.max;
-      case ImapSpecial::None: break;
+      case ImapSpecial::BelowMin:
+        return d.map.min;  // ST 1201 default reverse
+      case ImapSpecial::AboveMax:
+        return d.map.max;
+      case ImapSpecial::None:
+        break;
     }
   }
   const ImapB p = imapb_params(d.map.min, d.map.max, static_cast<int>(raw.size()));
@@ -167,10 +174,10 @@ double imapb_decode(const ItemDescriptor& d, std::span<const std::byte> raw) {
 }
 
 void imapb_encode(const ItemDescriptor& d, double x, Bytes& out, int len) {
-  if (std::isnan(x)) return imapb_put_special(out, 0xD0, len);              // +QNaN
+  if (std::isnan(x)) return imapb_put_special(out, 0xD0, len);  // +QNaN
   if (std::isinf(x)) return imapb_put_special(out, x > 0 ? 0xC8 : 0xE8, len);
-  if (x < d.map.min) return imapb_put_special(out, 0xE0, len);             // BELOW_MIN
-  if (x > d.map.max) return imapb_put_special(out, 0xE1, len);             // ABOVE_MAX
+  if (x < d.map.min) return imapb_put_special(out, 0xE0, len);  // BELOW_MIN
+  if (x > d.map.max) return imapb_put_special(out, 0xE1, len);  // ABOVE_MAX
   // A degenerate descriptor (min == max) reaches here only for x == min, since
   // any other x is caught by the BELOW_MIN/ABOVE_MAX guards above. With b - a == 0
   // imapb_params yields sF == +inf, so yf == inf*0 == NaN and the float->int cast
@@ -179,7 +186,7 @@ void imapb_encode(const ItemDescriptor& d, double x, Bytes& out, int len) {
   // with linear_encode, emitting the +QNaN special (a defined, decodable output).
   if (!(d.map.min < d.map.max)) return imapb_put_special(out, 0xD0, len);
   const ImapB p = imapb_params(d.map.min, d.map.max, len);
-  double yf = p.sF * (x - p.a) + p.zoff;             // truncate; x>=a => floor
+  double yf = p.sF * (x - p.a) + p.zoff;  // truncate; x>=a => floor
   // A decoded on-grid value re-encodes to an exact integer in real arithmetic;
   // float error can pull it just below, so floor would drop 1 LSB. Nudge up by
   // a few ULP (far below a real cell width) to keep IMAPB a stable inverse.
@@ -203,8 +210,7 @@ Result<Value> decode(const ItemDescriptor& d, std::span<const std::byte> raw) {
     case ValueKind::Int:
     case ValueKind::LinearLDS:
     case ValueKind::IMAPB:
-      if (raw.empty() || raw.size() > 8)
-        return Result<Value>::err(Error::BadLength);
+      if (raw.empty() || raw.size() > 8) return Result<Value>::err(Error::BadLength);
       break;
     default:
       break;
@@ -219,8 +225,8 @@ Result<Value> decode(const ItemDescriptor& d, std::span<const std::byte> raw) {
     case ValueKind::IMAPB:
       return Result<Value>::ok(Value{imapb_decode(d, raw)});
     case ValueKind::Utf8:
-      return Result<Value>::ok(Value{std::string_view{
-          reinterpret_cast<const char*>(raw.data()), raw.size()}});
+      return Result<Value>::ok(
+          Value{std::string_view{reinterpret_cast<const char*>(raw.data()), raw.size()}});
     default:
       return Result<Value>::ok(Value{raw});
   }
@@ -230,8 +236,7 @@ Result<Bytes> encode(const ItemDescriptor& d, const Value& v, std::size_t len) {
   Bytes out;
   switch (d.kind) {
     case ValueKind::UInt: {
-      if (!std::holds_alternative<std::uint64_t>(v))
-        return Result<Bytes>::err(Error::TypeMismatch);
+      if (!std::holds_alternative<std::uint64_t>(v)) return Result<Bytes>::err(Error::TypeMismatch);
       if (!valid_numeric_width(len)) return Result<Bytes>::err(Error::BadLength);
       const auto value = std::get<std::uint64_t>(v);
       if (!fits_uint(value, len)) return Result<Bytes>::err(Error::RangeError);
@@ -239,8 +244,7 @@ Result<Bytes> encode(const ItemDescriptor& d, const Value& v, std::size_t len) {
       return Result<Bytes>::ok(std::move(out));
     }
     case ValueKind::Int: {
-      if (!std::holds_alternative<std::int64_t>(v))
-        return Result<Bytes>::err(Error::TypeMismatch);
+      if (!std::holds_alternative<std::int64_t>(v)) return Result<Bytes>::err(Error::TypeMismatch);
       if (!valid_numeric_width(len)) return Result<Bytes>::err(Error::BadLength);
       const auto value = std::get<std::int64_t>(v);
       if (!fits_int(value, len)) return Result<Bytes>::err(Error::RangeError);
@@ -248,8 +252,7 @@ Result<Bytes> encode(const ItemDescriptor& d, const Value& v, std::size_t len) {
       return Result<Bytes>::ok(std::move(out));
     }
     case ValueKind::LinearLDS: {
-      if (!std::holds_alternative<double>(v))
-        return Result<Bytes>::err(Error::TypeMismatch);
+      if (!std::holds_alternative<double>(v)) return Result<Bytes>::err(Error::TypeMismatch);
       if (!valid_numeric_width(len)) return Result<Bytes>::err(Error::BadLength);
       const double value = std::get<double>(v);
       if (!std::isfinite(value) || value < d.map.min || value > d.map.max)
@@ -258,8 +261,7 @@ Result<Bytes> encode(const ItemDescriptor& d, const Value& v, std::size_t len) {
       return Result<Bytes>::ok(std::move(out));
     }
     case ValueKind::IMAPB: {
-      if (!std::holds_alternative<double>(v))
-        return Result<Bytes>::err(Error::TypeMismatch);
+      if (!std::holds_alternative<double>(v)) return Result<Bytes>::err(Error::TypeMismatch);
       if (!valid_numeric_width(len)) return Result<Bytes>::err(Error::BadLength);
       // ST 1201 represents NaN, infinity, and values outside [min,max] as
       // structural special values rather than returning RangeError.

@@ -23,8 +23,7 @@ using namespace misbklv;
 
 static std::vector<std::byte> read_file(const char* path) {
   std::ifstream f(path, std::ios::binary);
-  std::vector<char> raw((std::istreambuf_iterator<char>(f)),
-                        std::istreambuf_iterator<char>());
+  std::vector<char> raw((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   std::vector<std::byte> out(raw.size());
   for (std::size_t i = 0; i < raw.size(); ++i)
     out[i] = static_cast<std::byte>(static_cast<unsigned char>(raw[i]));
@@ -58,8 +57,7 @@ int main(int argc, char** argv) {
 
   // --- sender: push each framed KLV packet, clock-paced (realtime) ------------
   auto be = make_gst_backend();
-  auto ins = be->open_insert({endpoint, /*realtime=*/true, /*video_source=*/"",
-                              Sei0604::Preserve});
+  auto ins = be->open_insert({endpoint, /*realtime=*/true, /*video_source=*/"", Sei0604::Preserve});
   if (!ins) {
     std::fprintf(stderr, "open_insert failed: %d\n", static_cast<int>(ins.error()));
     rx.join();
@@ -84,11 +82,10 @@ int main(int argc, char** argv) {
     return 2;
   }
   const auto elapsed =
-      std::chrono::duration_cast<std::chrono::milliseconds>(
-          std::chrono::steady_clock::now() - t0)
+      std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
           .count();
-  std::printf("streamed %zu packets over udp:%d in %lld ms (clock-paced)\n", npush,
-              port, static_cast<long long>(elapsed));
+  std::printf("streamed %zu packets over udp:%d in %lld ms (clock-paced)\n", npush, port,
+              static_cast<long long>(elapsed));
 
   rx.join();  // returns once the udpsrc idle timeout fires (post-stream)
   if (!extract_ok) {

@@ -44,17 +44,16 @@ class Message {
   bool has(std::uint16_t tag) const;
 
   // Named-tag overload: has(tags::Uas0601::SensorLatitude).
-  template <class E,
-            std::enable_if_t<std::is_enum_v<E> &&
-                std::is_same_v<std::underlying_type_t<E>, std::uint16_t>, int> = 0>
+  template <class E, std::enable_if_t<std::is_enum_v<E> &&
+                                          std::is_same_v<std::underlying_type_t<E>, std::uint16_t>,
+                                      int> = 0>
   bool has(E tag) const {
     return has(static_cast<std::uint16_t>(tag));
   }
 
   // Typed read: decodes the item (edited value if set()) and returns it iff the
   // requested type matches the descriptor's ValueKind, else nullopt.
-  template <class T>
-  std::optional<T> get(std::uint16_t tag) const {
+  template <class T> std::optional<T> get(std::uint16_t tag) const {
     const ItemDescriptor* d = reg_->find(tag);
     if (!d) return std::nullopt;
     const auto raw = value_of(tag);
@@ -67,9 +66,10 @@ class Message {
 
   // Named-tag overload: get<double>(tags::Uas0601::SensorLatitude) etc. Accepts
   // the generated per-registry tag enums (ADR 0018 follow-on); numbers still work.
-  template <class T, class E,
-            std::enable_if_t<std::is_enum_v<E> &&
-                std::is_same_v<std::underlying_type_t<E>, std::uint16_t>, int> = 0>
+  template <
+      class T, class E,
+      std::enable_if_t<
+          std::is_enum_v<E> && std::is_same_v<std::underlying_type_t<E>, std::uint16_t>, int> = 0>
   std::optional<T> get(E tag) const {
     return get<T>(static_cast<std::uint16_t>(tag));
   }
@@ -79,9 +79,9 @@ class Message {
   Result<std::monostate> set(std::uint16_t tag, Value v);
 
   // Named-tag overload: set(tags::Uas0601::SensorLatitude, Value{...}).
-  template <class E,
-            std::enable_if_t<std::is_enum_v<E> &&
-                std::is_same_v<std::underlying_type_t<E>, std::uint16_t>, int> = 0>
+  template <class E, std::enable_if_t<std::is_enum_v<E> &&
+                                          std::is_same_v<std::underlying_type_t<E>, std::uint16_t>,
+                                      int> = 0>
   Result<std::monostate> set(E tag, Value v) {
     return set(static_cast<std::uint16_t>(tag), std::move(v));
   }
@@ -108,7 +108,7 @@ class Message {
   Message& operator=(const Message&) = delete;
 
  private:
-  Message() = default;  // parse() is the entry point
+  Message() = default;                     // parse() is the entry point
   template <class U> friend class Result;  // Result<Message> value-inits on err()
   std::optional<std::span<const std::byte>> value_of(std::uint16_t tag) const;
   const ber::Bytes* find_edit(std::uint16_t tag) const;

@@ -9,10 +9,8 @@ namespace {
 
 class GstBackend : public MediaBackend {
  public:
-  Result<std::monostate> extract(std::string_view source,
-                                 const PacketHandler& on_packet,
-                                 std::stop_token stop = {},
-                                 ExtractOptions options = {}) override {
+  Result<std::monostate> extract(std::string_view source, const PacketHandler& on_packet,
+                                 std::stop_token stop = {}, ExtractOptions options = {}) override {
     gst_init(nullptr, nullptr);
     return detail::extract(source, on_packet, stop, options);
   }

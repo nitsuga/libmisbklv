@@ -27,9 +27,8 @@ static void check(bool cond, const char* what) {
 }
 
 // Read a udpsink property and print/verify it.
-static void expect_udp_props(const char* spec, const InsertConfig& cfg,
-                             int want_ttl, const char* want_iface,
-                             bool want_loop, bool want_auto_mc) {
+static void expect_udp_props(const char* spec, const InsertConfig& cfg, int want_ttl,
+                             const char* want_iface, bool want_loop, bool want_auto_mc) {
   GstElement* s = make_sink(spec, cfg);
   std::printf("  udp '%s' -> sink=%s\n", spec, s ? "created" : "NULL");
   check(s != nullptr, "udp sink created");
@@ -39,11 +38,10 @@ static void expect_udp_props(const char* spec, const InsertConfig& cfg,
   gint ttl = -1;
   gchar* iface = nullptr;
   gboolean loop = FALSE, am = FALSE;
-  g_object_get(s, "ttl-mc", &ttl, "multicast-iface", &iface, "loop", &loop,
-               "auto-multicast", &am, nullptr);
-  std::printf("    ttl-mc=%d multicast-iface=%s loop=%d auto-multicast=%d\n",
-              ttl, iface ? iface : "(null)", static_cast<int>(loop),
-              static_cast<int>(am));
+  g_object_get(s, "ttl-mc", &ttl, "multicast-iface", &iface, "loop", &loop, "auto-multicast", &am,
+               nullptr);
+  std::printf("    ttl-mc=%d multicast-iface=%s loop=%d auto-multicast=%d\n", ttl,
+              iface ? iface : "(null)", static_cast<int>(loop), static_cast<int>(am));
   check(ttl == want_ttl, "ttl-mc matches");
   // multicast-iface unset reads back as null (udpsink default); a requested
   // iface comes back populated.
@@ -136,7 +134,6 @@ int main() {
     if (st) gst_object_unref(st);
   }
 
-  std::printf("\nUDP MULTICAST KNOBS: %s\n",
-              failures == 0 ? "PASS" : "FAIL");
+  std::printf("\nUDP MULTICAST KNOBS: %s\n", failures == 0 ? "PASS" : "FAIL");
   return failures == 0 ? 0 : 1;
 }

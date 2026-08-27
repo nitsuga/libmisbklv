@@ -19,24 +19,25 @@ static void check(bool ok, const char* what) {
 }
 static std::vector<std::byte> read_file(const char* p) {
   std::ifstream f(p, std::ios::binary);
-  std::vector<char> raw((std::istreambuf_iterator<char>(f)),
-                        std::istreambuf_iterator<char>());
+  std::vector<char> raw((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   std::vector<std::byte> out(raw.size());
   for (std::size_t i = 0; i < raw.size(); ++i)
     out[i] = static_cast<std::byte>(static_cast<unsigned char>(raw[i]));
   return out;
 }
-static std::byte B(unsigned v) { return static_cast<std::byte>(v); }
+static std::byte B(unsigned v) {
+  return static_cast<std::byte>(v);
+}
 
 // Parseable ST 0601 packet with two intentional wire-level oddities that builder
 // authoring would normalize: the outer length uses long form for a short value,
 // and the checksum item appears before the ordinary item. Parsing deliberately
 // does not validate checksums, so the checksum bytes can be arbitrary here.
 static std::vector<std::byte> unusual_source_packet() {
-  const std::vector<std::byte> payload = {
-      B(0x01), B(0x02), B(0x12), B(0x34),  // checksum first
-      B(0x02), B(0x08),                    // Precision Time Stamp
-      B(0x00), B(0x00), B(0x00), B(0x00), B(0x00), B(0x00), B(0x00), B(0x01)};
+  const std::vector<std::byte> payload = {B(0x01), B(0x02), B(0x12), B(0x34),  // checksum first
+                                          B(0x02), B(0x08),  // Precision Time Stamp
+                                          B(0x00), B(0x00), B(0x00), B(0x00),
+                                          B(0x00), B(0x00), B(0x00), B(0x01)};
   std::vector<std::byte> out;
   for (auto b : kUas0601Key) out.push_back(B(b));
   out.push_back(B(0x81));  // noncanonical long-form length for a 14-byte value
@@ -56,9 +57,9 @@ static void test_vmti_variable_uint() {
   if (!msg) return;
   check(static_cast<bool>(msg->set(Vmti0903::VMTILSVersionNumber, Value{std::uint64_t{2}})),
         "set(tag 4) at default width");
-  check(static_cast<bool>(msg->set(Vmti0903::TotalNumberOfTargetsDetected,
-                                   Value{std::uint64_t{28}})),
-        "set(tag 5) at default width");
+  check(
+      static_cast<bool>(msg->set(Vmti0903::TotalNumberOfTargetsDetected, Value{std::uint64_t{28}})),
+      "set(tag 5) at default width");
   check(static_cast<bool>(msg->set(Vmti0903::NumberOfReportedTargets, Value{std::uint64_t{14}})),
         "set(tag 6) at default width");
   auto authored = msg->encode();
@@ -74,9 +75,12 @@ static void test_vmti_variable_uint() {
     check(v6 && *v6 == 14, "tag 6 value round-trips");
     std::size_t w4 = 0, w5 = 0, w6 = 0;
     for (const auto& it : rp->items())
-      if (it.tag == 4) w4 = it.value.size();
-      else if (it.tag == 5) w5 = it.value.size();
-      else if (it.tag == 6) w6 = it.value.size();
+      if (it.tag == 4)
+        w4 = it.value.size();
+      else if (it.tag == 5)
+        w5 = it.value.size();
+      else if (it.tag == 6)
+        w6 = it.value.size();
     check(w4 == 2, "tag 4 emitted at 2 bytes (V2)");
     check(w5 == 3, "tag 5 emitted at 3 bytes (V3)");
     check(w6 == 3, "tag 6 emitted at 3 bytes (V3)");
@@ -89,24 +93,23 @@ static void test_vmti_variable_uint() {
   if (maxed) {
     check(static_cast<bool>(maxed->set(Vmti0903::VMTILSVersionNumber, Value{std::uint64_t{65535}})),
           "tag 4 = 65535 fits V2");
-    check(static_cast<bool>(maxed->set(Vmti0903::TotalNumberOfTargetsDetected,
-                                       Value{std::uint64_t{0xFFFFFF}})),
+    check(static_cast<bool>(
+              maxed->set(Vmti0903::TotalNumberOfTargetsDetected, Value{std::uint64_t{0xFFFFFF}})),
           "tag 5 = 0xFFFFFF fits V3");
-    check(static_cast<bool>(maxed->set(Vmti0903::NumberOfReportedTargets,
-                                       Value{std::uint64_t{0xFFFFFF}})),
+    check(static_cast<bool>(
+              maxed->set(Vmti0903::NumberOfReportedTargets, Value{std::uint64_t{0xFFFFFF}})),
           "tag 6 = 0xFFFFFF fits V3");
     check(maxed->set(Vmti0903::VMTILSVersionNumber, Value{std::uint64_t{65536}}).error() ==
               Error::RangeError,
           "tag 4 = 65536 rejected (RangeError)");
-    check(maxed->set(Vmti0903::TotalNumberOfTargetsDetected,
-                     Value{std::uint64_t{0x1000000}}).error() == Error::RangeError,
+    check(maxed->set(Vmti0903::TotalNumberOfTargetsDetected, Value{std::uint64_t{0x1000000}})
+                  .error() == Error::RangeError,
           "tag 5 = 0x1000000 rejected (RangeError)");
-    check(maxed->set(Vmti0903::NumberOfReportedTargets,
-                     Value{std::uint64_t{0x1000000}}).error() == Error::RangeError,
+    check(maxed->set(Vmti0903::NumberOfReportedTargets, Value{std::uint64_t{0x1000000}}).error() ==
+              Error::RangeError,
           "tag 6 = 0x1000000 rejected (RangeError)");
     auto max_encoded = maxed->encode();
-    auto max_rp = max_encoded ? Message::parse(*max_encoded)
-                              : Result<Message>::err(Error::Backend);
+    auto max_rp = max_encoded ? Message::parse(*max_encoded) : Result<Message>::err(Error::Backend);
     check(static_cast<bool>(max_rp), "max-value VMTI parses");
     if (max_rp) {
       auto g4 = max_rp->get<std::uint64_t>(Vmti0903::VMTILSVersionNumber);
@@ -116,9 +119,12 @@ static void test_vmti_variable_uint() {
             "max values round-trip");
       std::size_t w4 = 0, w5 = 0, w6 = 0;
       for (const auto& it : max_rp->items())
-        if (it.tag == 4) w4 = it.value.size();
-        else if (it.tag == 5) w5 = it.value.size();
-        else if (it.tag == 6) w6 = it.value.size();
+        if (it.tag == 4)
+          w4 = it.value.size();
+        else if (it.tag == 5)
+          w5 = it.value.size();
+        else if (it.tag == 6)
+          w6 = it.value.size();
       check(w4 == 2 && w5 == 3 && w6 == 3, "max values still emit at 2/3/3 bytes");
     }
   }
@@ -131,7 +137,10 @@ int main(int argc, char** argv) {
   }
   const char* path = argv[1];
   const auto bytes = read_file(path);
-  if (bytes.empty()) { std::fprintf(stderr, "no fixture: %s\n", path); return 2; }
+  if (bytes.empty()) {
+    std::fprintf(stderr, "no fixture: %s\n", path);
+    return 2;
+  }
 
   auto msg = Message::parse(bytes);
   check(static_cast<bool>(msg), "parse");
@@ -161,8 +170,8 @@ int main(int argc, char** argv) {
   // routing through the builder's canonicalizing authoring path.
   const auto unusual = unusual_source_packet();
   auto unusual_msg = Message::parse(unusual);
-  auto unusual_encoded = unusual_msg ? unusual_msg->encode()
-                                     : Result<ber::Bytes>::err(Error::Backend);
+  auto unusual_encoded =
+      unusual_msg ? unusual_msg->encode() : Result<ber::Bytes>::err(Error::Backend);
   check(unusual_msg && unusual_encoded && *unusual_encoded == unusual,
         "no-op encode preserves noncanonical length and checksum placement");
 
@@ -193,8 +202,7 @@ int main(int argc, char** argv) {
   // --- named tags: enum values equal the numbers, get/set accept both -------
   using tags::Uas0601;
   check(static_cast<std::uint16_t>(Uas0601::SensorLatitude) == 13, "enum value == tag number");
-  check(msg->get<double>(Uas0601::SensorLatitude).has_value() ==
-            msg->get<double>(13).has_value(),
+  check(msg->get<double>(Uas0601::SensorLatitude).has_value() == msg->get<double>(13).has_value(),
         "get by name and by number agree");
 
   // --- author a 0601 packet from scratch (by name) --------------------------
@@ -206,11 +214,10 @@ int main(int argc, char** argv) {
     check(fresh->set(1, Value{std::uint64_t{0}}).error() == Error::ReadOnly,
           "set(1) on a created message -> ReadOnly");
 
-    check(static_cast<bool>(fresh->set(Uas0601::PrecisionTimeStamp,
-                                       Value{std::uint64_t{0x0004603E4F03D2CBull}})),
+    check(static_cast<bool>(
+              fresh->set(Uas0601::PrecisionTimeStamp, Value{std::uint64_t{0x0004603E4F03D2CBull}})),
           "set previously absent Precision Time Stamp");
-    check(fresh->has(Uas0601::PrecisionTimeStamp),
-          "has() sees an added tag before encode");
+    check(fresh->has(Uas0601::PrecisionTimeStamp), "has() sees an added tag before encode");
 
     // 0601 mandates tag 2 (Precision Time Stamp) and tag 65 (Version Number).
     // With only tag 2 staged, the authoring path reports the missing mandatory
@@ -219,19 +226,20 @@ int main(int argc, char** argv) {
     check(!missing_version && missing_version.error() == Error::MissingMandatory,
           "authoring without mandatory Version Number -> MissingMandatory");
 
-    check(static_cast<bool>(fresh->set(Uas0601::UASDatalinkLSVersionNumber,
-                                       Value{std::uint64_t{19}})),
+    check(static_cast<bool>(
+              fresh->set(Uas0601::UASDatalinkLSVersionNumber, Value{std::uint64_t{19}})),
           "set Version Number");
     auto one_added = fresh->encode();
     check(static_cast<bool>(one_added), "encode conformant authored packet");
-    auto one_added_reparsed = one_added ? Message::parse(*one_added)
-                                        : Result<Message>::err(Error::Backend);
-    check(one_added_reparsed &&
-              one_added_reparsed->has(Uas0601::PrecisionTimeStamp),
+    auto one_added_reparsed =
+        one_added ? Message::parse(*one_added) : Result<Message>::err(Error::Backend);
+    check(one_added_reparsed && one_added_reparsed->has(Uas0601::PrecisionTimeStamp),
           "added tag survives encode and re-parse");
 
-    check(static_cast<bool>(fresh->set(Uas0601::SensorLatitude, Value{54.0})), "set SensorLatitude");
-    check(static_cast<bool>(fresh->set(Uas0601::SensorLongitude, Value{-110.0})), "set SensorLongitude");
+    check(static_cast<bool>(fresh->set(Uas0601::SensorLatitude, Value{54.0})),
+          "set SensorLatitude");
+    check(static_cast<bool>(fresh->set(Uas0601::SensorLongitude, Value{-110.0})),
+          "set SensorLongitude");
     auto authored = fresh->encode();
     check(static_cast<bool>(authored), "encode authored packet");
     auto rp = authored ? Message::parse(*authored) : Result<Message>::err(Error::Backend);
@@ -250,8 +258,8 @@ int main(int argc, char** argv) {
   // rejects it for the mandatory items it lacks rather than passing an empty
   // (non-conformant) packet through.
   auto empty_fresh = Message::create(RegistryId::Uas0601);
-  auto empty_authored = empty_fresh ? empty_fresh->encode()
-                                    : Result<ber::Bytes>::err(Error::Backend);
+  auto empty_authored =
+      empty_fresh ? empty_fresh->encode() : Result<ber::Bytes>::err(Error::Backend);
   check(!empty_authored && empty_authored.error() == Error::MissingMandatory,
         "create with no edits -> MissingMandatory, not empty passthrough");
 

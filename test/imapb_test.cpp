@@ -28,8 +28,7 @@ static ber::Bytes enc(const ItemDescriptor& d, double x, int len) {
   return out;
 }
 
-static void expect_bytes(const char* what, const ber::Bytes& got,
-                         std::initializer_list<int> want) {
+static void expect_bytes(const char* what, const ber::Bytes& got, std::initializer_list<int> want) {
   bool ok = got.size() == want.size();
   std::size_t i = 0;
   for (int w : want)
@@ -42,8 +41,7 @@ static void expect_bytes(const char* what, const ber::Bytes& got,
 
 static void expect_near(const char* what, double got, double want) {
   const bool ok = std::fabs(got - want) < 1e-6;
-  std::printf("  %-28s = %.6f  (want %.6f) -> %s\n", what, got, want,
-              ok ? "OK" : "FAIL");
+  std::printf("  %-28s = %.6f  (want %.6f) -> %s\n", what, got, want, ok ? "OK" : "FAIL");
   if (!ok) ++failures;
 }
 
@@ -58,8 +56,8 @@ int main() {
 
   // forward: exact integers published in Table 7
   expect_bytes("enc(-900.0)", enc(d, -900.0, 3), {0x00, 0x00, 0x00});
-  expect_bytes("enc(0.0)", enc(d, 0.0, 3), {0x03, 0x84, 0x00});     // 230400
-  expect_bytes("enc(10.0)", enc(d, 10.0, 3), {0x03, 0x8E, 0x00});   // 232960
+  expect_bytes("enc(0.0)", enc(d, 0.0, 3), {0x03, 0x84, 0x00});    // 230400
+  expect_bytes("enc(10.0)", enc(d, 10.0, 3), {0x03, 0x8E, 0x00});  // 232960
 
   // reverse: exact floats published in Table 7
   auto dec = [&](std::initializer_list<int> bytes) {
@@ -95,7 +93,7 @@ int main() {
   // WestRidgeSystems, MIT) — independent confirmation, incl. the non-zero
   // Zoffset path (a<0<b) that regressed in M6.
   std::printf("ST 1201 Annex A cross-check (via jmisb):\n");
-  const ItemDescriptor a0 = imapb(0.0, 100.0);   // Zoffset = 0
+  const ItemDescriptor a0 = imapb(0.0, 100.0);  // Zoffset = 0
   expect_bytes("IMAPB(0,100,3) enc(10.1)", enc(a0, 10.1, 3), {0x0A, 0x19, 0x99});
   expect_bytes("IMAPB(0,100,3) enc(50.5)", enc(a0, 50.5, 3), {0x32, 0x80, 0x00});
   expect_bytes("IMAPB(0,100,3) enc(100.0)", enc(a0, 100.0, 3), {0x64, 0x00, 0x00});
@@ -151,9 +149,9 @@ int main() {
   std::printf("degenerate descriptor guards (issue #7):\n");
   const ItemDescriptor degen = imapb(5.0, 5.0);  // min == max
   expect_bytes("enc(min==max) -> +QNaN", enc(degen, 5.0, 3), {0xD0, 0x00, 0x00});
-  expect_pred("dec(min==max) -> NaN",
-              std::isnan(codec::imapb_decode(degen, enc(degen, 5.0, 3))), 0.0);
-  const ItemDescriptor inv = imapb(10.0, 5.0);   // min > max
+  expect_pred("dec(min==max) -> NaN", std::isnan(codec::imapb_decode(degen, enc(degen, 5.0, 3))),
+              0.0);
+  const ItemDescriptor inv = imapb(10.0, 5.0);  // min > max
   expect_pred("enc(min>max) -> special, no UB",
               codec::is_imap_special(enc(inv, 7.0, 3)) && enc(inv, 7.0, 3).size() == 3, 0.0);
 
@@ -165,8 +163,8 @@ int main() {
     const ItemDescriptor a0 = imapb(0.0, 100.0);
     ber::Bytes wide(9, std::byte{0});
     wide[0] = std::byte{0xAA};  // 9-byte field: leading byte dropped by the clamp
-    expect_pred("dec(9 bytes) stays finite, no UB",
-                std::isfinite(codec::imapb_decode(a0, wide)), 0.0);
+    expect_pred("dec(9 bytes) stays finite, no UB", std::isfinite(codec::imapb_decode(a0, wide)),
+                0.0);
   }
 
   std::printf("IMAPB: %s\n", failures == 0 ? "PASS" : "FAIL");

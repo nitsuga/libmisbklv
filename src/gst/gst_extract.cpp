@@ -17,8 +17,7 @@ namespace {
 // Reassembly + framing state shared with appsink callbacks. The callbacks run
 // on a streaming thread while extract() blocks on the bus.
 struct ExtractCtx {
-  explicit ExtractCtx(std::size_t max_packet_bytes)
-      : framer(max_packet_bytes) {}
+  explicit ExtractCtx(std::size_t max_packet_bytes) : framer(max_packet_bytes) {}
 
   GstElement* sink = nullptr;
   const PacketHandler* on_packet = nullptr;
@@ -79,8 +78,7 @@ GstFlowReturn on_new_sample(GstElement* sink, gpointer user) {
     }
   }
   gst_sample_unref(sample);
-  return ctx->has_frame_error.load(std::memory_order_acquire) ? GST_FLOW_ERROR
-                                                               : GST_FLOW_OK;
+  return ctx->has_frame_error.load(std::memory_order_acquire) ? GST_FLOW_ERROR : GST_FLOW_OK;
 }
 
 // UDP has no EOS. Once metadata bytes have arrived, this idle interval is the
@@ -92,8 +90,7 @@ inline constexpr guint64 kIdleTimeoutNs = 500'000'000;
 GstElement* make_src(const std::string& spec, bool* udp) {
   *udp = false;
   const auto colon = spec.find(':');
-  const std::string scheme =
-      (colon == std::string::npos) ? std::string() : spec.substr(0, colon);
+  const std::string scheme = (colon == std::string::npos) ? std::string() : spec.substr(0, colon);
   if (scheme == "udp") {
     const std::string rest = spec.substr(colon + 1);
     std::string host;
@@ -127,10 +124,10 @@ GstElement* make_src(const std::string& spec, bool* udp) {
     }
     GstElement* s = gst_element_factory_make("udpsrc", "src");
     if (s) {
-      GstCaps* caps = gst_caps_from_string(
-          "video/mpegts, systemstream=(boolean)true, packetsize=(int)188");
-      g_object_set(s, "address", host.c_str(), "port", port, "caps", caps,
-                   "timeout", kIdleTimeoutNs, nullptr);
+      GstCaps* caps =
+          gst_caps_from_string("video/mpegts, systemstream=(boolean)true, packetsize=(int)188");
+      g_object_set(s, "address", host.c_str(), "port", port, "caps", caps, "timeout",
+                   kIdleTimeoutNs, nullptr);
       gst_caps_unref(caps);
       *udp = true;
     }
@@ -149,8 +146,7 @@ GstElement* make_src(const std::string& spec, bool* udp) {
 
 }  // namespace
 
-Result<std::monostate> extract(std::string_view source,
-                               const PacketHandler& on_packet,
+Result<std::monostate> extract(std::string_view source, const PacketHandler& on_packet,
                                std::stop_token stop, ExtractOptions options) {
   GstElement* pipeline = gst_pipeline_new("misbklv-extract");
   bool udp = false;
@@ -195,8 +191,7 @@ Result<std::monostate> extract(std::string_view source,
       }
       GstMessage* msg = gst_bus_timed_pop_filtered(
           bus, kPoll,
-          static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR |
-                                      GST_MESSAGE_ELEMENT));
+          static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR | GST_MESSAGE_ELEMENT));
       if (!msg) continue;
       const GstMessageType t = GST_MESSAGE_TYPE(msg);
       bool done = false;
@@ -225,18 +220,15 @@ Result<std::monostate> extract(std::string_view source,
   gst_element_set_state(pipeline, GST_STATE_NULL);
   gst_object_unref(pipeline);
   if (cancelled || stop.stop_requested()) return Result<std::monostate>::ok({});
-  if (ctx.has_frame_error.load(std::memory_order_acquire))
-    failure = ctx.frame_error;
+  if (ctx.has_frame_error.load(std::memory_order_acquire)) failure = ctx.frame_error;
   if (!failure && natural_end && !ctx.framer.remainder().empty()) {
-    auto frame = inspect_packet_frame(ctx.framer.remainder(),
-                                      options.max_packet_bytes);
+    auto frame = inspect_packet_frame(ctx.framer.remainder(), options.max_packet_bytes);
     if (!frame)
       failure = frame.error();
     else if (!*frame)
       failure = Error::Truncated;
   }
-  return failure ? Result<std::monostate>::err(*failure)
-                 : Result<std::monostate>::ok({});
+  return failure ? Result<std::monostate>::err(*failure) : Result<std::monostate>::ok({});
 }
 
 }  // namespace misbklv::detail

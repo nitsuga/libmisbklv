@@ -45,8 +45,8 @@ static void ck_real(std::uint16_t tag, const char* hex, double want, double lsb)
   auto v = codec::decode(*d, raw);
   const double got = std::get<double>(*v);
   const bool ok = v && std::fabs(got - want) <= lsb;
-  std::printf("  tag %-3u %-9s -> %18.9f  (spec %.9f, tol %g)  %s  %s\n", tag, hex,
-              got, want, lsb, ok ? "OK" : "FAIL", d->name.data());
+  std::printf("  tag %-3u %-9s -> %18.9f  (spec %.9f, tol %g)  %s  %s\n", tag, hex, got, want, lsb,
+              ok ? "OK" : "FAIL", d->name.data());
   if (!ok) ++failures;
 }
 
@@ -57,8 +57,8 @@ static void ck_uint(std::uint16_t tag, const char* hex, std::uint64_t want) {
   const auto got = std::get<std::uint64_t>(*v);
   const bool ok = v && got == want;
   std::printf("  tag %-3u %-9s -> %18llu  (spec %llu)  %s  %s\n", tag, hex,
-              static_cast<unsigned long long>(got),
-              static_cast<unsigned long long>(want), ok ? "OK" : "FAIL", d->name.data());
+              static_cast<unsigned long long>(got), static_cast<unsigned long long>(want),
+              ok ? "OK" : "FAIL", d->name.data());
   if (!ok) ++failures;
 }
 
@@ -69,8 +69,8 @@ static void ck_int(std::uint16_t tag, const char* hex, std::int64_t want) {
   const auto got = std::get<std::int64_t>(*v);
   const bool ok = v && got == want;
   std::printf("  tag %-3u %-9s -> %18lld  (spec %lld)  %s  %s\n", tag, hex,
-              static_cast<long long>(got), static_cast<long long>(want),
-              ok ? "OK" : "FAIL", d->name.data());
+              static_cast<long long>(got), static_cast<long long>(want), ok ? "OK" : "FAIL",
+              d->name.data());
   if (!ok) ++failures;
 }
 
@@ -78,20 +78,20 @@ int main() {
   // One vector per distinct (kind, range, width) the registry introduces, so a
   // transcription slip in any mapping family shows up here.
   std::printf("linear LDS — unsigned, offset and plain:\n");
-  ck_real(35, "A7C4", 235.924010, 360.0 / 65535);        // 0..360 over uint16
-  ck_real(37, "BEBA", 3725.18502, 5000.0 / 65535);       // 0..5000 mbar
-  ck_real(43, "03", 6.0, 510.0 / 255);                   // 0..510 px over uint8
-  ck_real(45, "1A95", 425.215152, 4095.0 / 65535);       // 0..4095 m
-  ck_real(55, "81", 50.5882353, 100.0 / 255);            // 0..100 % over uint8
-  ck_real(58, "A45D", 6420.53864, 10000.0 / 65535);      // 0..10000 kg
+  ck_real(35, "A7C4", 235.924010, 360.0 / 65535);    // 0..360 over uint16
+  ck_real(37, "BEBA", 3725.18502, 5000.0 / 65535);   // 0..5000 mbar
+  ck_real(43, "03", 6.0, 510.0 / 255);               // 0..510 px over uint8
+  ck_real(45, "1A95", 425.215152, 4095.0 / 65535);   // 0..4095 m
+  ck_real(55, "81", 50.5882353, 100.0 / 255);        // 0..100 % over uint8
+  ck_real(58, "A45D", 6420.53864, 10000.0 / 65535);  // 0..10000 kg
 
   std::printf("linear LDS — signed (symmetric about zero):\n");
-  ck_real(26, "1750", 0.0136602540, 0.075 / 32767);      // +/-0.075 over int16
-  ck_real(51, "D3FE", -61.8878750, 180.0 / 32767);       // +/-180 m/s
-  ck_real(79, "09FB", 25.4977569, 327.0 / 32767);        // +/-327 m/s
-  ck_real(83, "14BCB2C0", 29.161550376960857,            // +/-180 over int32
+  ck_real(26, "1750", 0.0136602540, 0.075 / 32767);  // +/-0.075 over int16
+  ck_real(51, "D3FE", -61.8878750, 180.0 / 32767);   // +/-180 m/s
+  ck_real(79, "09FB", 25.4977569, 327.0 / 32767);    // +/-327 m/s
+  ck_real(83, "14BCB2C0", 29.161550376960857,        // +/-180 over int32
           180.0 / 2147483647);
-  ck_real(90, "FF62E2F2", -0.43152510208614414,          // +/-90 over int32
+  ck_real(90, "FF62E2F2", -0.43152510208614414,  // +/-90 over int32
           90.0 / 2147483647);
   ck_real(93, "DE179323", -47.683, 180.0 / 2147483647);
 
@@ -99,19 +99,19 @@ int main() {
   // the spec's own example uses, which is not always the registry's default
   // encode width — decoding is driven by the actual field length.
   std::printf("IMAPB (ST 1201):\n");
-  ck_real(96, "00D92A", 13898.5463, 0.25);               // (0, 1500000), 3 B
-  ck_real(103, "2F921E", 23456.24, 0.078125);            // (-900, 40000), 3 B
-  ck_real(109, "0001A0", 1.625, 0.0039);                 // (0, 21000) km, 3 B
-  ck_real(112, "1F40", 125.0, 0.016625);                 // (0, 360), 2 B
-  ck_real(117, "3E90", 1.0, 0.0625);                     // (-1000, 1000) dps, 2 B
-  ck_real(120, "4800", 72.0, 0.004);                     // (0, 100) %, 2 B
-  ck_real(132, "0257C0", 2400.0, 0.015625);              // (1, 99999) MHz, 3 B
-  ck_real(134, "3700", 55.0, 0.0039);                    // (0, 100) %, 2 B
+  ck_real(96, "00D92A", 13898.5463, 0.25);     // (0, 1500000), 3 B
+  ck_real(103, "2F921E", 23456.24, 0.078125);  // (-900, 40000), 3 B
+  ck_real(109, "0001A0", 1.625, 0.0039);       // (0, 21000) km, 3 B
+  ck_real(112, "1F40", 125.0, 0.016625);       // (0, 360), 2 B
+  ck_real(117, "3E90", 1.0, 0.0625);           // (-1000, 1000) dps, 2 B
+  ck_real(120, "4800", 72.0, 0.004);           // (0, 100) %, 2 B
+  ck_real(132, "0257C0", 2400.0, 0.015625);    // (1, 99999) MHz, 3 B
+  ck_real(134, "3700", 55.0, 0.0039);          // (0, 100) %, 2 B
 
   std::printf("integers (variable width — decoded at the field's own length):\n");
-  ck_uint(110, "4DAF", 19887);                           // uint, 2 of max 4 B
-  ck_int(39, "54", 84);                                  // int8, direct
-  ck_int(136, "1E", 30);                                 // int, 1 of max 4 B
+  ck_uint(110, "4DAF", 19887);  // uint, 2 of max 4 B
+  ck_int(39, "54", 84);         // int8, direct
+  ck_int(136, "1E", 30);        // int, 1 of max 4 B
 
   std::printf("%s\n", failures ? "FAIL" : "PASS");
   return failures ? 1 : 0;
