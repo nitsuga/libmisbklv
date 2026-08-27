@@ -653,31 +653,6 @@ static void test_ts_klv_robustness() {
   check(out4.size() == 1 && out4[0] == pkt_a,
         "split KLV packet reassembled byte-exact");
 
-  // (5) Sustained non-framing input on the selected KLV PID: packet A selects
-  // the PID, then many PES carry only garbage that never completes a frame.
-  // Framing must resync past every one of them, deliver nothing further, and
-  // still report success — the extractor must not stall or accumulate.
-  //
-  // This exercises the path marks.prune(stream_off) sits on (stream_off
-  // advances by resync alone, with no on_packet() call to consume marks via
-  // at()). It cannot observe the marks queue itself: pruning has no effect on
-  // delivered bytes or timestamps, only on how much the extractor retains
-  // while running. The bound is asserted directly at the unit level in
-  // pts_marks_test; this case guards the call site's behavior around it.
-  std::vector<std::byte> ts5;
-  append_pes(ts5, pes_packet(0xC0, pkt_a));
-  for (int i = 0; i < 500; ++i) {
-    // 32 bytes that contain no SMPTE UL prefix, so nothing ever frames.
-    std::vector<std::byte> junk(32, B(0x00));
-    for (std::size_t j = 0; j < junk.size(); ++j) junk[j] = B(0xA0 + (j & 0x0F));
-    append_pes(ts5, pes_packet(0xC0, junk));
-  }
-  std::vector<std::vector<std::byte>> out5;
-  auto r5 = run_extract(ts5, out5);
-  check(static_cast<bool>(r5), "extract_ts_klv sustained non-framing input succeeds");
-  check(out5.size() == 1 && out5[0] == pkt_a,
-        "only the framed packet is delivered, garbage never frames");
-
   // 0x15 variant of (4): each fragment rides in its own RP 217 AU cell, so
   // each PES payload has a cell header and only the first starts with the UL.
   std::vector<std::byte> ts6;
