@@ -132,4 +132,9 @@ Result<std::monostate> KlvSink::close(std::stop_token stop) {
   return inserter_->finish(std::move(stop));
 }
 
+Result<bool> KlvSink::poll() {
+  if (!inserter_) return Result<bool>::err(open_error_.value_or(Error::Backend));
+  return inserter_->poll();
+}
+
 }  // namespace misbklv

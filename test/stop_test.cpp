@@ -213,9 +213,11 @@ int main(int argc, char** argv) {
     KlvSink sink(std::make_unique<UnsupportedInsertBackend>(), "unsupported");
     const auto emitted = fresh ? sink.emit(*fresh) : Result<std::monostate>::err(Error::Backend);
     const auto closed = sink.close();
+    const auto polled = sink.poll();
     check(sink.error() == Error::Unsupported && !emitted && emitted.error() == Error::Unsupported &&
-              !closed && closed.error() == Error::Unsupported,
-          "KlvSink exposes open_insert Unsupported through error/emit/close");
+              !closed && closed.error() == Error::Unsupported && !polled &&
+              polled.error() == Error::Unsupported,
+          "KlvSink exposes open_insert Unsupported through error/emit/close/poll");
   }
 
   std::printf("%s\n", failures == 0 ? "STOP: all PASS" : "STOP: FAIL");

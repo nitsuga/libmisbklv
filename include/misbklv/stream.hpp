@@ -125,6 +125,11 @@ class KlvSink {
   // that lands after the KLV is emitted (ADR 0032). Default token never signals.
   Result<std::monostate> close(std::stop_token stop = {});
 
+  // Nonblocking terminal-state observation for a live video source. ok(false)
+  // means the source is still running, ok(true) means EOS, and an error means
+  // the backend reported a terminal failure.
+  Result<bool> poll();
+
   // Failure from open_insert(), if any. Runtime emit()/close() failures remain
   // reported by their Result values and do not change this accessor.
   std::optional<Error> error() const { return open_error_; }

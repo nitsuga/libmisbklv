@@ -1,5 +1,17 @@
 # Knowledge Bundle Log
 
+## 2026-08-28
+
+* **fix: expose terminal insert status for live consumers** (parrot-to-klv#94):
+  `Inserter::poll()` has a default no-op for synchronous/custom backends, while
+  `KlvSink::poll()` forwards the supported surface to the inserter. The
+  GStreamer backend now consumes terminal EOS/ERROR messages without blocking
+  and retains the result so a later `close()` preserves the observed outcome.
+  This lets a live consumer fail before its first KLV packet instead of waiting
+  for telemetry, SIGINT, or the close drain. The API forwarding, synchronous
+  no-op, and no-KLV live pipeline ERROR cases are covered; all 28 CTest cases
+  pass.
+
 ## 2026-08-27
 
 * **refactor: one private UDP `host:port` parser** (issue #45). Moved the identical bracketed-IPv6 split, bare-IPv6 rejection, and 1–65535 port validation out of the GStreamer source and sink constructors into `detail::parse_host_port`; `make_src` and `make_sink` now share the result while retaining their separate element configuration. The proposed shared video-branch wait loop remains rejected because the file and RTSP paths intentionally differ, and the repeated `VideoCtx` assignments stay visible because a factory would save almost no code. The existing UDP multicast test now directly pins hostname and scoped/bracketed-IPv6 parsing plus bare-IPv6, empty, zero, out-of-range, and trailing-character rejection; the broader extraction, insertion, and live-stream suites exercise both callers. Release build clean; all 28 CTest cases pass, as do the sanitizer core suite's 17.

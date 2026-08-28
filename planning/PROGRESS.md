@@ -8,8 +8,9 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-`refactor/dedupe-host-port` removes the remaining actionable GStreamer backend
-duplication from issue #45 without abstracting the intentionally different wait loops.
+The insertion facade exposes a nonblocking `poll()` for live video consumers:
+GStreamer reports terminal EOS/ERROR without waiting for `finish()`, while
+backends without asynchronous sources retain a no-op default.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
@@ -17,8 +18,8 @@ duplication from issue #45 without abstracting the intentionally different wait 
 
 ## In progress
 
-- Validate the shared private UDP endpoint parser through both extraction and
-  insertion paths, then close issue #45.
+- Verify the live-consumer integration in parrot-to-klv#94 against the new
+  terminal-status API.
 
 ## Next
 
