@@ -8,9 +8,9 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-The nonblocking terminal-status API for live insertion is proposed in
-[ADR 0035](../context/decisions/0035-live-insert-terminal-status.md) and under
-review in [libmisbklv#58](https://github.com/nitsuga/libmisbklv/issues/58).
+The nonblocking terminal-status API for live insertion, including prompt close
+after a polled EOS, is proposed in [ADR 0035](../context/decisions/0035-live-insert-terminal-status.md)
+and under review in [libmisbklv#58](https://github.com/nitsuga/libmisbklv/issues/58).
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a

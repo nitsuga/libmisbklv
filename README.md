@@ -32,7 +32,8 @@ ffmpeg backend are deferred — see
 - **High-level API**: an owned, editable `Message` (typed `get<T>`/`set`,
   byte-exact `encode`) plus a `KlvStream` / `KlvSink` read-edit-write facade —
   read and write share one timeline, so editing a stream doesn't re-time it;
-  terminal streaming errors are checked explicitly after iteration.
+  terminal read errors are checked explicitly after iteration, and live sink
+  terminal status can be polled without blocking.
 
 ## Quick start
 

@@ -260,7 +260,7 @@ class GstInserter : public Inserter {
     // cap branch. That was harmless (issue #34), but only by way of a
     // conversion nobody should have to re-derive. One sample keeps `remain`
     // positive by construction, so the cast is unconditionally well defined.
-    while (!cancelled && klv_eos == GST_FLOW_OK && live_video_eos) {
+    while (!already_eos && !cancelled && klv_eos == GST_FLOW_OK && live_video_eos) {
       // Checked before the deadline: if the caller has asked to stop and the
       // drain has also timed out, the stop wins and this reports cancellation
       // rather than a drain failure. Both discard a partial sink file (ADR

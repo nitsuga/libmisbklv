@@ -2,6 +2,11 @@
 
 ## 2026-08-28
 
+* **fix: finish promptly after polled EOS** (libmisbklv#58 / PR #59): a
+  terminal EOS consumed by `Inserter::poll()` now skips the second drain wait;
+  the public sink guide and README describe the live polling contract, and a
+  bounded-source regression covers clean close after a polled EOS.
+
 * **Proposed nonblocking terminal status for live insertion** ([ADR 0035](./decisions/0035-live-insert-terminal-status.md), libmisbklv#58 / parrot-to-klv#94).
 
 ## 2026-08-27
