@@ -8,9 +8,9 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-The insertion facade exposes a nonblocking `poll()` for live video consumers:
-GStreamer reports terminal EOS/ERROR without waiting for `finish()`, while
-backends without asynchronous sources retain a no-op default.
+The nonblocking terminal-status API for live insertion is proposed in
+[ADR 0035](../context/decisions/0035-live-insert-terminal-status.md) and under
+review in [libmisbklv#58](https://github.com/nitsuga/libmisbklv/issues/58).
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
@@ -18,8 +18,8 @@ backends without asynchronous sources retain a no-op default.
 
 ## In progress
 
-- Verify the live-consumer integration in parrot-to-klv#94 against the new
-  terminal-status API.
+- Review the terminal-status API and verify the live-consumer integration in
+  parrot-to-klv#94 against it.
 
 ## Next
 

@@ -2,15 +2,7 @@
 
 ## 2026-08-28
 
-* **fix: expose terminal insert status for live consumers** (parrot-to-klv#94):
-  `Inserter::poll()` has a default no-op for synchronous/custom backends, while
-  `KlvSink::poll()` forwards the supported surface to the inserter. The
-  GStreamer backend now consumes terminal EOS/ERROR messages without blocking
-  and retains the result so a later `close()` preserves the observed outcome.
-  This lets a live consumer fail before its first KLV packet instead of waiting
-  for telemetry, SIGINT, or the close drain. The API forwarding, synchronous
-  no-op, and no-KLV live pipeline ERROR cases are covered; all 28 CTest cases
-  pass.
+* **Proposed nonblocking terminal status for live insertion** ([ADR 0035](./decisions/0035-live-insert-terminal-status.md), libmisbklv#58 / parrot-to-klv#94).
 
 ## 2026-08-27
 
