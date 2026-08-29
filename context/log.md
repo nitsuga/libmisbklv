@@ -20,7 +20,11 @@
   retryable source outage. Errors are now attributed by origin first
   (`object_within_branch`), with anything outside the RTSP branch reported as
   `Backend`, and `GST_RESOURCE_ERROR` narrowed to its read-side codes as
-  redundant defense. Behavior change: an unreachable
+  redundant defense. A further round added RTSP status awareness: `rtspsrc`
+  folds most non-2xx responses onto `RESOURCE/READ` and 404 onto
+  `RESOURCE/NOT_FOUND`, so a bad path or an unsupported transport read as an
+  absent source; the `rtsp-status-code` detail now decides when present, and
+  only a 5xx is transient. Behavior change: an unreachable
   RTSP source reports `SourceUnavailable` where it reported `Unsupported`. Debug
   build clean; all 28 CTest cases pass.
 

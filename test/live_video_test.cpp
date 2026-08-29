@@ -559,6 +559,41 @@ int main(int argc, char** argv) {
     check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_BUSY) ==
               Error::SourceUnavailable,
           "resource BUSY -> SourceUnavailable");
+
+    // rtspsrc folds most non-2xx RTSP responses onto RESOURCE/READ and 404 onto
+    // RESOURCE/NOT_FOUND, so the code alone would read a rejected request as an
+    // absent source. A status means the server answered and is therefore there.
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_NOT_FOUND, 404) ==
+              Error::Unsupported,
+          "RTSP 404 -> Unsupported (bad path, server is there)");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ, 400) ==
+              Error::Unsupported,
+          "RTSP 400 -> Unsupported (bad request)");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ, 401) ==
+              Error::Unsupported,
+          "RTSP 401 -> Unsupported (credentials)");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ, 461) ==
+              Error::Unsupported,
+          "RTSP 461 -> Unsupported (unsupported transport)");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ, 454) ==
+              Error::Unsupported,
+          "RTSP 454 -> Unsupported (session not found)");
+    // Server-side failures are worth coming back to.
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ, 503) ==
+              Error::SourceUnavailable,
+          "RTSP 503 -> SourceUnavailable (service unavailable)");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ, 500) ==
+              Error::SourceUnavailable,
+          "RTSP 500 -> SourceUnavailable (server error)");
+    // No status: the failure never reached the protocol, so the code decides.
+    // This is the refused-connection path that must stay retryable.
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ, 0) ==
+              Error::SourceUnavailable,
+          "no RTSP status -> falls back to the code (refused connection)");
+    // A status overrides even a write-side code: the server spoke.
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_WRITE, 404) ==
+              Error::Unsupported,
+          "RTSP 404 with a write-side code -> Unsupported");
   }
 
   std::printf("== RTSP error origin: only the source branch speaks for the source ==\n");

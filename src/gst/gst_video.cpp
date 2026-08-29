@@ -1081,7 +1081,25 @@ bool object_within_branch(GstObject* src, GstElement* branch) {
   return false;
 }
 
-Error classify_rtsp_error(GQuark domain, int code) {
+int rtsp_status_from_message(GstMessage* msg) {
+  if (!msg) return 0;
+  const GstStructure* details = nullptr;
+  gst_message_parse_error_details(msg, &details);
+  gint status = 0;
+  if (details && gst_structure_get_int(details, "rtsp-status-code", &status)) return status;
+  return 0;
+}
+
+Error classify_rtsp_error(GQuark domain, int code, int rtsp_status) {
+  // A status at all means the server answered: it is reachable, and the
+  // request was rejected on its merits. rtspsrc maps most non-2xx responses
+  // onto RESOURCE/READ and 404 onto RESOURCE/NOT_FOUND, so without this the
+  // codes below would read a bad path or an unsupported transport as an absent
+  // source and retry it forever. Only a server-side 5xx — overloaded, briefly
+  // broken — is worth coming back to.
+  if (rtsp_status > 0) {
+    return rtsp_status >= 500 ? Error::SourceUnavailable : Error::Unsupported;
+  }
   // GST_RESOURCE_ERROR covers both directions of I/O, and only the read side
   // says the source is absent: refused, not found, not answering. The write
   // side belongs to an output — a full disk, a sink that cannot be opened —
@@ -1160,9 +1178,11 @@ static Result<std::monostate> prepare_rtsp_branch(GstElement* pipeline, GstPad* 
       // there — classifying it as absent would have a polling consumer retry a
       // full disk forever.
       const bool from_source = object_within_branch(GST_MESSAGE_SRC(msg), rtspsrc);
-      const Error klass = !from_source ? Error::Backend
-                          : err        ? classify_rtsp_error(err->domain, err->code)
-                                       : Error::SourceUnavailable;
+      const int rtsp_status = rtsp_status_from_message(msg);
+      const Error klass =
+          !from_source ? Error::Backend
+          : err        ? classify_rtsp_error(err->domain, err->code, rtsp_status)
+                       : Error::SourceUnavailable;
       g_warning("misbklv: RTSP pipeline error for '%s': %s%s", uri.c_str(),
                 err ? err->message : "pipeline error",
                 klass == Error::SourceUnavailable ? ""

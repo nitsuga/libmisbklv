@@ -62,7 +62,16 @@ numeric code keeps its value — the same treatment `TypeMismatch`,
   would have a polling consumer retry it forever, which is the exact failure
   this ADR exists to prevent.
 
-  A message from the branch is then routed by its `GError` domain.
+  A message from the branch is then routed by its **RTSP status** when it has
+  one. `rtspsrc` folds most non-2xx responses onto `RESOURCE/READ` and 404 onto
+  `RESOURCE/NOT_FOUND`, so the domain and code alone would read a bad path, an
+  unsupported transport, or a rejected request as an absent source. A status at
+  all means the server answered — it is reachable, and the request was refused
+  on its merits — so only a server-side 5xx is transient. The status lives in
+  the message's error details under `rtsp-status-code`.
+
+  With no status the failure never reached the protocol, which is the
+  refused-connection case, and the `GError` domain decides.
   `GST_RESOURCE_ERROR` yields `SourceUnavailable` only for its **read-side**
   codes — `NOT_FOUND`, `OPEN_READ`, `OPEN_READ_WRITE`, `READ`, and `BUSY`, a
   camera whose client slot is taken. Write-side codes (`OPEN_WRITE`, `WRITE`,

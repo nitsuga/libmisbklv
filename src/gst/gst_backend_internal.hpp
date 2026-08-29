@@ -138,7 +138,14 @@ struct VideoCtx {
 // retrying cannot fix. Authorization is resource-level but permanent — wrong
 // credentials stay wrong (ADR 0036). Exposed for tests: the permanent paths
 // need a live server to reach otherwise.
-Error classify_rtsp_error(GQuark domain, int code);
+// `rtsp_status` is the RTSP response status from the error message's details
+// (`rtsp-status-code`), or 0 when the failure never got that far — a refused
+// TCP connection carries no status. A status means the server answered, so it
+// is not absent, and only a server-side 5xx is worth coming back to (ADR 0036).
+Error classify_rtsp_error(GQuark domain, int code, int rtsp_status = 0);
+
+// Pull `rtsp-status-code` out of an error message's details, or 0 if absent.
+int rtsp_status_from_message(GstMessage* msg);
 
 // True when `src` is `branch` or lives inside it. The RTSP branch watches the
 // whole pipeline bus, so an error posted by the sink or the muxer arrives on
