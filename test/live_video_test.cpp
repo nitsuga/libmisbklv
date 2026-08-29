@@ -596,6 +596,61 @@ int main(int argc, char** argv) {
           "RTSP 404 with a write-side code -> Unsupported");
   }
 
+  std::printf("== RTSP status extraction from real message details ==\n");
+  {
+    // The classifier cases above pass a status straight in, which cannot catch
+    // the seam: rtspsrc writes rtsp-status-code as G_TYPE_UINT, and a typed
+    // getter returns false on a mismatch rather than converting. Reading it as
+    // an int yielded 0 for every real message and silently disabled the whole
+    // status rule. Build the message the way rtspsrc does.
+    GstElement* src = gst_element_factory_make("fakesrc", "status-src");
+    if (src) {
+      auto make_msg = [&](GstStructure* details) {
+        GError* e = g_error_new(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ, "test");
+        GstMessage* m =
+            gst_message_new_error_with_details(GST_OBJECT(src), e, "debug", details);
+        g_error_free(e);
+        return m;
+      };
+
+      GstMessage* m_uint = make_msg(
+          gst_structure_new("rtsp-details", "rtsp-status-code", G_TYPE_UINT, 404u, nullptr));
+      check(detail::rtsp_status_from_message(m_uint) == 404,
+            "uint rtsp-status-code is extracted (the type rtspsrc actually writes)");
+      gst_message_unref(m_uint);
+
+      // Accepted too, so the reader does not depend on one spelling.
+      GstMessage* m_int = make_msg(
+          gst_structure_new("rtsp-details", "rtsp-status-code", G_TYPE_INT, 503, nullptr));
+      check(detail::rtsp_status_from_message(m_int) == 503, "int rtsp-status-code is extracted");
+      gst_message_unref(m_int);
+
+      GstMessage* m_absent =
+          make_msg(gst_structure_new("rtsp-details", "something-else", G_TYPE_UINT, 1u, nullptr));
+      check(detail::rtsp_status_from_message(m_absent) == 0, "details without a status yield 0");
+      gst_message_unref(m_absent);
+
+      GstMessage* m_none = make_msg(nullptr);
+      check(detail::rtsp_status_from_message(m_none) == 0, "a message with no details yields 0");
+      gst_message_unref(m_none);
+
+      check(detail::rtsp_status_from_message(nullptr) == 0, "a null message yields 0");
+
+      // End to end through the classifier: a 404 carried as uint must be
+      // permanent, which is the case that silently regressed.
+      GstMessage* m_404 = make_msg(
+          gst_structure_new("rtsp-details", "rtsp-status-code", G_TYPE_UINT, 404u, nullptr));
+      check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ,
+                                        detail::rtsp_status_from_message(m_404)) ==
+                Error::Unsupported,
+            "uint 404 through extraction + classification -> Unsupported");
+      gst_message_unref(m_404);
+      gst_object_unref(src);
+    } else {
+      std::printf("  SKIP status extraction: fakesrc unavailable\n");
+    }
+  }
+
   std::printf("== RTSP error origin: only the source branch speaks for the source ==\n");
   {
     // The branch watches the whole pipeline bus, so an error from the sink

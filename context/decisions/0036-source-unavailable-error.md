@@ -68,7 +68,10 @@ numeric code keeps its value — the same treatment `TypeMismatch`,
   unsupported transport, or a rejected request as an absent source. A status at
   all means the server answered — it is reachable, and the request was refused
   on its merits — so only a server-side 5xx is transient. The status lives in
-  the message's error details under `rtsp-status-code`.
+  the message's error details under `rtsp-status-code`, written by `rtspsrc`
+  as `G_TYPE_UINT` — read it with the matching getter, since the typed
+  getters report failure on a mismatch instead of converting, and a silent 0
+  turns the whole rule off.
 
   With no status the failure never reached the protocol, which is the
   refused-connection case, and the `GError` domain decides.

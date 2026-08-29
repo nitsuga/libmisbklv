@@ -1085,8 +1085,18 @@ int rtsp_status_from_message(GstMessage* msg) {
   if (!msg) return 0;
   const GstStructure* details = nullptr;
   gst_message_parse_error_details(msg, &details);
-  gint status = 0;
-  if (details && gst_structure_get_int(details, "rtsp-status-code", &status)) return status;
+  if (!details) return 0;
+  // rtspsrc writes this field as G_TYPE_UINT, and the typed getters return
+  // false on a type mismatch rather than converting — reading it as an int
+  // silently yielded 0 for every real message, which fell back to the generic
+  // resource-code rules and undid the status classification entirely. Accept
+  // either spelling rather than depending on one.
+  guint as_uint = 0;
+  if (gst_structure_get_uint(details, "rtsp-status-code", &as_uint)) {
+    return static_cast<int>(as_uint);
+  }
+  gint as_int = 0;
+  if (gst_structure_get_int(details, "rtsp-status-code", &as_int)) return as_int;
   return 0;
 }
 
