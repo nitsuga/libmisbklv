@@ -140,6 +140,12 @@ struct VideoCtx {
 // need a live server to reach otherwise.
 Error classify_rtsp_error(GQuark domain, int code);
 
+// True when `src` is `branch` or lives inside it. The RTSP branch watches the
+// whole pipeline bus, so an error posted by the sink or the muxer arrives on
+// the same bus as one from rtspsrc; only the latter says anything about the
+// source (ADR 0036).
+bool object_within_branch(GstObject* src, GstElement* branch);
+
 // Adds and prerolls the video branch. On an error the caller retains `video`
 // until it has taken the pipeline to NULL, keeping all callback user pointers
 // valid during teardown.

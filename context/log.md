@@ -14,7 +14,13 @@
   `rtspsrc` announced a pad at all — one means the server answered with media
   this build cannot carry, none means nothing answered. `classify_rtsp_error` is
   exposed internally so the permanent paths, which need a live server to reach
-  end to end, are covered by nine direct cases. Behavior change: an unreachable
+  end to end, are covered directly. Review then caught that the branch watches
+  the *whole pipeline* bus, so a sink failure — a full disk, an output that
+  cannot be opened — arrived as a `GST_RESOURCE_ERROR` and was classified as a
+  retryable source outage. Errors are now attributed by origin first
+  (`object_within_branch`), with anything outside the RTSP branch reported as
+  `Backend`, and `GST_RESOURCE_ERROR` narrowed to its read-side codes as
+  redundant defense. Behavior change: an unreachable
   RTSP source reports `SourceUnavailable` where it reported `Unsupported`. Debug
   build clean; all 28 CTest cases pass.
 

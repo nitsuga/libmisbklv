@@ -541,6 +541,53 @@ int main(int argc, char** argv) {
     // retry in a consumer polling on SourceUnavailable.
     check(detail::classify_rtsp_error(GST_LIBRARY_ERROR, 1) == Error::Unsupported,
           "unknown domain -> Unsupported (conservative)");
+    // Write-side resource errors belong to an output, not to the source. A full
+    // disk must never look like an aircraft that is powered off.
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_NO_SPACE_LEFT) ==
+              Error::Unsupported,
+          "resource NO_SPACE_LEFT -> Unsupported (output, not source)");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_WRITE) ==
+              Error::Unsupported,
+          "resource WRITE -> Unsupported (output, not source)");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_OPEN_WRITE) ==
+              Error::Unsupported,
+          "resource OPEN_WRITE -> Unsupported (output, not source)");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_CLOSE) ==
+              Error::Unsupported,
+          "resource CLOSE -> Unsupported (output, not source)");
+    // A server at capacity is worth coming back to.
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_BUSY) ==
+              Error::SourceUnavailable,
+          "resource BUSY -> SourceUnavailable");
+  }
+
+  std::printf("== RTSP error origin: only the source branch speaks for the source ==\n");
+  {
+    // The branch watches the whole pipeline bus, so an error from the sink
+    // arrives alongside one from rtspsrc. Only the latter says the source is
+    // absent; the former must not become a retryable outage.
+    GstElement* pipeline = gst_pipeline_new("origin-test");
+    GstElement* branch = gst_bin_new("branch");
+    GstElement* inside = gst_element_factory_make("fakesrc", "inside");
+    GstElement* outside = gst_element_factory_make("fakesink", "outside");
+    if (pipeline && branch && inside && outside) {
+      gst_bin_add(GST_BIN(branch), inside);
+      gst_bin_add_many(GST_BIN(pipeline), branch, outside, nullptr);
+      check(detail::object_within_branch(GST_OBJECT(inside), branch),
+            "an element inside the branch is attributed to the source");
+      check(detail::object_within_branch(GST_OBJECT(branch), branch),
+            "the branch itself is attributed to the source");
+      check(!detail::object_within_branch(GST_OBJECT(outside), branch),
+            "a sink outside the branch is not attributed to the source");
+      check(!detail::object_within_branch(GST_OBJECT(pipeline), branch),
+            "the pipeline itself is not attributed to the source");
+      check(!detail::object_within_branch(nullptr, branch), "a null source is not attributed");
+      gst_object_unref(pipeline);
+    } else {
+      std::printf("  SKIP origin test: element factories unavailable\n");
+      if (outside) gst_object_unref(outside);
+      if (pipeline) gst_object_unref(pipeline);
+    }
   }
 
   std::printf("== error cases: unsupported URIs ==\n");

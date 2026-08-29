@@ -54,10 +54,22 @@ numeric code keeps its value — the same treatment `TypeMismatch`,
   else.
 
   Classification matters, because the RTSP branch's two failure paths each
-  cover both meanings. A bus error is routed by its `GError` domain:
-  `GST_RESOURCE_ERROR` is the transport failing to reach or read the endpoint
-  and yields `SourceUnavailable`, except `NOT_AUTHORIZED`, since credentials do
-  not become correct by waiting. `GST_STREAM_ERROR` and `GST_CORE_ERROR` mean
+  cover both meanings. A bus error is routed first by **where it came from**:
+  the branch watches the whole pipeline bus, so an error posted by the muxer or
+  the sink arrives alongside one from `rtspsrc`, and only the latter says
+  anything about the source. A message from outside the branch is `Backend` —
+  an output fault, never an absent source. Classifying a full disk as "absent"
+  would have a polling consumer retry it forever, which is the exact failure
+  this ADR exists to prevent.
+
+  A message from the branch is then routed by its `GError` domain.
+  `GST_RESOURCE_ERROR` yields `SourceUnavailable` only for its **read-side**
+  codes — `NOT_FOUND`, `OPEN_READ`, `OPEN_READ_WRITE`, `READ`, and `BUSY`, a
+  camera whose client slot is taken. Write-side codes (`OPEN_WRITE`, `WRITE`,
+  `NO_SPACE_LEFT`, `CLOSE`) and `NOT_AUTHORIZED` are permanent: an output that
+  cannot be written is not an absent source, and credentials do not become
+  correct by waiting. The code split is deliberate redundancy behind the origin
+  check — either alone would keep a disk-full error out of the retry path. `GST_STREAM_ERROR` and `GST_CORE_ERROR` mean
   the server answered and its media cannot be handled by this build — an
   unsupported encoding, a missing depayloader — and stay `Unsupported`. An
   unrecognized domain is treated as permanent, because an unrecognized error
@@ -117,6 +129,11 @@ instead of two.
 
 # Assumptions / open questions
 
+- Read-side bias: a write failure originating *inside* the RTSP branch — an
+  `rtspsrc` that cannot send over an interleaved TCP connection — is classified
+  permanent, though it may be transient. That is the conservative direction, and
+  a peer that accepted a connection and then failed on write is a fault rather
+  than an absence. Revisit if it proves wrong in the field.
 - The classifier is keyed on GStreamer error domains, which are stable API but
   broader than the cases enumerated here. New domains default to permanent,
   which fails safe for a polling consumer but will silently mark a genuinely

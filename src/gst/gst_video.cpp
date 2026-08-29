@@ -1066,13 +1066,40 @@ static Result<std::monostate> prepare_file_branch(GstElement* pipeline, GstPad* 
   return Result<std::monostate>::ok({});
 }
 
+bool object_within_branch(GstObject* src, GstElement* branch) {
+  if (!src || !branch) return false;
+  GstObject* cur = GST_OBJECT(gst_object_ref(src));
+  while (cur) {
+    if (cur == GST_OBJECT(branch)) {
+      gst_object_unref(cur);
+      return true;
+    }
+    GstObject* parent = gst_object_get_parent(cur);
+    gst_object_unref(cur);
+    cur = parent;
+  }
+  return false;
+}
+
 Error classify_rtsp_error(GQuark domain, int code) {
-  // GST_RESOURCE_ERROR is the transport failing to reach or read the endpoint:
-  // refused, not found, timed out. That is a source that may be back later.
+  // GST_RESOURCE_ERROR covers both directions of I/O, and only the read side
+  // says the source is absent: refused, not found, not answering. The write
+  // side belongs to an output — a full disk, a sink that cannot be opened —
+  // which no amount of waiting for the aircraft will fix.
   if (domain == GST_RESOURCE_ERROR) {
-    // Except authorization — wrong credentials are wrong on every retry.
-    if (code == GST_RESOURCE_ERROR_NOT_AUTHORIZED) return Error::Unsupported;
-    return Error::SourceUnavailable;
+    switch (code) {
+      case GST_RESOURCE_ERROR_NOT_FOUND:
+      case GST_RESOURCE_ERROR_OPEN_READ:
+      case GST_RESOURCE_ERROR_OPEN_READ_WRITE:
+      case GST_RESOURCE_ERROR_READ:
+      case GST_RESOURCE_ERROR_BUSY:  // a camera with its client slot taken
+        return Error::SourceUnavailable;
+      default:
+        // Authorization, and every write-side code: OPEN_WRITE, WRITE,
+        // NO_SPACE_LEFT, CLOSE. Wrong credentials stay wrong, and a failing
+        // output is not an absent source.
+        return Error::Unsupported;
+    }
   }
   // GST_STREAM_ERROR (codec not found, wrong type, decode) and GST_CORE_ERROR
   // (missing plugin, negotiation, pad) both mean the server answered and its
@@ -1128,11 +1155,19 @@ static Result<std::monostate> prepare_rtsp_branch(GstElement* pipeline, GstPad* 
       GError* err = nullptr;
       gchar* dbg = nullptr;
       gst_message_parse_error(msg, &err, &dbg);
-      const Error klass =
-          err ? classify_rtsp_error(err->domain, err->code) : Error::SourceUnavailable;
-      g_warning("misbklv: RTSP source '%s': %s%s", uri.c_str(),
+      // This bus carries the whole pipeline. An error from the muxer or the
+      // sink is an output fault, and says nothing about whether the source is
+      // there — classifying it as absent would have a polling consumer retry a
+      // full disk forever.
+      const bool from_source = object_within_branch(GST_MESSAGE_SRC(msg), rtspsrc);
+      const Error klass = !from_source ? Error::Backend
+                          : err        ? classify_rtsp_error(err->domain, err->code)
+                                       : Error::SourceUnavailable;
+      g_warning("misbklv: RTSP pipeline error for '%s': %s%s", uri.c_str(),
                 err ? err->message : "pipeline error",
-                klass == Error::SourceUnavailable ? "" : " (permanent)");
+                klass == Error::SourceUnavailable ? ""
+                : from_source                     ? " (permanent)"
+                                                  : " (from the output, not the source)");
       if (err) g_error_free(err);
       g_free(dbg);
       gst_message_unref(msg);
