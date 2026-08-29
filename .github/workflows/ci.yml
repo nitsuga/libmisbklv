@@ -44,9 +44,22 @@ jobs:
           target_link_libraries(app PRIVATE misbklv::gst)  # transitively: core
           EOF
           cat > /tmp/consumer/main.cpp <<'EOF'
+          // Construct both facade types with the in-memory backend so this
+          // remains a link/ABI check without opening a real source or sink.
+          #include <memory>
           #include "misbklv/gst_backend.hpp"
+          #include "misbklv/mock_backend.hpp"
+          #include "misbklv/stream.hpp"
+
           int main() {
-            return misbklv::make_gst_backend() ? 0 : 1;
+            auto gst_backend = misbklv::make_gst_backend();
+            misbklv::KlvStream stream(std::make_unique<misbklv::MockBackend>(), "unused");
+            misbklv::KlvSink sink(std::make_unique<misbklv::MockBackend>(), misbklv::InsertConfig{});
+            (void)stream.error();
+            (void)sink.error();
+            (void)sink.poll();
+            (void)sink.close();
+            return gst_backend ? 0 : 1;
           }
           EOF
           cmake -S /tmp/consumer -B /tmp/consumer/build -DCMAKE_PREFIX_PATH="$PWD/_install"

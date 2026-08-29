@@ -7,7 +7,7 @@
   consumer smoke test calls the backend factory; corrected timestamp-origin
   wording, current progress/roadmap status, historical backend-plan labels,
   and the amended ADR 0023/0027 claims. Release build, all 28 CTest cases, and
-  the installed consumer link check pass. Author: Codex (GPT-5).
+  the installed consumer link check pass. Author: openai/gpt-5.
 
 * **`Error::SourceUnavailable` separates an absent live source from an
   unsupported configuration** ([ADR 0036](./decisions/0036-source-unavailable-error.md),
