@@ -23,6 +23,7 @@ jobs:
       packages: write
     env:
       IMAGE: ghcr.io/nitsuga/libmisbklv-ci
+      CI_CAPACITY_DIR: /home/eric/ci-cache
     steps:
       - uses: actions/checkout@v5
       - name: Scope registry credentials to this job
@@ -41,10 +42,12 @@ jobs:
         # Layers already on this host are reused, so an unchanged apt list
         # makes this a no-op rebuild.
         run: |
+          bash ci/with-capacity.sh 2 bash -c '
           docker build -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:latest" \
             -f ci/Dockerfile ci
           docker push "$IMAGE:${{ github.sha }}"
           docker push "$IMAGE:latest"
+          '
       - name: Remove credentials
         if: always()
         run: rm -rf "$DOCKER_CONFIG"

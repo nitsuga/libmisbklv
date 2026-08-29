@@ -31,28 +31,30 @@ jobs:
       # A fork PR gets a throwaway path inside its own VM.
       volumes:
         - ${{ github.event.pull_request.head.repo.fork && '/tmp/ccache:/ccache' || '/home/eric/ci-cache/ccache:/ccache' }}
+        - ${{ github.event.pull_request.head.repo.fork && '/tmp/ci-capacity:/ci-capacity' || '/home/eric/ci-cache:/ci-capacity' }}
     # A hung test otherwise runs to GitHub's 6-hour cap: gst_video_insert did
     # exactly that, nine times over, before finish() grew a drain timeout.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - name: Configure
-        run: cmake --preset release
+        run: bash ci/with-capacity.sh 1 cmake --preset release
       - name: Build
-        run: cmake --build --preset release -j3
+        run: bash ci/with-capacity.sh 1 cmake --build --preset release -j3
       - name: ccache stats
         run: ccache -s
       - name: Test
         # --timeout names the test that hung; the job timeout above is the backstop.
-        run: ctest --test-dir build/release --output-on-failure --timeout 600
+        run: bash ci/with-capacity.sh 1 ctest --test-dir build/release --output-on-failure --timeout 600
       - name: Install
-        run: cmake --install build/release --prefix "$PWD/_install"
+        run: bash ci/with-capacity.sh 1 cmake --install build/release --prefix "$PWD/_install"
       - name: Consumer smoke test (find_package, core + gst component)
         # Builds a throwaway out-of-tree project against the install — catches
         # export/packaging gaps that a bare `cmake --install` cannot.
         run: |
+          bash ci/with-capacity.sh 1 bash -c '
           mkdir -p /tmp/consumer
-          cat > /tmp/consumer/CMakeLists.txt <<'EOF'
+          cat > /tmp/consumer/CMakeLists.txt <<"EOF"
           cmake_minimum_required(VERSION 3.20)
           project(consumer CXX)
           set(CMAKE_CXX_STANDARD 20)
@@ -60,7 +62,7 @@ jobs:
           add_executable(app main.cpp)
           target_link_libraries(app PRIVATE misbklv::gst)  # transitively: core
           EOF
-          cat > /tmp/consumer/main.cpp <<'EOF'
+          cat > /tmp/consumer/main.cpp <<"EOF"
           // Construct both facade types with the in-memory backend so this
           // remains a link/ABI check without opening a real source or sink.
           #include <memory>
@@ -81,6 +83,7 @@ jobs:
           EOF
           cmake -S /tmp/consumer -B /tmp/consumer/build -DCMAKE_PREFIX_PATH="$PWD/_install"
           cmake --build /tmp/consumer/build -j3
+          '
 
   sanitizers:
     timeout-minutes: 20
@@ -106,14 +109,15 @@ jobs:
       # A fork PR gets a throwaway path inside its own VM.
       volumes:
         - ${{ github.event.pull_request.head.repo.fork && '/tmp/ccache:/ccache' || '/home/eric/ci-cache/ccache:/ccache' }}
+        - ${{ github.event.pull_request.head.repo.fork && '/tmp/ci-capacity:/ci-capacity' || '/home/eric/ci-cache:/ci-capacity' }}
     steps:
       - uses: actions/checkout@v5
       - name: Configure (ASan + UBSan, no gstreamer)
-        run: cmake --preset sanitize
+        run: bash ci/with-capacity.sh 1 cmake --preset sanitize
       - name: Build
-        run: cmake --build --preset sanitize -j3
+        run: bash ci/with-capacity.sh 1 cmake --build --preset sanitize -j3
       - name: Test under sanitizers
-        run: ctest --test-dir build/sanitize --output-on-failure --timeout 600
+        run: bash ci/with-capacity.sh 1 ctest --test-dir build/sanitize --output-on-failure --timeout 600
         env:
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
           ASAN_OPTIONS: abort_on_error=1
@@ -129,15 +133,19 @@ jobs:
     # host and on ubuntu-latest. It also runs PR-supplied generator scripts
     # directly, which is exactly why it must not land on the persistent host
     # for a fork.
+    env:
+      CI_CAPACITY_DIR: ${{ github.event.pull_request.head.repo.fork && '/tmp/ci-capacity' || '/home/eric/ci-cache' }}
     steps:
       - uses: actions/checkout@v5
       - name: Regenerate committed outputs
         run: |
+          bash ci/with-capacity.sh 1 bash -c '
           for r in uas0601 vmti0903 vtarget0903; do
             python3 tools/gen_registry.py \
               "registry/$r.toml" "include/misbklv/registry/${r}_tables.generated.hpp"
           done
           python3 test/fixtures/generate_synthetic_fixtures.py \
             registry/uas0601.toml test/fixtures
+          '
       - name: Fail on drift
-        run: git diff --exit-code -- include/misbklv/registry test/fixtures
+        run: bash ci/with-capacity.sh 1 git diff --exit-code -- include/misbklv/registry test/fixtures
