@@ -16,6 +16,8 @@ jobs:
     runs-on: [self-hosted, libmisbklv]
     timeout-minutes: 30
     permissions:
+      # contents:read is needed too -- naming any scope zeroes the rest.
+      contents: read
       packages: write
     steps:
       - uses: actions/checkout@v5

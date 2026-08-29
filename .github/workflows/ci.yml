@@ -5,11 +5,21 @@ on:
   push:
   pull_request:
 
+# packages: read is what lets the container credentials pull the CI image.
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   build-test:
     runs-on: [self-hosted, libmisbklv]
     container:
       image: ghcr.io/nitsuga/libmisbklv-ci:latest
+      # The runner pulls with a per-job docker config, so a host `docker
+      # login` is not visible here -- the job needs its own credentials.
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
       # Compiler cache shared by every job on this host. ccache is safe under
       # concurrent access, so parallel jobs warm one cache instead of three.
       volumes:
@@ -72,6 +82,11 @@ jobs:
     runs-on: [self-hosted, libmisbklv]
     container:
       image: ghcr.io/nitsuga/libmisbklv-ci:latest
+      # The runner pulls with a per-job docker config, so a host `docker
+      # login` is not visible here -- the job needs its own credentials.
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
       # Compiler cache shared by every job on this host. ccache is safe under
       # concurrent access, so parallel jobs warm one cache instead of three.
       volumes:
@@ -94,6 +109,11 @@ jobs:
     runs-on: [self-hosted, libmisbklv]
     container:
       image: ghcr.io/nitsuga/libmisbklv-ci:latest
+      # The runner pulls with a per-job docker config, so a host `docker
+      # login` is not visible here -- the job needs its own credentials.
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
       # Compiler cache shared by every job on this host. ccache is safe under
       # concurrent access, so parallel jobs warm one cache instead of three.
       volumes:

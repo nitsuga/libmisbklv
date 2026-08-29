@@ -3,6 +3,11 @@
 # apt at runtime -- that is what made concurrent jobs race on the dpkg lock.
 FROM ubuntu:24.04
 
+# Links the GHCR package to this repo, which is what lets the workflow's
+# GITHUB_TOKEN push and pull it. Without the label the package lands in the
+# user namespace and the repo token gets 403.
+LABEL org.opencontainers.image.source=https://github.com/nitsuga/libmisbklv
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 # BuildKit cache mounts keep the apt archives and lists between image
