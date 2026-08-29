@@ -22,12 +22,13 @@ jobs:
       contents: read
       packages: write
     env:
-      # Scope the registry credential to this job. The default config lives in
-      # the runner user's home, which every other job on this host can read.
-      DOCKER_CONFIG: ${{ runner.temp }}/docker-${{ github.run_id }}
       IMAGE: ghcr.io/nitsuga/libmisbklv-ci
     steps:
       - uses: actions/checkout@v5
+      - name: Scope registry credentials to this job
+        # The default docker config lives in the runner user's home, which
+        # every other job on this host can read. RUNNER_TEMP is per-job.
+        run: echo "DOCKER_CONFIG=$RUNNER_TEMP/docker-$GITHUB_RUN_ID" >> "$GITHUB_ENV"
       - name: Log in to GHCR
         run: |
           mkdir -p "$DOCKER_CONFIG"
