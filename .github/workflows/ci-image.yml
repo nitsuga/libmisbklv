@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 name: CI image
 
-# Only rebuilds when the image definition changes -- day-to-day CI just pulls
-# the published tag, which the host has cached locally after the first pull.
+# Never runs on pull_request: this job has packages: write and runs on a
+# persistent host, so it must not be reachable from fork-supplied code.
+# Publishing is a trusted-push (or manual) operation only.
 on:
   push:
+    branches: [main]
     paths:
       - ci/Dockerfile
       - .github/workflows/ci-image.yml
@@ -19,13 +21,29 @@ jobs:
       # contents:read is needed too -- naming any scope zeroes the rest.
       contents: read
       packages: write
+    env:
+      # Scope the registry credential to this job. The default config lives in
+      # the runner user's home, which every other job on this host can read.
+      DOCKER_CONFIG: ${{ runner.temp }}/docker-${{ github.run_id }}
+      IMAGE: ghcr.io/nitsuga/libmisbklv-ci
     steps:
       - uses: actions/checkout@v5
       - name: Log in to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+        run: |
+          mkdir -p "$DOCKER_CONFIG"
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
       - name: Build and push
+        # The commit tag is what CI consumes -- immutable, so a queued run can
+        # never pick up a different image than the one it was queued against.
+        # :latest is a convenience pointer, not something CI resolves.
         # Layers already on this host are reused, so an unchanged apt list
         # makes this a no-op rebuild.
         run: |
-          docker build -t ghcr.io/nitsuga/libmisbklv-ci:latest -f ci/Dockerfile ci
-          docker push ghcr.io/nitsuga/libmisbklv-ci:latest
+          docker build -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:latest" \
+            -f ci/Dockerfile ci
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+      - name: Remove credentials
+        if: always()
+        run: rm -rf "$DOCKER_CONFIG"
