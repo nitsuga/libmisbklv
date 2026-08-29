@@ -66,7 +66,7 @@ int main() {
   check(mi && mi->pts.size() == 1 && mi->pts[0] == 42, "pushed pts match");
   check(mi && mi->finished, "finish recorded");
   const auto polled = (*ins)->poll();
-  check(polled && !*polled, "Inserter poll is a no-op for a synchronous backend");
+  check(static_cast<bool>(polled), "Inserter poll is a no-op for a synchronous backend");
 
   std::printf("MockBackend: %s\n", failures == 0 ? "PASS" : "FAIL");
   return failures == 0 ? 0 : 1;

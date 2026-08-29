@@ -8,9 +8,8 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-The nonblocking terminal-status API for live insertion, including prompt close
-after a polled EOS, is proposed in [ADR 0035](../context/decisions/0035-live-insert-terminal-status.md)
-and under review in [libmisbklv#58](https://github.com/nitsuga/libmisbklv/issues/58).
+`Inserter::poll()` / `KlvSink::poll()` report live insert failure without
+blocking ([ADR 0035](../context/decisions/0035-live-insert-terminal-status.md)).
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
@@ -18,8 +17,8 @@ and under review in [libmisbklv#58](https://github.com/nitsuga/libmisbklv/issues
 
 ## In progress
 
-- Review the terminal-status API and verify the live-consumer integration in
-  parrot-to-klv#94 against it.
+- Verify the live-consumer integration in parrot-to-klv#94 against the shipped
+  `poll()` contract.
 
 ## Next
 

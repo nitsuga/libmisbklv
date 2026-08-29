@@ -67,12 +67,8 @@ Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 `decision_status: proposed`) · `DECIDED` / `DEFERRED` (has an ADR — see the
 register).
 
-**Fork 32 — Nonblocking terminal status for asynchronous insert sources**
-(`PROPOSED`): review the `Inserter::poll()` / `KlvSink::poll()` contract in
-[ADR 0035](../context/decisions/0035-live-insert-terminal-status.md). The
-implementation is tracked in [libmisbklv#58](https://github.com/nitsuga/libmisbklv/issues/58)
-for the downstream live-ingest failure reported in
-[parrot-to-klv#94](https://github.com/nitsuga/parrot-to-klv/issues/94).
+**No open forks** — all design decisions resolved. See the decided register
+([`../context/decisions/index.md`](../context/decisions/index.md)) for fork → ADR mapping.
 
 **Candidate future forks** (not yet opened), mostly downstream of
 registry/data breadth:

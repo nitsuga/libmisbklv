@@ -128,75 +128,6 @@ static void one_shot_null_fail_sink_init(OneShotNullFailSink* self) {
   gst_element_add_pad(GST_ELEMENT(self), sink);
 }
 
-// Test-only filter that posts a terminal bus EOS during negotiation.
-// The bounded branch makes the test cover the same poll-then-finish sequence
-// without coupling it to encoder-specific EOS timing.
-struct PostEosFilter {
-  GstElement parent;
-  GstPad* src;
-  gboolean posted;
-};
-struct PostEosFilterClass {
-  GstElementClass parent_class;
-};
-
-static GstStaticPadTemplate post_eos_filter_sink_template =
-    GST_STATIC_PAD_TEMPLATE("sink", GST_PAD_SINK, GST_PAD_ALWAYS, GST_STATIC_CAPS("video/x-h264"));
-static GstStaticPadTemplate post_eos_filter_src_template =
-    GST_STATIC_PAD_TEMPLATE("src", GST_PAD_SRC, GST_PAD_ALWAYS, GST_STATIC_CAPS("video/x-h264"));
-
-G_DEFINE_TYPE(PostEosFilter, post_eos_filter, GST_TYPE_ELEMENT)
-
-static GstElement* post_eos_filter_find_pipeline(GstObject* object) {
-  GstObject* current = GST_OBJECT(gst_object_ref(object));
-  while (current) {
-    if (GST_IS_PIPELINE(current)) return GST_ELEMENT(current);
-    GstObject* parent = gst_object_get_parent(current);
-    gst_object_unref(current);
-    current = parent;
-  }
-  return nullptr;
-}
-
-static void post_eos_filter_message(PostEosFilter* self) {
-  if (!self->posted) {
-    self->posted = TRUE;
-    GstElement* pipeline = post_eos_filter_find_pipeline(GST_OBJECT(self));
-    if (pipeline)
-      gst_element_post_message(GST_ELEMENT(pipeline), gst_message_new_eos(GST_OBJECT(pipeline)));
-    if (pipeline) gst_object_unref(pipeline);
-  }
-}
-
-static GstFlowReturn post_eos_filter_chain(GstPad*, GstObject* parent, GstBuffer* buffer) {
-  return gst_pad_push(reinterpret_cast<PostEosFilter*>(parent)->src, buffer);
-}
-
-static gboolean post_eos_filter_event(GstPad*, GstObject* parent, GstEvent* event) {
-  auto* self = reinterpret_cast<PostEosFilter*>(parent);
-  if (GST_EVENT_TYPE(event) == GST_EVENT_CAPS) post_eos_filter_message(self);
-  return gst_pad_push_event(self->src, event);
-}
-
-static void post_eos_filter_class_init(PostEosFilterClass* klass) {
-  auto* element_class = GST_ELEMENT_CLASS(klass);
-  gst_element_class_set_static_metadata(element_class, "Post EOS filter", "Filter/Testing",
-                                        "Posts a terminal bus message during negotiation",
-                                        "libmisbklv tests");
-  gst_element_class_add_static_pad_template(element_class, &post_eos_filter_sink_template);
-  gst_element_class_add_static_pad_template(element_class, &post_eos_filter_src_template);
-}
-
-static void post_eos_filter_init(PostEosFilter* self) {
-  self->posted = FALSE;
-  GstPad* sink = gst_pad_new_from_static_template(&post_eos_filter_sink_template, "sink");
-  self->src = gst_pad_new_from_static_template(&post_eos_filter_src_template, "src");
-  gst_pad_set_chain_function(sink, GST_DEBUG_FUNCPTR(post_eos_filter_chain));
-  gst_pad_set_event_function(sink, GST_DEBUG_FUNCPTR(post_eos_filter_event));
-  gst_element_add_pad(GST_ELEMENT(self), sink);
-  gst_element_add_pad(GST_ELEMENT(self), self->src);
-}
-
 static void check_live_eos_uses_downstream_lock() {
   GstPad* target = gst_pad_new("target", GST_PAD_SRC);
   GstPad* source = gst_ghost_pad_new("src", target);
@@ -555,10 +486,6 @@ int main(int argc, char** argv) {
   if (!gst_element_register(nullptr, "oneshotnullfailsink", GST_RANK_NONE,
                             one_shot_null_fail_sink_get_type())) {
     std::fprintf(stderr, "failed to register one-shot NULL-failure sink\n");
-    return 2;
-  }
-  if (!gst_element_register(nullptr, "posteosfilter", GST_RANK_NONE, post_eos_filter_get_type())) {
-    std::fprintf(stderr, "failed to register post-EOS filter test element\n");
     return 2;
   }
   if (argc < 4) {
@@ -947,7 +874,6 @@ int main(int argc, char** argv) {
             saw_error = status.error() == Error::Backend;
             break;
           }
-          if (*status) break;
           std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -959,71 +885,6 @@ int main(int argc, char** argv) {
         check(!fr && fr.error() == Error::Backend,
               "close remains failed after poll consumed pipeline ERROR");
         check(!file_exists_p(out), "pipeline ERROR output discarded");
-        std::remove(out.c_str());
-      }
-    }
-  }
-
-  std::printf("== polled EOS makes finish prompt ==\n");
-  {
-    const std::string enc = pick_h264_encoder();
-    if (enc.empty()) {
-      std::printf("  SKIP polled EOS close: no encoder\n");
-    } else {
-      const std::string desc = pipeline_desc_for(enc) + " ! posteosfilter";
-      const std::string out = tmpdir + "/pipeline-polled-eos.ts";
-      std::remove(out.c_str());
-      auto r = be->open_insert({"file:" + out, true, desc, Sei0604::Preserve});
-      check(static_cast<bool>(r), "bounded video EOS poll open succeeds");
-      if (r) {
-        const size_t n = packet_frame_length(klv);
-        check(static_cast<bool>((*r)->push(klv.subspan(0, n), 0)),
-              "bounded video EOS poll push succeeds");
-        bool saw_eos = false;
-        const auto poll_start = std::chrono::steady_clock::now();
-        while (std::chrono::steady_clock::now() - poll_start < std::chrono::seconds(5)) {
-          auto status = (*r)->poll();
-          if (!status) {
-            std::printf("  polled EOS setup got error %d\n", static_cast<int>(status.error()));
-            break;
-          }
-          if (*status) {
-            saw_eos = true;
-            break;
-          }
-          std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-        check(saw_eos, "bounded video EOS is observable before finish");
-        if (saw_eos) {
-          std::stop_source finish_stop;
-          std::mutex finish_mu;
-          std::condition_variable finish_cv;
-          bool finish_done = false;
-          std::thread watchdog([&] {
-            std::unique_lock<std::mutex> lk(finish_mu);
-            if (!finish_cv.wait_for(lk, std::chrono::seconds(2), [&] { return finish_done; }))
-              finish_stop.request_stop();
-          });
-          const auto finish_start = std::chrono::steady_clock::now();
-          auto fr = (*r)->finish(finish_stop.get_token());
-          const auto finish_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                          std::chrono::steady_clock::now() - finish_start)
-                                          .count();
-          {
-            std::lock_guard<std::mutex> lk(finish_mu);
-            finish_done = true;
-          }
-          finish_cv.notify_one();
-          watchdog.join();
-          check(static_cast<bool>(fr), "finish after polled EOS succeeds");
-          check(finish_elapsed < 1800, "finish after polled EOS returns promptly");
-          check(file_exists_p(out), "finish after polled EOS preserves output");
-          std::printf("  polled EOS finish elapsed %lld ms\n", (long long)finish_elapsed);
-        } else {
-          std::stop_source cleanup;
-          cleanup.request_stop();
-          (void)(*r)->finish(cleanup.get_token());
-        }
         std::remove(out.c_str());
       }
     }

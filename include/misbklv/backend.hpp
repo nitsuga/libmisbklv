@@ -164,11 +164,13 @@ class Inserter {
   // extract()'s cooperative-stop convention (ADR 0019).
   virtual Result<std::monostate> finish(std::stop_token stop = {}) = 0;
   // Nonblocking terminal-state observation for asynchronous insert sources.
-  // ok(false) means no terminal event has arrived, ok(true) means EOS, and an
-  // error means the backend reported a terminal failure. Backends without an
+  // ok() means no terminal event has arrived; an error means the backend
+  // reported a terminal failure. A live consumer polls this so a pipeline that
+  // fails before the first KLV packet is noticed without waiting for finish().
+  // Clean EOS is deliberately not reported here (ADR 0035). Backends without an
   // asynchronous source keep the default no-op result. Callers must serialize
   // poll(), push(), and finish().
-  virtual Result<bool> poll() { return Result<bool>::ok(false); }
+  virtual Result<std::monostate> poll() { return Result<std::monostate>::ok({}); }
   virtual ~Inserter() = default;
 };
 

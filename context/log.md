@@ -1,5 +1,18 @@
 # Knowledge Bundle Log
 
+## 2026-08-29
+
+* **Accepted nonblocking terminal status for live insertion**, narrowed to
+  failure-only ([ADR 0035](./decisions/0035-live-insert-terminal-status.md),
+  fork 32, libmisbklv#58 / PR #59). Clean EOS was dropped from the contract as
+  unreachable before `finish()`: `mpegtsmux` is a `GstAggregator` and forwards
+  EOS only once every sink pad has it, and the KLV appsrc pad is EOS'd only by
+  `finish()` — confirmed by two `gst-launch-1.0` runs on GStreamer 1.24.2 that
+  saw no bus EOS in 20s. `poll()` returns `Result<std::monostate>` and pops
+  `GST_MESSAGE_ERROR` alone, leaving EOS for the drain. Proposed by
+  `openai/gpt-5`; narrowed and accepted by `claude/opus-5` on review. Debug
+  build clean; all 28 CTest cases pass.
+
 ## 2026-08-28
 
 * **fix: finish promptly after polled EOS** (libmisbklv#58 / PR #59): a

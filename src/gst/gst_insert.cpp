@@ -178,20 +178,18 @@ class GstInserter : public Inserter {
                               : Result<std::monostate>::err(Error::Backend);
   }
 
-  Result<bool> poll() override {
-    if (terminal_error_) return Result<bool>::err(*terminal_error_);
-    if (eos_seen_) return Result<bool>::ok(true);
+  // Pops ERROR only. A pipeline EOS cannot reach the bus before finish() sends
+  // EOS on the KLV appsrc: mpegtsmux is a GstAggregator, so it forwards EOS
+  // downstream only once every sink pad has it, and the KLV pad is EOS'd
+  // nowhere else (ADR 0035). Filtering ERROR alone also keeps poll() from
+  // consuming the EOS that finish()'s drain is waiting for.
+  Result<std::monostate> poll() override {
+    if (terminal_error_) return Result<std::monostate>::err(*terminal_error_);
 
     GstBus* bus = gst_element_get_bus(pipeline_);
-    GstMessage* m =
-        gst_bus_pop_filtered(bus, static_cast<GstMessageType>(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
+    GstMessage* m = gst_bus_pop_filtered(bus, GST_MESSAGE_ERROR);
     gst_object_unref(bus);
-    if (!m) return Result<bool>::ok(false);
-    if (GST_MESSAGE_TYPE(m) == GST_MESSAGE_EOS) {
-      eos_seen_ = true;
-      gst_message_unref(m);
-      return Result<bool>::ok(true);
-    }
+    if (!m) return Result<std::monostate>::ok({});
 
     GError* err = nullptr;
     gchar* dbg = nullptr;
@@ -201,7 +199,7 @@ class GstInserter : public Inserter {
     g_free(dbg);
     gst_message_unref(m);
     terminal_error_ = Error::Backend;
-    return Result<bool>::err(*terminal_error_);
+    return Result<std::monostate>::err(*terminal_error_);
   }
 
   // An unbounded live video source will never produce EOS by itself. Send EOS
@@ -215,11 +213,9 @@ class GstInserter : public Inserter {
       discard_output();
       return Result<std::monostate>::err(*terminal_error_);
     }
-    const bool already_eos = eos_seen_;
-    const GstFlowReturn klv_eos =
-        already_eos ? GST_FLOW_OK : gst_app_src_end_of_stream(GST_APP_SRC(appsrc_));
+    const GstFlowReturn klv_eos = gst_app_src_end_of_stream(GST_APP_SRC(appsrc_));
     bool live_video_eos = true;
-    if (!already_eos && video_ && video_->is_live_unbounded && video_->reserved_video_pad) {
+    if (video_ && video_->is_live_unbounded && video_->reserved_video_pad) {
       GstPad* peer = gst_pad_get_peer(video_->reserved_video_pad);
       if (peer) {
         bool ready = video_->delivered_buffer.load(std::memory_order_acquire);
@@ -245,7 +241,7 @@ class GstInserter : public Inserter {
     }
 
     GstBus* bus = gst_element_get_bus(pipeline_);
-    bool ok = already_eos;
+    bool ok = false;
     bool cancelled = stop.stop_requested();
     const auto deadline =
         std::chrono::steady_clock::now() + std::chrono::nanoseconds(kFinishDrainTimeout);
@@ -260,7 +256,7 @@ class GstInserter : public Inserter {
     // cap branch. That was harmless (issue #34), but only by way of a
     // conversion nobody should have to re-derive. One sample keeps `remain`
     // positive by construction, so the cast is unconditionally well defined.
-    while (!already_eos && !cancelled && klv_eos == GST_FLOW_OK && live_video_eos) {
+    while (!cancelled && klv_eos == GST_FLOW_OK && live_video_eos) {
       // Checked before the deadline: if the caller has asked to stop and the
       // drain has also timed out, the stop wins and this reports cancellation
       // rather than a drain failure. Both discard a partial sink file (ADR
@@ -279,7 +275,6 @@ class GstInserter : public Inserter {
       if (!m) continue;
       if (GST_MESSAGE_TYPE(m) == GST_MESSAGE_EOS) {
         ok = true;
-        eos_seen_ = true;
         gst_message_unref(m);
         break;
       }
@@ -359,7 +354,6 @@ class GstInserter : public Inserter {
   std::unique_ptr<VideoCtx> video_;
   GstClockTime pts_ = 0;
   std::string removable_sink_;
-  bool eos_seen_ = false;
   std::optional<Error> terminal_error_;
 };
 
