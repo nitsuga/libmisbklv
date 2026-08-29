@@ -186,6 +186,12 @@ class MediaBackend {
   virtual Result<std::monostate> extract(std::string_view source, const PacketHandler& on_packet,
                                          std::stop_token stop = {},
                                          ExtractOptions options = {}) = 0;
+  // Fails with `Error::SourceUnavailable` when a live video source is simply
+  // not there right now — an unreachable RTSP peer, or one that produces no
+  // video pad in time. That is the code a consumer polling for a stream to come
+  // back retries on. Every other open failure is permanent for this
+  // configuration (`Error::Unsupported`) or an I/O fault (`Error::Backend`), and
+  // retrying neither will help. See ADR 0036.
   virtual Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig&) = 0;
   virtual ~MediaBackend() = default;
 };

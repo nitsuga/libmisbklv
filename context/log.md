@@ -2,6 +2,33 @@
 
 ## 2026-08-29
 
+* **`Error::SourceUnavailable` separates an absent live source from an
+  unsupported configuration** ([ADR 0036](./decisions/0036-source-unavailable-error.md),
+  fork 33, issue #61). Appended to the enum so existing numeric codes keep their
+  values; only the two RTSP sites in `prepare_rtsp_branch` return it, and
+  `Unsupported` is now unambiguously permanent. Review caught that the RTSP
+  branch's two failure paths each cover both meanings, so they are classified
+  rather than assumed: a bus error routes on its `GError` domain
+  (`GST_RESOURCE_ERROR` transient, except `NOT_AUTHORIZED`; stream/core and any
+  unrecognized domain permanent), and the no-video-pad timeout splits on whether
+  `rtspsrc` announced a pad at all — one means the server answered with media
+  this build cannot carry, none means nothing answered. `classify_rtsp_error` is
+  exposed internally so the permanent paths, which need a live server to reach
+  end to end, are covered directly. Review then caught that the branch watches
+  the *whole pipeline* bus, so a sink failure — a full disk, an output that
+  cannot be opened — arrived as a `GST_RESOURCE_ERROR` and was classified as a
+  retryable source outage. Errors are now attributed by origin first
+  (`object_within_branch`), with anything outside the RTSP branch reported as
+  `Backend`, and `GST_RESOURCE_ERROR` narrowed to its read-side codes as
+  redundant defense. A further round added RTSP status awareness: `rtspsrc`
+  folds most non-2xx responses onto `RESOURCE/READ` and 404 onto
+  `RESOURCE/NOT_FOUND`, so a bad path or an unsupported transport read as an
+  absent source; the `rtsp-status-code` detail now decides when present, and
+  only a 5xx is transient. Behavior change: an unreachable
+  RTSP source reports `SourceUnavailable` where it reported `Unsupported`. Debug
+  build clean; all 28 CTest cases pass.
+
+
 * **Accepted nonblocking terminal status for live insertion**, narrowed to
   failure-only ([ADR 0035](./decisions/0035-live-insert-terminal-status.md),
   fork 32, libmisbklv#58 / PR #59). Clean EOS was dropped from the contract as

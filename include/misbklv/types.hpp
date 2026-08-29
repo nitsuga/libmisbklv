@@ -24,11 +24,16 @@ enum class Error : std::uint8_t {
   RangeError,
   // media backend (ADR 0013)
   Backend,      // pipeline / I/O failure
-  Unsupported,  // not implemented in this backend / config
+  Unsupported,  // not implemented in this backend / config; permanent
   // Typed encode validation; appended to preserve the existing numeric codes.
   TypeMismatch,   // Value variant does not match the ItemDescriptor::kind
   ResourceLimit,  // configured parser/backend resource limit exceeded
   ReadOnly,       // caller tried to set an auto-managed item (e.g. the checksum)
+  // A live source that is not there right now, as distinct from a
+  // configuration that can never work (ADR 0036). Only a live source can
+  // return this: a caller polling for a stream to come back retries on it and
+  // treats Unsupported as fatal.
+  SourceUnavailable,
 };
 
 // Minimal Result<T> — the full map/and_then API is deferred (ADR 0007).

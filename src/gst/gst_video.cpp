@@ -620,6 +620,9 @@ void on_video_no_more_pads(GstElement*, gpointer user) {
 
 void on_rtspsrc_pad_added(GstElement*, GstPad* pad, gpointer user) {
   auto* ctx = static_cast<VideoCtx*>(user);
+  // The server answered and described a stream, whatever we end up doing with
+  // this pad. Distinguishes an unusable source from an absent one (ADR 0036).
+  ctx->saw_any_pad.store(true, std::memory_order_release);
   GstCaps* caps = gst_pad_get_current_caps(pad);
   if (!caps) caps = gst_pad_query_caps(pad, nullptr);
   const std::string media_type = caps ? caps_media_type(caps) : std::string();
@@ -1063,6 +1066,78 @@ static Result<std::monostate> prepare_file_branch(GstElement* pipeline, GstPad* 
   return Result<std::monostate>::ok({});
 }
 
+bool object_within_branch(GstObject* src, GstElement* branch) {
+  if (!src || !branch) return false;
+  GstObject* cur = GST_OBJECT(gst_object_ref(src));
+  while (cur) {
+    if (cur == GST_OBJECT(branch)) {
+      gst_object_unref(cur);
+      return true;
+    }
+    GstObject* parent = gst_object_get_parent(cur);
+    gst_object_unref(cur);
+    cur = parent;
+  }
+  return false;
+}
+
+int rtsp_status_from_message(GstMessage* msg) {
+  if (!msg) return 0;
+  const GstStructure* details = nullptr;
+  gst_message_parse_error_details(msg, &details);
+  if (!details) return 0;
+  // rtspsrc writes this field as G_TYPE_UINT, and the typed getters return
+  // false on a type mismatch rather than converting — reading it as an int
+  // silently yielded 0 for every real message, which fell back to the generic
+  // resource-code rules and undid the status classification entirely. Accept
+  // either spelling rather than depending on one.
+  guint as_uint = 0;
+  if (gst_structure_get_uint(details, "rtsp-status-code", &as_uint)) {
+    return static_cast<int>(as_uint);
+  }
+  gint as_int = 0;
+  if (gst_structure_get_int(details, "rtsp-status-code", &as_int)) return as_int;
+  return 0;
+}
+
+Error classify_rtsp_error(GQuark domain, int code, int rtsp_status) {
+  // A status at all means the server answered: it is reachable, and the
+  // request was rejected on its merits. rtspsrc maps most non-2xx responses
+  // onto RESOURCE/READ and 404 onto RESOURCE/NOT_FOUND, so without this the
+  // codes below would read a bad path or an unsupported transport as an absent
+  // source and retry it forever. Only a server-side 5xx — overloaded, briefly
+  // broken — is worth coming back to.
+  if (rtsp_status > 0) {
+    return rtsp_status >= 500 ? Error::SourceUnavailable : Error::Unsupported;
+  }
+  // GST_RESOURCE_ERROR covers both directions of I/O, and only the read side
+  // says the source is absent: refused, not found, not answering. The write
+  // side belongs to an output — a full disk, a sink that cannot be opened —
+  // which no amount of waiting for the aircraft will fix.
+  if (domain == GST_RESOURCE_ERROR) {
+    switch (code) {
+      case GST_RESOURCE_ERROR_NOT_FOUND:
+      case GST_RESOURCE_ERROR_OPEN_READ:
+      case GST_RESOURCE_ERROR_OPEN_READ_WRITE:
+      case GST_RESOURCE_ERROR_READ:
+      case GST_RESOURCE_ERROR_BUSY:  // a camera with its client slot taken
+        return Error::SourceUnavailable;
+      default:
+        // Authorization, and every write-side code: OPEN_WRITE, WRITE,
+        // NO_SPACE_LEFT, CLOSE. Wrong credentials stay wrong, and a failing
+        // output is not an absent source.
+        return Error::Unsupported;
+    }
+  }
+  // GST_STREAM_ERROR (codec not found, wrong type, decode) and GST_CORE_ERROR
+  // (missing plugin, negotiation, pad) both mean the server answered and its
+  // media cannot be handled by this build. Permanent.
+  //
+  // Anything else is deliberately permanent too: an unrecognized error must not
+  // become an infinite retry in a consumer that polls on SourceUnavailable.
+  return Error::Unsupported;
+}
+
 static Result<std::monostate> prepare_rtsp_branch(GstElement* pipeline, GstPad* reserved_video_pad,
                                                   GstElement* mux, const std::string& uri,
                                                   Sei0604 sei_0604,
@@ -1108,21 +1183,40 @@ static Result<std::monostate> prepare_rtsp_branch(GstElement* pipeline, GstPad* 
       GError* err = nullptr;
       gchar* dbg = nullptr;
       gst_message_parse_error(msg, &err, &dbg);
-      g_warning("misbklv: RTSP source '%s': %s", uri.c_str(),
-                err ? err->message : "pipeline error");
+      // This bus carries the whole pipeline. An error from the muxer or the
+      // sink is an output fault, and says nothing about whether the source is
+      // there — classifying it as absent would have a polling consumer retry a
+      // full disk forever.
+      const bool from_source = object_within_branch(GST_MESSAGE_SRC(msg), rtspsrc);
+      const int rtsp_status = rtsp_status_from_message(msg);
+      const Error klass =
+          !from_source ? Error::Backend
+          : err        ? classify_rtsp_error(err->domain, err->code, rtsp_status)
+                       : Error::SourceUnavailable;
+      g_warning("misbklv: RTSP pipeline error for '%s': %s%s", uri.c_str(),
+                err ? err->message : "pipeline error",
+                klass == Error::SourceUnavailable ? ""
+                : from_source                     ? " (permanent)"
+                                                  : " (from the output, not the source)");
       if (err) g_error_free(err);
       g_free(dbg);
       gst_message_unref(msg);
       gst_object_unref(bus);
-      return Result<std::monostate>::err(Error::Unsupported);
+      return Result<std::monostate>::err(klass);
     }
     if (std::chrono::steady_clock::now() > deadline) break;
   }
   gst_object_unref(bus);
   if (!linked) {
-    g_warning("misbklv: RTSP source '%s' produced no video pad within %lld s", uri.c_str(),
-              static_cast<long long>(kLivePadTimeout.count()));
-    return Result<std::monostate>::err(Error::Unsupported);
+    // A pad appeared but nothing linked: the server answered and described
+    // media this build cannot carry — an unsupported encoding, or a missing
+    // depayloader/parser. Permanent, and retrying would spin. No pad at all
+    // means nothing answered, which may be back later.
+    const bool answered = video->saw_any_pad.load(std::memory_order_acquire);
+    g_warning("misbklv: RTSP source '%s' produced no video pad within %lld s%s", uri.c_str(),
+              static_cast<long long>(kLivePadTimeout.count()),
+              answered ? " (source answered; its media is unusable here)" : "");
+    return Result<std::monostate>::err(answered ? Error::Unsupported : Error::SourceUnavailable);
   }
   return Result<std::monostate>::ok({});
 }

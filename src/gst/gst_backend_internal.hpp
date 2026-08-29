@@ -78,6 +78,11 @@ struct VideoCtx {
   // armed only during finish(), this remembers that a long-running branch has
   // already established a real mux stream even if it stalls at close time.
   std::atomic<bool> delivered_buffer{false};
+  // Set as soon as rtspsrc announces any pad, which means the server answered
+  // and described its streams. It separates "nothing there" from "there, but
+  // carrying media this build cannot handle" when no video pad ever links
+  // (ADR 0036).
+  std::atomic<bool> saw_any_pad{false};
   GstElement* mux_element = nullptr;  // borrowed, owned by pipeline
   GstElement* video_bin = nullptr;    // borrowed: rtspsrc or pipeline bin
   std::mutex mu;
@@ -126,6 +131,27 @@ struct VideoCtx {
 
   ~VideoCtx();
 };
+
+// Classify a GStreamer error from an RTSP branch. Only a resource-level
+// failure means the source is absent right now and is worth retrying; a stream
+// or core error is this build or this server's media being unusable, which
+// retrying cannot fix. Authorization is resource-level but permanent — wrong
+// credentials stay wrong (ADR 0036). Exposed for tests: the permanent paths
+// need a live server to reach otherwise.
+// `rtsp_status` is the RTSP response status from the error message's details
+// (`rtsp-status-code`), or 0 when the failure never got that far — a refused
+// TCP connection carries no status. A status means the server answered, so it
+// is not absent, and only a server-side 5xx is worth coming back to (ADR 0036).
+Error classify_rtsp_error(GQuark domain, int code, int rtsp_status = 0);
+
+// Pull `rtsp-status-code` out of an error message's details, or 0 if absent.
+int rtsp_status_from_message(GstMessage* msg);
+
+// True when `src` is `branch` or lives inside it. The RTSP branch watches the
+// whole pipeline bus, so an error posted by the sink or the muxer arrives on
+// the same bus as one from rtspsrc; only the latter says anything about the
+// source (ADR 0036).
+bool object_within_branch(GstObject* src, GstElement* branch);
 
 // Adds and prerolls the video branch. On an error the caller retains `video`
 // until it has taken the pipeline to NULL, keeping all callback user pointers

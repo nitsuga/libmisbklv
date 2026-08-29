@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Live video_source URI + realtime lift (ADR 0031, part 2). Verifies:
 // - pipeline: live source with realtime=true opens, pushes, finishes via file sink
-// - pipeline: invalid -> Unsupported, http:// -> Unsupported, rtsp unreachable -> Unsupported
+// - pipeline: invalid -> Unsupported, http:// -> Unsupported, rtsp unreachable ->
+//   SourceUnavailable (ADR 0036: absent now, not unsupported forever)
 // within 5s, bare missing -> Unsupported, empty -> KLV-only ok
 // - file source + realtime now succeeds (lift)
 // - multicast knobs still map with live video
@@ -505,6 +506,180 @@ int main(int argc, char** argv) {
   std::printf("== serialized live EOS locks the downstream mux pad ==\n");
   check_live_eos_uses_downstream_lock();
 
+  std::printf("== RTSP error classification (ADR 0036) ==\n");
+  {
+    // Only a resource-level failure means "absent right now". Everything else
+    // is this build or this server's media being unusable, which no amount of
+    // retrying fixes — and which a polling consumer must not spin on. These
+    // paths need a live RTSP server to reach end to end, so the classifier is
+    // exercised directly.
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_NOT_FOUND) ==
+              Error::SourceUnavailable,
+          "resource NOT_FOUND -> SourceUnavailable");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_OPEN_READ) ==
+              Error::SourceUnavailable,
+          "resource OPEN_READ -> SourceUnavailable");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ) ==
+              Error::SourceUnavailable,
+          "resource READ -> SourceUnavailable");
+    // Credentials do not become correct by waiting.
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_NOT_AUTHORIZED) ==
+              Error::Unsupported,
+          "resource NOT_AUTHORIZED -> Unsupported (permanent)");
+    // The server answered; we cannot handle what it sent.
+    check(detail::classify_rtsp_error(GST_STREAM_ERROR, GST_STREAM_ERROR_CODEC_NOT_FOUND) ==
+              Error::Unsupported,
+          "stream CODEC_NOT_FOUND -> Unsupported (permanent)");
+    check(detail::classify_rtsp_error(GST_STREAM_ERROR, GST_STREAM_ERROR_WRONG_TYPE) == Error::Unsupported,
+          "stream WRONG_TYPE -> Unsupported (permanent)");
+    // A deployment missing a depayloader must not retry forever.
+    check(detail::classify_rtsp_error(GST_CORE_ERROR, GST_CORE_ERROR_MISSING_PLUGIN) == Error::Unsupported,
+          "core MISSING_PLUGIN -> Unsupported (permanent)");
+    check(detail::classify_rtsp_error(GST_CORE_ERROR, GST_CORE_ERROR_NEGOTIATION) == Error::Unsupported,
+          "core NEGOTIATION -> Unsupported (permanent)");
+    // An unrecognized domain defaults to permanent rather than to an infinite
+    // retry in a consumer polling on SourceUnavailable.
+    check(detail::classify_rtsp_error(GST_LIBRARY_ERROR, 1) == Error::Unsupported,
+          "unknown domain -> Unsupported (conservative)");
+    // Write-side resource errors belong to an output, not to the source. A full
+    // disk must never look like an aircraft that is powered off.
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_NO_SPACE_LEFT) ==
+              Error::Unsupported,
+          "resource NO_SPACE_LEFT -> Unsupported (output, not source)");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_WRITE) ==
+              Error::Unsupported,
+          "resource WRITE -> Unsupported (output, not source)");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_OPEN_WRITE) ==
+              Error::Unsupported,
+          "resource OPEN_WRITE -> Unsupported (output, not source)");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_CLOSE) ==
+              Error::Unsupported,
+          "resource CLOSE -> Unsupported (output, not source)");
+    // A server at capacity is worth coming back to.
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_BUSY) ==
+              Error::SourceUnavailable,
+          "resource BUSY -> SourceUnavailable");
+
+    // rtspsrc folds most non-2xx RTSP responses onto RESOURCE/READ and 404 onto
+    // RESOURCE/NOT_FOUND, so the code alone would read a rejected request as an
+    // absent source. A status means the server answered and is therefore there.
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_NOT_FOUND, 404) ==
+              Error::Unsupported,
+          "RTSP 404 -> Unsupported (bad path, server is there)");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ, 400) ==
+              Error::Unsupported,
+          "RTSP 400 -> Unsupported (bad request)");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ, 401) ==
+              Error::Unsupported,
+          "RTSP 401 -> Unsupported (credentials)");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ, 461) ==
+              Error::Unsupported,
+          "RTSP 461 -> Unsupported (unsupported transport)");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ, 454) ==
+              Error::Unsupported,
+          "RTSP 454 -> Unsupported (session not found)");
+    // Server-side failures are worth coming back to.
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ, 503) ==
+              Error::SourceUnavailable,
+          "RTSP 503 -> SourceUnavailable (service unavailable)");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ, 500) ==
+              Error::SourceUnavailable,
+          "RTSP 500 -> SourceUnavailable (server error)");
+    // No status: the failure never reached the protocol, so the code decides.
+    // This is the refused-connection path that must stay retryable.
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ, 0) ==
+              Error::SourceUnavailable,
+          "no RTSP status -> falls back to the code (refused connection)");
+    // A status overrides even a write-side code: the server spoke.
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_WRITE, 404) ==
+              Error::Unsupported,
+          "RTSP 404 with a write-side code -> Unsupported");
+  }
+
+  std::printf("== RTSP status extraction from real message details ==\n");
+  {
+    // The classifier cases above pass a status straight in, which cannot catch
+    // the seam: rtspsrc writes rtsp-status-code as G_TYPE_UINT, and a typed
+    // getter returns false on a mismatch rather than converting. Reading it as
+    // an int yielded 0 for every real message and silently disabled the whole
+    // status rule. Build the message the way rtspsrc does.
+    GstElement* src = gst_element_factory_make("fakesrc", "status-src");
+    if (src) {
+      auto make_msg = [&](GstStructure* details) {
+        GError* e = g_error_new(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ, "test");
+        GstMessage* m =
+            gst_message_new_error_with_details(GST_OBJECT(src), e, "debug", details);
+        g_error_free(e);
+        return m;
+      };
+
+      GstMessage* m_uint = make_msg(
+          gst_structure_new("rtsp-details", "rtsp-status-code", G_TYPE_UINT, 404u, nullptr));
+      check(detail::rtsp_status_from_message(m_uint) == 404,
+            "uint rtsp-status-code is extracted (the type rtspsrc actually writes)");
+      gst_message_unref(m_uint);
+
+      // Accepted too, so the reader does not depend on one spelling.
+      GstMessage* m_int = make_msg(
+          gst_structure_new("rtsp-details", "rtsp-status-code", G_TYPE_INT, 503, nullptr));
+      check(detail::rtsp_status_from_message(m_int) == 503, "int rtsp-status-code is extracted");
+      gst_message_unref(m_int);
+
+      GstMessage* m_absent =
+          make_msg(gst_structure_new("rtsp-details", "something-else", G_TYPE_UINT, 1u, nullptr));
+      check(detail::rtsp_status_from_message(m_absent) == 0, "details without a status yield 0");
+      gst_message_unref(m_absent);
+
+      GstMessage* m_none = make_msg(nullptr);
+      check(detail::rtsp_status_from_message(m_none) == 0, "a message with no details yields 0");
+      gst_message_unref(m_none);
+
+      check(detail::rtsp_status_from_message(nullptr) == 0, "a null message yields 0");
+
+      // End to end through the classifier: a 404 carried as uint must be
+      // permanent, which is the case that silently regressed.
+      GstMessage* m_404 = make_msg(
+          gst_structure_new("rtsp-details", "rtsp-status-code", G_TYPE_UINT, 404u, nullptr));
+      check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ,
+                                        detail::rtsp_status_from_message(m_404)) ==
+                Error::Unsupported,
+            "uint 404 through extraction + classification -> Unsupported");
+      gst_message_unref(m_404);
+      gst_object_unref(src);
+    } else {
+      std::printf("  SKIP status extraction: fakesrc unavailable\n");
+    }
+  }
+
+  std::printf("== RTSP error origin: only the source branch speaks for the source ==\n");
+  {
+    // The branch watches the whole pipeline bus, so an error from the sink
+    // arrives alongside one from rtspsrc. Only the latter says the source is
+    // absent; the former must not become a retryable outage.
+    GstElement* pipeline = gst_pipeline_new("origin-test");
+    GstElement* branch = gst_bin_new("branch");
+    GstElement* inside = gst_element_factory_make("fakesrc", "inside");
+    GstElement* outside = gst_element_factory_make("fakesink", "outside");
+    if (pipeline && branch && inside && outside) {
+      gst_bin_add(GST_BIN(branch), inside);
+      gst_bin_add_many(GST_BIN(pipeline), branch, outside, nullptr);
+      check(detail::object_within_branch(GST_OBJECT(inside), branch),
+            "an element inside the branch is attributed to the source");
+      check(detail::object_within_branch(GST_OBJECT(branch), branch),
+            "the branch itself is attributed to the source");
+      check(!detail::object_within_branch(GST_OBJECT(outside), branch),
+            "a sink outside the branch is not attributed to the source");
+      check(!detail::object_within_branch(GST_OBJECT(pipeline), branch),
+            "the pipeline itself is not attributed to the source");
+      check(!detail::object_within_branch(nullptr, branch), "a null source is not attributed");
+      gst_object_unref(pipeline);
+    } else {
+      std::printf("  SKIP origin test: element factories unavailable\n");
+      if (outside) gst_object_unref(outside);
+      if (pipeline) gst_object_unref(pipeline);
+    }
+  }
+
   std::printf("== error cases: unsupported URIs ==\n");
   {
     auto r = be->open_insert(
@@ -529,7 +704,8 @@ int main(int argc, char** argv) {
     auto elapsed =
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
             .count();
-    check(!r && r.error() == Error::Unsupported, "rtsp unreachable -> Unsupported");
+    check(!r && r.error() == Error::SourceUnavailable,
+          "rtsp unreachable -> SourceUnavailable");
     check(elapsed < 7000, "rtsp unreachable within 5s (not hang)");
     std::printf("  rtsp elapsed %lld ms\n", (long long)elapsed);
   }
@@ -540,15 +716,16 @@ int main(int argc, char** argv) {
   }
   {
     // IPv6 bracket: rtsp://[::1]:8554/test must be detected as Rtsp (not bare file path)
-    // and attempt to open via rtspsrc; unreachable within 5s => Unsupported, not Backend (fopen).
+    // and attempt to open via rtspsrc; unreachable within 5s => SourceUnavailable, not
+    // Backend (fopen).
     auto t0 = std::chrono::steady_clock::now();
     auto r = be->open_insert({"file:" + tmpdir + "/err-rtsp-ipv6.ts", false,
                               "rtsp://[::1]:8554/test", Sei0604::Preserve});
     auto elapsed =
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
             .count();
-    check(!r && r.error() == Error::Unsupported,
-          "rtsp://[::1]:8554/test -> Unsupported (bracket not misrouted to file)");
+    check(!r && r.error() == Error::SourceUnavailable,
+          "rtsp://[::1]:8554/test -> SourceUnavailable (bracket not misrouted to file)");
     check(elapsed < 7000, "rtsp ipv6 bracket within 5s (not hang, not file path)");
     std::printf("  rtsp ipv6 elapsed %lld ms\n", (long long)elapsed);
     // Extra pure parse check: GStreamer handles bracketing, but our parse_video_source
@@ -594,7 +771,7 @@ int main(int argc, char** argv) {
         check(static_cast<bool>((*r)->finish()), "pipeline Generate finish ok");
         std::remove((tmpdir + "/err-gen-pipeline.ts").c_str());
       }
-      // RTSP Generate now goes to rtspsrc; unreachable still ends as Unsupported but after 5s wait,
+      // RTSP Generate now goes to rtspsrc; unreachable ends as SourceUnavailable after a 5s wait,
       // not fast reject
       auto t0 = std::chrono::steady_clock::now();
       auto r2 = be->open_insert({"file:" + tmpdir + "/err-gen-rtsp.ts", true,
@@ -602,7 +779,8 @@ int main(int argc, char** argv) {
       auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                          std::chrono::steady_clock::now() - t0)
                          .count();
-      check(!r2 && r2.error() == Error::Unsupported, "rtsp Generate unreachable -> Unsupported");
+      check(!r2 && r2.error() == Error::SourceUnavailable,
+            "rtsp Generate unreachable -> SourceUnavailable");
       check(elapsed < 7000, "rtsp Generate unreachable within 5s (not hang)");
       check(elapsed >= 40, "rtsp Generate went to network (not fast reject)");
       std::printf("  rtsp Generate elapsed %lld ms\n", (long long)elapsed);
