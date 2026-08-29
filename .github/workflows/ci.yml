@@ -107,17 +107,10 @@ jobs:
     timeout-minutes: 10
     # ADRs 0012/0028: committed generated outputs must match fresh regeneration.
     runs-on: [self-hosted, libmisbklv]
-    container:
-      image: ghcr.io/nitsuga/libmisbklv-ci:latest
-      # The runner pulls with a per-job docker config, so a host `docker
-      # login` is not visible here -- the job needs its own credentials.
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-      # Compiler cache shared by every job on this host. ccache is safe under
-      # concurrent access, so parallel jobs warm one cache instead of three.
-      volumes:
-        - /home/eric/ci-cache/ccache:/ccache
+    # No container: this job needs only python3 and git, which the host has.
+    # Under `container:` git reports every generated file as drift because it
+    # sees only a partial worktree -- unexplained, and not worth the risk for
+    # a job that gains nothing from the image.
     steps:
       - uses: actions/checkout@v5
       - name: Regenerate committed outputs

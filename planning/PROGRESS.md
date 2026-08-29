@@ -37,6 +37,10 @@ and `open_insert` distinguishes a live source that is absent right now
 
 ## Known gaps
 
+- CI's `generated-drift` job cannot run under `container:`: git there reports
+  every generated file as drift, and the same image and commit produce a clean
+  diff outside CI. It runs on the native runner until the cause is understood.
+
 - Report-on-Change, multi-byte BER-OID tags, and malformed-input robustness are
   now covered synthetically by `hardening_test` — including `extract_ts_klv`'s
   resync/cap/PES-spanning behavior; still worth a *real*
