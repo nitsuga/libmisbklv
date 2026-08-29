@@ -2,6 +2,15 @@
 
 ## 2026-08-29
 
+* **`Error::SourceUnavailable` separates an absent live source from an
+  unsupported configuration** ([ADR 0036](./decisions/0036-source-unavailable-error.md),
+  fork 33, issue #61). Appended to the enum so existing numeric codes keep their
+  values; only the two RTSP sites in `prepare_rtsp_branch` return it, and
+  `Unsupported` is now unambiguously permanent. Behavior change: an unreachable
+  RTSP source reports `SourceUnavailable` where it reported `Unsupported`.
+  Debug build clean; all 28 CTest cases pass.
+
+
 * **Accepted nonblocking terminal status for live insertion**, narrowed to
   failure-only ([ADR 0035](./decisions/0035-live-insert-terminal-status.md),
   fork 32, libmisbklv#58 / PR #59). Clean EOS was dropped from the contract as

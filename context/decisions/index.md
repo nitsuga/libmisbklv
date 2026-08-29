@@ -49,3 +49,4 @@ diverge — e.g. fork 7 → ADR 0004; one fork can span several ADRs — fork 4 
 | 30 | [0033 — Generate SEI matching absorbs the encoder DTS-headroom timeline shift](./0033-generate-sei-encoder-timeline-shift.md) | accepted |
 | 31 | [0034 — Live video request pads remain linked through EOS drain](./0034-live-request-pad-teardown.md) | accepted |
 | 32 | [0035 — Nonblocking terminal failure status for asynchronous insert sources](./0035-live-insert-terminal-status.md) | accepted |
+| 33 | [0036 — A live source that is absent right now is SourceUnavailable, not Unsupported](./0036-source-unavailable-error.md) | accepted |

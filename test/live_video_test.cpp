@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Live video_source URI + realtime lift (ADR 0031, part 2). Verifies:
 // - pipeline: live source with realtime=true opens, pushes, finishes via file sink
-// - pipeline: invalid -> Unsupported, http:// -> Unsupported, rtsp unreachable -> Unsupported
+// - pipeline: invalid -> Unsupported, http:// -> Unsupported, rtsp unreachable ->
+//   SourceUnavailable (ADR 0036: absent now, not unsupported forever)
 // within 5s, bare missing -> Unsupported, empty -> KLV-only ok
 // - file source + realtime now succeeds (lift)
 // - multicast knobs still map with live video
@@ -529,7 +530,8 @@ int main(int argc, char** argv) {
     auto elapsed =
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
             .count();
-    check(!r && r.error() == Error::Unsupported, "rtsp unreachable -> Unsupported");
+    check(!r && r.error() == Error::SourceUnavailable,
+          "rtsp unreachable -> SourceUnavailable");
     check(elapsed < 7000, "rtsp unreachable within 5s (not hang)");
     std::printf("  rtsp elapsed %lld ms\n", (long long)elapsed);
   }
@@ -540,15 +542,16 @@ int main(int argc, char** argv) {
   }
   {
     // IPv6 bracket: rtsp://[::1]:8554/test must be detected as Rtsp (not bare file path)
-    // and attempt to open via rtspsrc; unreachable within 5s => Unsupported, not Backend (fopen).
+    // and attempt to open via rtspsrc; unreachable within 5s => SourceUnavailable, not
+    // Backend (fopen).
     auto t0 = std::chrono::steady_clock::now();
     auto r = be->open_insert({"file:" + tmpdir + "/err-rtsp-ipv6.ts", false,
                               "rtsp://[::1]:8554/test", Sei0604::Preserve});
     auto elapsed =
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
             .count();
-    check(!r && r.error() == Error::Unsupported,
-          "rtsp://[::1]:8554/test -> Unsupported (bracket not misrouted to file)");
+    check(!r && r.error() == Error::SourceUnavailable,
+          "rtsp://[::1]:8554/test -> SourceUnavailable (bracket not misrouted to file)");
     check(elapsed < 7000, "rtsp ipv6 bracket within 5s (not hang, not file path)");
     std::printf("  rtsp ipv6 elapsed %lld ms\n", (long long)elapsed);
     // Extra pure parse check: GStreamer handles bracketing, but our parse_video_source
@@ -594,7 +597,7 @@ int main(int argc, char** argv) {
         check(static_cast<bool>((*r)->finish()), "pipeline Generate finish ok");
         std::remove((tmpdir + "/err-gen-pipeline.ts").c_str());
       }
-      // RTSP Generate now goes to rtspsrc; unreachable still ends as Unsupported but after 5s wait,
+      // RTSP Generate now goes to rtspsrc; unreachable ends as SourceUnavailable after a 5s wait,
       // not fast reject
       auto t0 = std::chrono::steady_clock::now();
       auto r2 = be->open_insert({"file:" + tmpdir + "/err-gen-rtsp.ts", true,
@@ -602,7 +605,8 @@ int main(int argc, char** argv) {
       auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                          std::chrono::steady_clock::now() - t0)
                          .count();
-      check(!r2 && r2.error() == Error::Unsupported, "rtsp Generate unreachable -> Unsupported");
+      check(!r2 && r2.error() == Error::SourceUnavailable,
+            "rtsp Generate unreachable -> SourceUnavailable");
       check(elapsed < 7000, "rtsp Generate unreachable within 5s (not hang)");
       check(elapsed >= 40, "rtsp Generate went to network (not fast reject)");
       std::printf("  rtsp Generate elapsed %lld ms\n", (long long)elapsed);

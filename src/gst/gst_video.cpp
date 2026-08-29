@@ -1114,7 +1114,7 @@ static Result<std::monostate> prepare_rtsp_branch(GstElement* pipeline, GstPad* 
       g_free(dbg);
       gst_message_unref(msg);
       gst_object_unref(bus);
-      return Result<std::monostate>::err(Error::Unsupported);
+      return Result<std::monostate>::err(Error::SourceUnavailable);
     }
     if (std::chrono::steady_clock::now() > deadline) break;
   }
@@ -1122,7 +1122,7 @@ static Result<std::monostate> prepare_rtsp_branch(GstElement* pipeline, GstPad* 
   if (!linked) {
     g_warning("misbklv: RTSP source '%s' produced no video pad within %lld s", uri.c_str(),
               static_cast<long long>(kLivePadTimeout.count()));
-    return Result<std::monostate>::err(Error::Unsupported);
+    return Result<std::monostate>::err(Error::SourceUnavailable);
   }
   return Result<std::monostate>::ok({});
 }
