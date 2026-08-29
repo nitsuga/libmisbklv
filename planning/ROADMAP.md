@@ -67,8 +67,14 @@ Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 `decision_status: proposed`) · `DECIDED` / `DEFERRED` (has an ADR — see the
 register).
 
-**No open forks** — all design decisions resolved. See the decided register
-([`../context/decisions/index.md`](../context/decisions/index.md)) for fork → ADR mapping.
+**One open fork remains**; all other design decisions are resolved. See the
+decided register ([`../context/decisions/index.md`](../context/decisions/index.md))
+for the resolved fork → ADR mapping.
+
+- **Fork 34 / issue #60 — live insert source liveness.** Decide the public
+  signal for video-source progress: a last-delivery timestamp is reliable even
+  when `mpegtsmux` cannot forward a branch EOS while its KLV pad is open;
+  determine whether exposing the branch EOS event adds useful information.
 
 **Candidate future forks** (not yet opened), mostly downstream of
 registry/data breadth:
