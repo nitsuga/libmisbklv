@@ -24,6 +24,10 @@ jobs:
       # concurrent access, so parallel jobs warm one cache instead of three.
       volumes:
         - /home/eric/ci-cache/ccache:/ccache
+      # Run as the runner's uid. The workspace is bind-mounted from the host
+      # and shared with native jobs, so a root container leaves root-owned
+      # files behind that the next job's checkout cannot clean.
+      options: --user 1000:1000
     # A hung test otherwise runs to GitHub's 6-hour cap: gst_video_insert did
     # exactly that, nine times over, before finish() grew a drain timeout.
     timeout-minutes: 20
@@ -91,6 +95,10 @@ jobs:
       # concurrent access, so parallel jobs warm one cache instead of three.
       volumes:
         - /home/eric/ci-cache/ccache:/ccache
+      # Run as the runner's uid. The workspace is bind-mounted from the host
+      # and shared with native jobs, so a root container leaves root-owned
+      # files behind that the next job's checkout cannot clean.
+      options: --user 1000:1000
     steps:
       - uses: actions/checkout@v5
       - name: Configure (ASan + UBSan, no gstreamer)

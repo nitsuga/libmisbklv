@@ -37,9 +37,10 @@ and `open_insert` distinguishes a live source that is absent right now
 
 ## Known gaps
 
-- CI's `generated-drift` job cannot run under `container:`: git there reports
-  every generated file as drift, and the same image and commit produce a clean
-  diff outside CI. It runs on the native runner until the cause is understood.
+- CI's containerized jobs must run as the runner's uid (`--user 1000:1000`).
+  The workspace is bind-mounted from the host and shared with native jobs, so a
+  root container leaves root-owned files that the next checkout cannot clean --
+  which surfaced first as bogus `generated-drift` failures.
 
 - Report-on-Change, multi-byte BER-OID tags, and malformed-input robustness are
   now covered synthetically by `hardening_test` — including `extract_ts_klv`'s
