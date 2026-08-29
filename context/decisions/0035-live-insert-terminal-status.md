@@ -13,6 +13,9 @@ sources:
   - id: parrot-to-klv-94
     resource: https://github.com/nitsuga/parrot-to-klv/issues/94
     title: Live pipeline errors are not detected when no KLV is received
+  - id: libmisbklv-59
+    resource: https://github.com/nitsuga/libmisbklv/pull/59
+    title: Review narrowing the terminal-status contract to failure only
 fork: 32
 ---
 
@@ -53,7 +56,7 @@ EOS downstream only once *every* sink pad has it, the pipeline's single sink
 posts `GST_MESSAGE_EOS` only on receiving that event, and the KLV appsrc pad is
 EOS'd in exactly one place — `finish()` itself. A consumer therefore cannot
 observe EOS through `poll()` at any point where the answer would still be
-useful.[^eos-unreachable]
+useful.[^libmisbklv-59]
 
 Two experiments on GStreamer 1.24.2 confirm it. A bounded video branch feeding
 the same muxer as a live branch produced no bus EOS in 20 seconds, though the
@@ -126,7 +129,7 @@ GStreamer implementation pops `GST_MESSAGE_ERROR` alone, which also keeps
     — downstream live-ingest failure and the no-telemetry reproduction.
 [^libmisbklv-58]: [libmisbklv#58](https://github.com/nitsuga/libmisbklv/issues/58)
     — upstream API request and review scope.
-[^eos-unreachable]: [libmisbklv#59](https://github.com/nitsuga/libmisbklv/pull/59)
+[^libmisbklv-59]: [libmisbklv#59](https://github.com/nitsuga/libmisbklv/pull/59)
     — review thread carrying the `gst-launch-1.0` runs and the `gst-inspect-1.0`
     class hierarchy behind the EOS-unreachability finding.
 
