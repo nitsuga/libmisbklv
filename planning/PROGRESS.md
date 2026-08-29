@@ -37,6 +37,8 @@ and `open_insert` distinguishes a live source that is absent right now
 
 ## Known gaps
 
+- The CI image must carry `git-lfs`: the repo sets `filter=lfs` attributes, so
+  `actions/checkout`'s post-checkout hook fails the job without it.
 - CI's containerized jobs must run as the runner's uid (`--user 1000:1000`).
   The workspace is bind-mounted from the host and shared with native jobs, so a
   root container leaves root-owned files that the next checkout cannot clean --
