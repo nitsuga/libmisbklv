@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, libmisbklv]
     # A hung test otherwise runs to GitHub's 6-hour cap: gst_video_insert did
     # exactly that, nine times over, before finish() grew a drain timeout.
     timeout-minutes: 20
@@ -69,7 +69,7 @@ jobs:
     timeout-minutes: 20
     # Real-world hardening: the core parse/codec paths must be free of UB / OOB
     # on adversarial input. gstreamer is off so ASan isn't noised by gst internals.
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, libmisbklv]
     steps:
       - uses: actions/checkout@v5
       - name: Install deps
@@ -89,7 +89,7 @@ jobs:
   generated-drift:
     timeout-minutes: 10
     # ADRs 0012/0028: committed generated outputs must match fresh regeneration.
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, libmisbklv]
     steps:
       - uses: actions/checkout@v5
       - name: Regenerate committed outputs
