@@ -8,23 +8,23 @@ on:
 jobs:
   build-test:
     runs-on: [self-hosted, libmisbklv]
+    container:
+      image: ghcr.io/nitsuga/libmisbklv-ci:latest
+      # Compiler cache shared by every job on this host. ccache is safe under
+      # concurrent access, so parallel jobs warm one cache instead of three.
+      volumes:
+        - /home/eric/ci-cache/ccache:/ccache
     # A hung test otherwise runs to GitHub's 6-hour cap: gst_video_insert did
     # exactly that, nine times over, before finish() grew a drain timeout.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
-      - name: Install deps
-        run: |
-          sudo flock /tmp/ci-apt.lock apt-get update
-          sudo flock /tmp/ci-apt.lock apt-get install -y cmake g++ \
-            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-            libgstreamer-plugins-bad1.0-dev \
-            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
-            gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
       - name: Configure
         run: cmake --preset release
       - name: Build
         run: cmake --build --preset release -j3
+      - name: ccache stats
+        run: ccache -s
       - name: Test
         # --timeout names the test that hung; the job timeout above is the backstop.
         run: ctest --test-dir build/release --output-on-failure --timeout 600
@@ -70,12 +70,14 @@ jobs:
     # Real-world hardening: the core parse/codec paths must be free of UB / OOB
     # on adversarial input. gstreamer is off so ASan isn't noised by gst internals.
     runs-on: [self-hosted, libmisbklv]
+    container:
+      image: ghcr.io/nitsuga/libmisbklv-ci:latest
+      # Compiler cache shared by every job on this host. ccache is safe under
+      # concurrent access, so parallel jobs warm one cache instead of three.
+      volumes:
+        - /home/eric/ci-cache/ccache:/ccache
     steps:
       - uses: actions/checkout@v5
-      - name: Install deps
-        run: |
-          sudo flock /tmp/ci-apt.lock apt-get update
-          sudo flock /tmp/ci-apt.lock apt-get install -y cmake g++
       - name: Configure (ASan + UBSan, no gstreamer)
         run: cmake --preset sanitize
       - name: Build
@@ -90,6 +92,12 @@ jobs:
     timeout-minutes: 10
     # ADRs 0012/0028: committed generated outputs must match fresh regeneration.
     runs-on: [self-hosted, libmisbklv]
+    container:
+      image: ghcr.io/nitsuga/libmisbklv-ci:latest
+      # Compiler cache shared by every job on this host. ccache is safe under
+      # concurrent access, so parallel jobs warm one cache instead of three.
+      volumes:
+        - /home/eric/ci-cache/ccache:/ccache
     steps:
       - uses: actions/checkout@v5
       - name: Regenerate committed outputs

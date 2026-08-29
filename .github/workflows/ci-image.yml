@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: Apache-2.0
+name: CI image
+
+# Only rebuilds when the image definition changes -- day-to-day CI just pulls
+# the published tag, which the host has cached locally after the first pull.
+on:
+  push:
+    paths:
+      - ci/Dockerfile
+      - .github/workflows/ci-image.yml
+  workflow_dispatch:
+
+jobs:
+  build:
+    # No container: here on purpose -- this job needs the host Docker daemon.
+    runs-on: [self-hosted, libmisbklv]
+    timeout-minutes: 30
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Build and push
+        # Layers already on this host are reused, so an unchanged apt list
+        # makes this a no-op rebuild.
+        run: |
+          docker build -t ghcr.io/nitsuga/libmisbklv-ci:latest -f ci/Dockerfile ci
+          docker push ghcr.io/nitsuga/libmisbklv-ci:latest
