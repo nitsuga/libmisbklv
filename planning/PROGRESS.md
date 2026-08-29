@@ -37,6 +37,17 @@ and `open_insert` distinguishes a live source that is absent right now
 
 ## Known gaps
 
+- Fork PRs never run on the self-hosted runners: approval is a gate, not an
+  isolation boundary, so `runs-on` routes them to `ubuntu-latest`. CI pins an
+  immutable image tag rather than `:latest`; bump it after **CI image**
+  publishes a new one.
+- The CI image must carry `git-lfs`: the repo sets `filter=lfs` attributes, so
+  `actions/checkout`'s post-checkout hook fails the job without it.
+- CI's containerized jobs must run as the runner's uid (`--user 1000:1000`).
+  The workspace is bind-mounted from the host and shared with native jobs, so a
+  root container leaves root-owned files that the next checkout cannot clean --
+  which surfaced first as bogus `generated-drift` failures.
+
 - Report-on-Change, multi-byte BER-OID tags, and malformed-input robustness are
   now covered synthetically by `hardening_test` — including `extract_ts_klv`'s
   resync/cap/PES-spanning behavior; still worth a *real*

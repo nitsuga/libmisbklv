@@ -5,26 +5,43 @@ on:
   push:
   pull_request:
 
+# The CI image package is public, so no packages scope is needed to pull it.
+permissions:
+  contents: read
+
 jobs:
   build-test:
-    runs-on: ubuntu-latest
+    # Fork PRs must never reach the persistent host: approving a fork PR is a
+    # gate, not an isolation boundary, and approved code would run here as the
+    # runner user. Forks go to a throwaway GitHub-hosted VM instead.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted", "libmisbklv"]') }}
+    container:
+      # Pinned to an immutable commit tag, never :latest -- a queued run must
+      # get the image it was queued against, and the publisher workflow runs
+      # independently of this one. Bump this line when ci/Dockerfile changes,
+      # after CI image has published the new tag. The package is public, so
+      # no registry credentials are needed here.
+      image: ghcr.io/nitsuga/libmisbklv-ci:9eeeeae9701449e06eee671c40b00fe4892888a7
+      # On the host the workspace is bind-mounted and shared with native jobs,
+      # so a root container leaves root-owned files the next checkout cannot
+      # clean. A hosted VM is throwaway and expects the default root.
+      options: ${{ github.event.pull_request.head.repo.fork && ' ' || '--user 1000:1000' }}
+      # Compiler cache shared by every job on this host. ccache is safe under
+      # concurrent access, so parallel jobs warm one cache instead of three.
+      # A fork PR gets a throwaway path inside its own VM.
+      volumes:
+        - ${{ github.event.pull_request.head.repo.fork && '/tmp/ccache:/ccache' || '/home/eric/ci-cache/ccache:/ccache' }}
     # A hung test otherwise runs to GitHub's 6-hour cap: gst_video_insert did
     # exactly that, nine times over, before finish() grew a drain timeout.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
-      - name: Install deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake g++ \
-            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-            libgstreamer-plugins-bad1.0-dev \
-            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
-            gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
       - name: Configure
         run: cmake --preset release
       - name: Build
-        run: cmake --build --preset release
+        run: cmake --build --preset release -j3
+      - name: ccache stats
+        run: ccache -s
       - name: Test
         # --timeout names the test that hung; the job timeout above is the backstop.
         run: ctest --test-dir build/release --output-on-failure --timeout 600
@@ -63,23 +80,38 @@ jobs:
           }
           EOF
           cmake -S /tmp/consumer -B /tmp/consumer/build -DCMAKE_PREFIX_PATH="$PWD/_install"
-          cmake --build /tmp/consumer/build
+          cmake --build /tmp/consumer/build -j3
 
   sanitizers:
     timeout-minutes: 20
     # Real-world hardening: the core parse/codec paths must be free of UB / OOB
     # on adversarial input. gstreamer is off so ASan isn't noised by gst internals.
-    runs-on: ubuntu-latest
+    # Fork PRs must never reach the persistent host: approving a fork PR is a
+    # gate, not an isolation boundary, and approved code would run here as the
+    # runner user. Forks go to a throwaway GitHub-hosted VM instead.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted", "libmisbklv"]') }}
+    container:
+      # Pinned to an immutable commit tag, never :latest -- a queued run must
+      # get the image it was queued against, and the publisher workflow runs
+      # independently of this one. Bump this line when ci/Dockerfile changes,
+      # after CI image has published the new tag. The package is public, so
+      # no registry credentials are needed here.
+      image: ghcr.io/nitsuga/libmisbklv-ci:9eeeeae9701449e06eee671c40b00fe4892888a7
+      # On the host the workspace is bind-mounted and shared with native jobs,
+      # so a root container leaves root-owned files the next checkout cannot
+      # clean. A hosted VM is throwaway and expects the default root.
+      options: ${{ github.event.pull_request.head.repo.fork && ' ' || '--user 1000:1000' }}
+      # Compiler cache shared by every job on this host. ccache is safe under
+      # concurrent access, so parallel jobs warm one cache instead of three.
+      # A fork PR gets a throwaway path inside its own VM.
+      volumes:
+        - ${{ github.event.pull_request.head.repo.fork && '/tmp/ccache:/ccache' || '/home/eric/ci-cache/ccache:/ccache' }}
     steps:
       - uses: actions/checkout@v5
-      - name: Install deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake g++
       - name: Configure (ASan + UBSan, no gstreamer)
         run: cmake --preset sanitize
       - name: Build
-        run: cmake --build --preset sanitize
+        run: cmake --build --preset sanitize -j3
       - name: Test under sanitizers
         run: ctest --test-dir build/sanitize --output-on-failure --timeout 600
         env:
@@ -89,7 +121,14 @@ jobs:
   generated-drift:
     timeout-minutes: 10
     # ADRs 0012/0028: committed generated outputs must match fresh regeneration.
-    runs-on: ubuntu-latest
+    # Fork PRs must never reach the persistent host: approving a fork PR is a
+    # gate, not an isolation boundary, and approved code would run here as the
+    # runner user. Forks go to a throwaway GitHub-hosted VM instead.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted", "libmisbklv"]') }}
+    # No container: this job needs only python3 and git, both present on the
+    # host and on ubuntu-latest. It also runs PR-supplied generator scripts
+    # directly, which is exactly why it must not land on the persistent host
+    # for a fork.
     steps:
       - uses: actions/checkout@v5
       - name: Regenerate committed outputs

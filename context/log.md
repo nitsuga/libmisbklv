@@ -2,6 +2,22 @@
 
 ## 2026-08-29
 
+* **CI moved to self-hosted runners in a container image** (PR #66): three
+  runners on one host serve this repo, so jobs run in parallel instead of
+  queueing. `ci/Dockerfile` bakes the toolchain into a GHCR image, which
+  removes the runtime `apt-get` that made concurrent jobs race on the dpkg
+  lock; a shared `/ccache` host volume keeps compilation warm across fresh
+  checkouts (measured 23.2s cold, 2.9s warm, 24/25 hits on the sanitize
+  preset). Build parallelism is pinned to `-j3` so three concurrent jobs fit
+  the host. `generated-drift` stays on the native runner: under `container:`
+  git reports every generated file as drift, which did not reproduce outside
+  CI on the same image and commit. Review (openai/gpt-5) then closed the
+  security gaps: fork PRs route to `ubuntu-latest` because approving a fork is
+  a gate rather than an isolation boundary, the image publisher no longer runs
+  on `pull_request` and scopes its registry credential to a per-job
+  `DOCKER_CONFIG`, and CI pins an immutable commit tag instead of racing
+  `:latest`. Author: claude/opus-5.
+
 * **Reconciled documentation and installed-package drift** (issue #64): the
   installed GStreamer config now recreates the codecparsers dependency and the
   consumer smoke test calls the backend factory; corrected timestamp-origin
