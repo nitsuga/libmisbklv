@@ -2,6 +2,12 @@
 
 ## 2026-08-29
 
+* **CI review follow-up (PR #68, parrot-to-klv#109):** documented that the
+  pinned CI image is consumed by parrot-to-klv and that the two-slot publisher
+  claim is capacity-bounded but not FIFO-fair.
+
+* **Shared self-hosted CI capacity (issue #67, parrot-to-klv#108, [ADR 0037](./decisions/0037-shared-ci-capacity-gate.md)):** normal jobs claim one of two shared host slots, while the CI image publisher claims both, allowing parrot-to-klv's two `-j3` jobs to run in parallel without relying on manual cross-repository timing.
+
 * **CI moved to self-hosted runners in a container image** (PR #66): three
   runners on one host serve this repo, so jobs run in parallel instead of
   queueing. `ci/Dockerfile` bakes the toolchain into a GHCR image, which
