@@ -48,6 +48,15 @@ cooperative cancellation leave `error()` empty.
 the same error is returned by `emit()` and `close()`. Check it before sending,
 then check every returned `Result` as in the example.
 
+For a live video sink, `poll()` is nonblocking: it returns `ok()` while nothing
+has failed, and an error once the backend reports a terminal failure. Poll it
+from your ingest loop so a pipeline that dies before the first KLV packet
+arrives is noticed then, rather than at `close()`. It does not report clean EOS
+— a live insert cannot observe one before `close()` sends it (ADR 0035).
+Serialize `poll()`, `emit()`, and `close()` from the same consumer context.
+Synchronous backends and sinks without an asynchronous source retain the `ok()`
+default.
+
 - **Timing carries through.** `m.pts()` is where the packet sat in the source —
   nanoseconds from the start of it — and `emit` writes it back at that time, so
   an edit does not re-time the stream. A source whose KLV carries no PES
@@ -100,8 +109,8 @@ out.close();
   it is the normal clock-paced configuration. An invalid file, a terminal
   source error, or a live source that exposes no usable video pad within the
   bounded open wait fails without leaving a newly created output file. A parse
-  or pipeline error that appears later is reported by `close()` and has the
-  same cleanup guarantee.
+  or pipeline error that appears later is reported by `poll()` when the caller
+  polls for it, and by `close()` either way, with the same cleanup guarantee.
 
 The same field exists on the lower level: `open_insert({.sink = "file:out.ts",
 .video_source = "in.mp4"})`. Leave it empty for the KLV-only pipeline.

@@ -7,6 +7,7 @@
 // - multicast knobs still map with live video
 // - hermetic UDP loopback with pipeline live video (KLV+video share timeline, byte-exact)
 // - mux-lock timeout, stalled close, never-ready, cancellation, failed NULL teardown
+// - nonblocking live pipeline ERROR observation before any KLV push
 // - repeated under load (ctest runs 5x externally)
 #include <atomic>
 #include <cctype>
@@ -21,6 +22,7 @@
 #include <mutex>
 #include <span>
 #include <string>
+#include <stop_token>
 #include <thread>
 #include <vector>
 
@@ -843,6 +845,46 @@ int main(int argc, char** argv) {
           check(static_cast<bool>(rr), "unbounded output extracts");
           check(back == sent, "unbounded output KLV byte-exact after drain");
         }
+        std::remove(out.c_str());
+      }
+    }
+  }
+
+  std::printf("== live pipeline ERROR is observable before finish ==\n");
+  {
+    std::string enc = pick_h264_encoder();
+    if (enc.empty()) {
+      std::printf("  SKIP pipeline ERROR poll: no encoder\n");
+    } else {
+      const bool h265 = enc == "x265enc";
+      std::string desc = "pipeline:videotestsrc is-live=true ! videoconvert ! "
+                         "video/x-raw,width=320,height=240,framerate=30/1 ! " +
+                         enc + (h265 ? " ! h265parse" : " ! h264parse") +
+                         " ! identity error-after=1";
+      std::string out = tmpdir + "/pipeline-poll-error.ts";
+      std::remove(out.c_str());
+      auto r = be->open_insert({"file:" + out, true, desc, Sei0604::Preserve});
+      check(static_cast<bool>(r), "pipeline ERROR poll open succeeds");
+      if (r) {
+        const auto t0 = std::chrono::steady_clock::now();
+        bool saw_error = false;
+        while (std::chrono::steady_clock::now() - t0 < std::chrono::seconds(2)) {
+          auto status = (*r)->poll();
+          if (!status) {
+            saw_error = status.error() == Error::Backend;
+            break;
+          }
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                 std::chrono::steady_clock::now() - t0)
+                                 .count();
+        check(saw_error, "pipeline ERROR poll reports Backend before any KLV push");
+        check(elapsed < 2000, "pipeline ERROR poll is prompt");
+        auto fr = (*r)->finish();
+        check(!fr && fr.error() == Error::Backend,
+              "close remains failed after poll consumed pipeline ERROR");
+        check(!file_exists_p(out), "pipeline ERROR output discarded");
         std::remove(out.c_str());
       }
     }

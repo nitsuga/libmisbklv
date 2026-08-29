@@ -8,8 +8,8 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-`refactor/dedupe-host-port` removes the remaining actionable GStreamer backend
-duplication from issue #45 without abstracting the intentionally different wait loops.
+`Inserter::poll()` / `KlvSink::poll()` report live insert failure without
+blocking ([ADR 0035](../context/decisions/0035-live-insert-terminal-status.md)).
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
@@ -17,8 +17,8 @@ duplication from issue #45 without abstracting the intentionally different wait 
 
 ## In progress
 
-- Validate the shared private UDP endpoint parser through both extraction and
-  insertion paths, then close issue #45.
+- Verify the live-consumer integration in parrot-to-klv#94 against the shipped
+  `poll()` contract.
 
 ## Next
 

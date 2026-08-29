@@ -9,6 +9,7 @@
 #include <cstring>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <stop_token>
 #include <string>
 #include <system_error>
@@ -177,12 +178,41 @@ class GstInserter : public Inserter {
                               : Result<std::monostate>::err(Error::Backend);
   }
 
+  // Pops ERROR only. A pipeline EOS cannot reach the bus before finish() sends
+  // EOS on the KLV appsrc: mpegtsmux is a GstAggregator, so it forwards EOS
+  // downstream only once every sink pad has it, and the KLV pad is EOS'd
+  // nowhere else (ADR 0035). Filtering ERROR alone also keeps poll() from
+  // consuming the EOS that finish()'s drain is waiting for.
+  Result<std::monostate> poll() override {
+    if (terminal_error_) return Result<std::monostate>::err(*terminal_error_);
+
+    GstBus* bus = gst_element_get_bus(pipeline_);
+    GstMessage* m = gst_bus_pop_filtered(bus, GST_MESSAGE_ERROR);
+    gst_object_unref(bus);
+    if (!m) return Result<std::monostate>::ok({});
+
+    GError* err = nullptr;
+    gchar* dbg = nullptr;
+    gst_message_parse_error(m, &err, &dbg);
+    g_warning("misbklv: pipeline error: %s", err ? err->message : "unknown");
+    if (err) g_error_free(err);
+    g_free(dbg);
+    gst_message_unref(m);
+    terminal_error_ = Error::Backend;
+    return Result<std::monostate>::err(*terminal_error_);
+  }
+
   // An unbounded live video source will never produce EOS by itself. Send EOS
   // from its final src pad while it remains linked to mpegtsmux, then wait for
   // the muxer/sink to drain both the video and KLV pads. In particular, do not
   // unlink or release the mux request pad while PLAYING: mpegtsmux can still be
   // traversing its request-pad list on a streaming thread (issue #39).
   Result<std::monostate> finish(std::stop_token stop) override {
+    if (terminal_error_) {
+      quiesce_to_null();
+      discard_output();
+      return Result<std::monostate>::err(*terminal_error_);
+    }
     const GstFlowReturn klv_eos = gst_app_src_end_of_stream(GST_APP_SRC(appsrc_));
     bool live_video_eos = true;
     if (video_ && video_->is_live_unbounded && video_->reserved_video_pad) {
@@ -255,6 +285,7 @@ class GstInserter : public Inserter {
       if (err) g_error_free(err);
       g_free(dbg);
       gst_message_unref(m);
+      terminal_error_ = Error::Backend;
       break;
     }
     if (!ok && !cancelled && std::chrono::steady_clock::now() >= deadline)
@@ -323,6 +354,7 @@ class GstInserter : public Inserter {
   std::unique_ptr<VideoCtx> video_;
   GstClockTime pts_ = 0;
   std::string removable_sink_;
+  std::optional<Error> terminal_error_;
 };
 
 }  // namespace

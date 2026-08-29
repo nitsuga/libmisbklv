@@ -1,5 +1,27 @@
 # Knowledge Bundle Log
 
+## 2026-08-29
+
+* **Accepted nonblocking terminal status for live insertion**, narrowed to
+  failure-only ([ADR 0035](./decisions/0035-live-insert-terminal-status.md),
+  fork 32, libmisbklv#58 / PR #59). Clean EOS was dropped from the contract as
+  unreachable before `finish()`: `mpegtsmux` is a `GstAggregator` and forwards
+  EOS only once every sink pad has it, and the KLV appsrc pad is EOS'd only by
+  `finish()` — confirmed by two `gst-launch-1.0` runs on GStreamer 1.24.2 that
+  saw no bus EOS in 20s. `poll()` returns `Result<std::monostate>` and pops
+  `GST_MESSAGE_ERROR` alone, leaving EOS for the drain. Proposed by
+  `openai/gpt-5`; narrowed and accepted by `claude/opus-5` on review. Debug
+  build clean; all 28 CTest cases pass.
+
+## 2026-08-28
+
+* **fix: finish promptly after polled EOS** (libmisbklv#58 / PR #59): a
+  terminal EOS consumed by `Inserter::poll()` now skips the second drain wait;
+  the public sink guide and README describe the live polling contract, and a
+  bounded-source regression covers clean close after a polled EOS.
+
+* **Proposed nonblocking terminal status for live insertion** ([ADR 0035](./decisions/0035-live-insert-terminal-status.md), libmisbklv#58 / parrot-to-klv#94).
+
 ## 2026-08-27
 
 * **refactor: one private UDP `host:port` parser** (issue #45). Moved the identical bracketed-IPv6 split, bare-IPv6 rejection, and 1–65535 port validation out of the GStreamer source and sink constructors into `detail::parse_host_port`; `make_src` and `make_sink` now share the result while retaining their separate element configuration. The proposed shared video-branch wait loop remains rejected because the file and RTSP paths intentionally differ, and the repeated `VideoCtx` assignments stay visible because a factory would save almost no code. The existing UDP multicast test now directly pins hostname and scoped/bracketed-IPv6 parsing plus bare-IPv6, empty, zero, out-of-range, and trailing-character rejection; the broader extraction, insertion, and live-stream suites exercise both callers. Release build clean; all 28 CTest cases pass, as do the sanitizer core suite's 17.
