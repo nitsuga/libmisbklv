@@ -3,6 +3,8 @@
 # apt at runtime -- that is what made concurrent jobs race on the dpkg lock.
 FROM ubuntu:24.04
 
+# parrot-to-klv consumes this image for its regular build and sanitizer jobs;
+# keep the GStreamer development and runtime packages in sync with that use.
 # Links the GHCR package to this repo, which is what lets the workflow's
 # GITHUB_TOKEN push and pull it. Without the label the package lands in the
 # user namespace and the repo token gets 403.

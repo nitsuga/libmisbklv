@@ -22,6 +22,8 @@ release() {
 trap release EXIT
 
 if [[ "$slots" == 2 ]]; then
+  # A two-slot claim can be overtaken while waiting for slot 1; flock provides
+  # capacity safety here, not FIFO fairness.
   for slot in 0 1; do
     exec {fd}>"$capacity_dir/slot-$slot.lock"
     flock "$fd"
