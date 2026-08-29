@@ -24,7 +24,7 @@ jobs:
       - name: Configure
         run: cmake --preset release
       - name: Build
-        run: cmake --build --preset release
+        run: cmake --build --preset release -j3
       - name: Test
         # --timeout names the test that hung; the job timeout above is the backstop.
         run: ctest --test-dir build/release --output-on-failure --timeout 600
@@ -63,7 +63,7 @@ jobs:
           }
           EOF
           cmake -S /tmp/consumer -B /tmp/consumer/build -DCMAKE_PREFIX_PATH="$PWD/_install"
-          cmake --build /tmp/consumer/build
+          cmake --build /tmp/consumer/build -j3
 
   sanitizers:
     timeout-minutes: 20
@@ -79,7 +79,7 @@ jobs:
       - name: Configure (ASan + UBSan, no gstreamer)
         run: cmake --preset sanitize
       - name: Build
-        run: cmake --build --preset sanitize
+        run: cmake --build --preset sanitize -j3
       - name: Test under sanitizers
         run: ctest --test-dir build/sanitize --output-on-failure --timeout 600
         env:
