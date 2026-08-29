@@ -506,6 +506,43 @@ int main(int argc, char** argv) {
   std::printf("== serialized live EOS locks the downstream mux pad ==\n");
   check_live_eos_uses_downstream_lock();
 
+  std::printf("== RTSP error classification (ADR 0036) ==\n");
+  {
+    // Only a resource-level failure means "absent right now". Everything else
+    // is this build or this server's media being unusable, which no amount of
+    // retrying fixes — and which a polling consumer must not spin on. These
+    // paths need a live RTSP server to reach end to end, so the classifier is
+    // exercised directly.
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_NOT_FOUND) ==
+              Error::SourceUnavailable,
+          "resource NOT_FOUND -> SourceUnavailable");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_OPEN_READ) ==
+              Error::SourceUnavailable,
+          "resource OPEN_READ -> SourceUnavailable");
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_READ) ==
+              Error::SourceUnavailable,
+          "resource READ -> SourceUnavailable");
+    // Credentials do not become correct by waiting.
+    check(detail::classify_rtsp_error(GST_RESOURCE_ERROR, GST_RESOURCE_ERROR_NOT_AUTHORIZED) ==
+              Error::Unsupported,
+          "resource NOT_AUTHORIZED -> Unsupported (permanent)");
+    // The server answered; we cannot handle what it sent.
+    check(detail::classify_rtsp_error(GST_STREAM_ERROR, GST_STREAM_ERROR_CODEC_NOT_FOUND) ==
+              Error::Unsupported,
+          "stream CODEC_NOT_FOUND -> Unsupported (permanent)");
+    check(detail::classify_rtsp_error(GST_STREAM_ERROR, GST_STREAM_ERROR_WRONG_TYPE) == Error::Unsupported,
+          "stream WRONG_TYPE -> Unsupported (permanent)");
+    // A deployment missing a depayloader must not retry forever.
+    check(detail::classify_rtsp_error(GST_CORE_ERROR, GST_CORE_ERROR_MISSING_PLUGIN) == Error::Unsupported,
+          "core MISSING_PLUGIN -> Unsupported (permanent)");
+    check(detail::classify_rtsp_error(GST_CORE_ERROR, GST_CORE_ERROR_NEGOTIATION) == Error::Unsupported,
+          "core NEGOTIATION -> Unsupported (permanent)");
+    // An unrecognized domain defaults to permanent rather than to an infinite
+    // retry in a consumer polling on SourceUnavailable.
+    check(detail::classify_rtsp_error(GST_LIBRARY_ERROR, 1) == Error::Unsupported,
+          "unknown domain -> Unsupported (conservative)");
+  }
+
   std::printf("== error cases: unsupported URIs ==\n");
   {
     auto r = be->open_insert(

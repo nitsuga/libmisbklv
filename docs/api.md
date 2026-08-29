@@ -48,6 +48,20 @@ cooperative cancellation leave `error()` empty.
 the same error is returned by `emit()` and `close()`. Check it before sending,
 then check every returned `Result` as in the example.
 
+**One open error is worth retrying, and only one.** `Error::SourceUnavailable`
+means a live video source is not there *right now* — an unreachable RTSP peer,
+or one that never answers with a video pad. A consumer waiting for a stream to
+come back polls on that code and nothing else. `Error::Unsupported` is
+permanent for this configuration: an unparseable `pipeline:` description, a
+container this library does not demux, a missing element, RTSP credentials that
+were refused, or a server whose media this build cannot carry. `Error::Backend`
+is an I/O or pipeline fault. Retrying either of the last two will not help, so a
+reconnect loop should stop on them (ADR 0036).
+
+A server that answers and then offers only media we cannot handle reports
+`Unsupported`, not `SourceUnavailable` — reaching it proves the source exists,
+so the problem is the media or the build, not the source's absence.
+
 For a live video sink, `poll()` is nonblocking: it returns `ok()` while nothing
 has failed, and an error once the backend reports a terminal failure. Poll it
 from your ingest loop so a pipeline that dies before the first KLV packet

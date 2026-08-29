@@ -6,9 +6,17 @@
   unsupported configuration** ([ADR 0036](./decisions/0036-source-unavailable-error.md),
   fork 33, issue #61). Appended to the enum so existing numeric codes keep their
   values; only the two RTSP sites in `prepare_rtsp_branch` return it, and
-  `Unsupported` is now unambiguously permanent. Behavior change: an unreachable
-  RTSP source reports `SourceUnavailable` where it reported `Unsupported`.
-  Debug build clean; all 28 CTest cases pass.
+  `Unsupported` is now unambiguously permanent. Review caught that the RTSP
+  branch's two failure paths each cover both meanings, so they are classified
+  rather than assumed: a bus error routes on its `GError` domain
+  (`GST_RESOURCE_ERROR` transient, except `NOT_AUTHORIZED`; stream/core and any
+  unrecognized domain permanent), and the no-video-pad timeout splits on whether
+  `rtspsrc` announced a pad at all — one means the server answered with media
+  this build cannot carry, none means nothing answered. `classify_rtsp_error` is
+  exposed internally so the permanent paths, which need a live server to reach
+  end to end, are covered by nine direct cases. Behavior change: an unreachable
+  RTSP source reports `SourceUnavailable` where it reported `Unsupported`. Debug
+  build clean; all 28 CTest cases pass.
 
 
 * **Accepted nonblocking terminal status for live insertion**, narrowed to

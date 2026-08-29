@@ -620,6 +620,9 @@ void on_video_no_more_pads(GstElement*, gpointer user) {
 
 void on_rtspsrc_pad_added(GstElement*, GstPad* pad, gpointer user) {
   auto* ctx = static_cast<VideoCtx*>(user);
+  // The server answered and described a stream, whatever we end up doing with
+  // this pad. Distinguishes an unusable source from an absent one (ADR 0036).
+  ctx->saw_any_pad.store(true, std::memory_order_release);
   GstCaps* caps = gst_pad_get_current_caps(pad);
   if (!caps) caps = gst_pad_query_caps(pad, nullptr);
   const std::string media_type = caps ? caps_media_type(caps) : std::string();
@@ -1063,6 +1066,23 @@ static Result<std::monostate> prepare_file_branch(GstElement* pipeline, GstPad* 
   return Result<std::monostate>::ok({});
 }
 
+Error classify_rtsp_error(GQuark domain, int code) {
+  // GST_RESOURCE_ERROR is the transport failing to reach or read the endpoint:
+  // refused, not found, timed out. That is a source that may be back later.
+  if (domain == GST_RESOURCE_ERROR) {
+    // Except authorization — wrong credentials are wrong on every retry.
+    if (code == GST_RESOURCE_ERROR_NOT_AUTHORIZED) return Error::Unsupported;
+    return Error::SourceUnavailable;
+  }
+  // GST_STREAM_ERROR (codec not found, wrong type, decode) and GST_CORE_ERROR
+  // (missing plugin, negotiation, pad) both mean the server answered and its
+  // media cannot be handled by this build. Permanent.
+  //
+  // Anything else is deliberately permanent too: an unrecognized error must not
+  // become an infinite retry in a consumer that polls on SourceUnavailable.
+  return Error::Unsupported;
+}
+
 static Result<std::monostate> prepare_rtsp_branch(GstElement* pipeline, GstPad* reserved_video_pad,
                                                   GstElement* mux, const std::string& uri,
                                                   Sei0604 sei_0604,
@@ -1108,21 +1128,30 @@ static Result<std::monostate> prepare_rtsp_branch(GstElement* pipeline, GstPad* 
       GError* err = nullptr;
       gchar* dbg = nullptr;
       gst_message_parse_error(msg, &err, &dbg);
-      g_warning("misbklv: RTSP source '%s': %s", uri.c_str(),
-                err ? err->message : "pipeline error");
+      const Error klass =
+          err ? classify_rtsp_error(err->domain, err->code) : Error::SourceUnavailable;
+      g_warning("misbklv: RTSP source '%s': %s%s", uri.c_str(),
+                err ? err->message : "pipeline error",
+                klass == Error::SourceUnavailable ? "" : " (permanent)");
       if (err) g_error_free(err);
       g_free(dbg);
       gst_message_unref(msg);
       gst_object_unref(bus);
-      return Result<std::monostate>::err(Error::SourceUnavailable);
+      return Result<std::monostate>::err(klass);
     }
     if (std::chrono::steady_clock::now() > deadline) break;
   }
   gst_object_unref(bus);
   if (!linked) {
-    g_warning("misbklv: RTSP source '%s' produced no video pad within %lld s", uri.c_str(),
-              static_cast<long long>(kLivePadTimeout.count()));
-    return Result<std::monostate>::err(Error::SourceUnavailable);
+    // A pad appeared but nothing linked: the server answered and described
+    // media this build cannot carry — an unsupported encoding, or a missing
+    // depayloader/parser. Permanent, and retrying would spin. No pad at all
+    // means nothing answered, which may be back later.
+    const bool answered = video->saw_any_pad.load(std::memory_order_acquire);
+    g_warning("misbklv: RTSP source '%s' produced no video pad within %lld s%s", uri.c_str(),
+              static_cast<long long>(kLivePadTimeout.count()),
+              answered ? " (source answered; its media is unusable here)" : "");
+    return Result<std::monostate>::err(answered ? Error::Unsupported : Error::SourceUnavailable);
   }
   return Result<std::monostate>::ok({});
 }

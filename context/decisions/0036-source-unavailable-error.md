@@ -49,8 +49,23 @@ numeric code keeps its value — the same treatment `TypeMismatch`,
 `ResourceLimit`, and `ReadOnly` received (ADR 0007, ADR 0011).
 
 - `SourceUnavailable` means a **live source that is absent right now**. Only
-  the two RTSP sites in `prepare_rtsp_branch` return it. A caller polling for a
-  stream to come back retries on this code and nothing else.
+  `prepare_rtsp_branch` returns it, and only after classifying *why* it failed.
+  A caller polling for a stream to come back retries on this code and nothing
+  else.
+
+  Classification matters, because the RTSP branch's two failure paths each
+  cover both meanings. A bus error is routed by its `GError` domain:
+  `GST_RESOURCE_ERROR` is the transport failing to reach or read the endpoint
+  and yields `SourceUnavailable`, except `NOT_AUTHORIZED`, since credentials do
+  not become correct by waiting. `GST_STREAM_ERROR` and `GST_CORE_ERROR` mean
+  the server answered and its media cannot be handled by this build — an
+  unsupported encoding, a missing depayloader — and stay `Unsupported`. An
+  unrecognized domain is treated as permanent, because an unrecognized error
+  must not become an infinite retry in a consumer that polls on this code.
+
+  The no-video-pad timeout is split the same way, on whether `rtspsrc`
+  announced any pad at all. A pad means the server answered and described
+  streams we cannot carry: permanent. No pad means nothing answered: absent.
 - `Unsupported` keeps its documented meaning — not implemented in this backend
   or this configuration — and is now unambiguously **permanent**. An
   unparseable `pipeline:`, a demuxer-bearing `pipeline:`, an undemuxable
@@ -102,6 +117,10 @@ instead of two.
 
 # Assumptions / open questions
 
+- The classifier is keyed on GStreamer error domains, which are stable API but
+  broader than the cases enumerated here. New domains default to permanent,
+  which fails safe for a polling consumer but will silently mark a genuinely
+  transient future case as fatal. Revisit if a live transport is added.
 - Only RTSP can currently be transiently absent. A future live input that can
   also be temporarily down — a network video source that is not RTSP — should
   return `SourceUnavailable` from its own branch rather than growing another

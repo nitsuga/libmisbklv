@@ -78,6 +78,11 @@ struct VideoCtx {
   // armed only during finish(), this remembers that a long-running branch has
   // already established a real mux stream even if it stalls at close time.
   std::atomic<bool> delivered_buffer{false};
+  // Set as soon as rtspsrc announces any pad, which means the server answered
+  // and described its streams. It separates "nothing there" from "there, but
+  // carrying media this build cannot handle" when no video pad ever links
+  // (ADR 0036).
+  std::atomic<bool> saw_any_pad{false};
   GstElement* mux_element = nullptr;  // borrowed, owned by pipeline
   GstElement* video_bin = nullptr;    // borrowed: rtspsrc or pipeline bin
   std::mutex mu;
@@ -126,6 +131,14 @@ struct VideoCtx {
 
   ~VideoCtx();
 };
+
+// Classify a GStreamer error from an RTSP branch. Only a resource-level
+// failure means the source is absent right now and is worth retrying; a stream
+// or core error is this build or this server's media being unusable, which
+// retrying cannot fix. Authorization is resource-level but permanent — wrong
+// credentials stay wrong (ADR 0036). Exposed for tests: the permanent paths
+// need a live server to reach otherwise.
+Error classify_rtsp_error(GQuark domain, int code);
 
 // Adds and prerolls the video branch. On an error the caller retains `video`
 // until it has taken the pipeline to NULL, keeping all callback user pointers
