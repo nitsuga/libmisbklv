@@ -199,8 +199,9 @@ relock is visible to a reader instead of being smoothed over.
 
 `Message` needs no media backend — hand it raw KLV bytes (e.g. from
 `extract_ts_klv`, which pulls KLV from a `.ts` buffer with zero dependencies and
-timestamps each packet the same way `KlvStream` does — it also reads the `0x15`
-sync-KLV streams gstreamer's demuxer drops):
+uses the same nanosecond units and relative source timing as `KlvStream` — its
+absolute origin can differ by about a frame; it also reads the `0x15` sync-KLV
+streams gstreamer's demuxer drops):
 
 ```cpp
 #include "misbklv/message.hpp"

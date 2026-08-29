@@ -18,13 +18,11 @@ and `open_insert` distinguishes a live source that is absent right now
      true after a month of no work is knowledge, not status: it belongs in a
      context/ concept or an ADR, with at most a pointer here. -->
 
-## In progress
-
-- Verify the live-consumer integration in parrot-to-klv#94 against the shipped
-  `poll()` contract.
-
 ## Next
 
+- **Live insert liveness — #60**: expose video delivery progress (and settle
+  whether the video branch's EOS is useful) for live consumers. This is an open
+  design fork; the delivery timestamp is the reliable signal.
 - **Registry breadth — 0903 side**: the remaining VMTI/VTarget items, as data
   needs them. (0601 is complete.)
 - **Remaining maintenance issue**: #50 benchmarks Generate-SEI end to end through

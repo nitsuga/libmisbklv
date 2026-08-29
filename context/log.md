@@ -2,6 +2,13 @@
 
 ## 2026-08-29
 
+* **Reconciled documentation and installed-package drift** (issue #64): the
+  installed GStreamer config now recreates the codecparsers dependency and the
+  consumer smoke test calls the backend factory; corrected timestamp-origin
+  wording, current progress/roadmap status, historical backend-plan labels,
+  and the amended ADR 0023/0027 claims. Release build, all 28 CTest cases, and
+  the installed consumer link check pass. Author: Codex (GPT-5).
+
 * **`Error::SourceUnavailable` separates an absent live source from an
   unsupported configuration** ([ADR 0036](./decisions/0036-source-unavailable-error.md),
   fork 33, issue #61). Appended to the enum so existing numeric codes keep their

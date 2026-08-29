@@ -58,7 +58,10 @@ assumption that both are equivalent, and confirms ADR 0008's "accept both on
 extract" is a real requirement, not hypothetical. 0x15 ties to the deferred
 sync-KLV mode (its samples are the `*_sync` file).
 
-## Components to build
+## Original components plan (historical)
+
+The list below is the original implementation plan. It is retained as design
+history; the implemented shape and resolved forks are recorded below.
 
 1. **`MediaBackend` interface** — core-facing, gstreamer-agnostic (mock + future
    ffmpeg fit). Extraction (pull KLV units from a source) + insertion (push KLV
@@ -127,7 +130,7 @@ Opened here during scoping, each resolved by an ADR (see the
   [`0021`](./decisions/0021-read-path-timestamps.md); Item 2 remains the fallback
   for streams like this one.
 
-## Phased plan
+## Original phased plan (historical)
 
 - **B0 — extraction spike**: done (above).
 - **B1 — extraction (0x06) + interface + mock**: land `MediaBackend` (F-A),
@@ -184,8 +187,8 @@ Opened here during scoping, each resolved by an ADR (see the
 - **Live 0x15 extraction gap** — stock `tsdemux` cannot surface 0x15, so the
   live GStreamer path handles 0x06 only. The gst-free whole-buffer extractor
   handles both offline; live 0x15 needs an incremental TS demux.
-- **CI** — the gst backend needs the gst dev libs in CI; keep it a separate,
-  skippable job so the core build stays light.
+- **CI** — the gst backend is exercised in the main build/test job; the
+  core-only sanitizer job keeps the core build independent of GStreamer.
 
 ## Outcome
 
@@ -195,5 +198,6 @@ implementation plus the `KlvStream`/`KlvSink` facade
 (ADR [`0018`](./decisions/0018-high-level-api.md)), live `extract` cancellable via
 a stop token (ADR [`0019`](./decisions/0019-extract-cancellation.md)). Extraction
 + insertion (KLV alone, or alongside a passed-through video stream — ADR
-[`0020`](./decisions/0020-video-passthrough.md)), file + live (`udp`/`srt`), all
-on **stock gstreamer — no custom element**. Consumable via `find_package(misbklv COMPONENTS gst)`.
+[`0020`](./decisions/0020-video-passthrough.md)), file + live (`udp`/`srt`
+extraction and `udp`/`srt`/`rtsp[s]`/`pipeline:` video sources), all on **stock
+gstreamer — no custom element**. Consumable via `find_package(misbklv COMPONENTS gst)`.

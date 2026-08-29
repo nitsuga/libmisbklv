@@ -44,9 +44,10 @@ jobs:
           target_link_libraries(app PRIVATE misbklv::gst)  # transitively: core
           EOF
           cat > /tmp/consumer/main.cpp <<'EOF'
-          #include "misbklv/stream.hpp"
-          #include "misbklv/message.hpp"
-          int main() { return 0; }  // link-only: proves both components resolve
+          #include "misbklv/gst_backend.hpp"
+          int main() {
+            return misbklv::make_gst_backend() ? 0 : 1;
+          }
           EOF
           cmake -S /tmp/consumer -B /tmp/consumer/build -DCMAKE_PREFIX_PATH="$PWD/_install"
           cmake --build /tmp/consumer/build

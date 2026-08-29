@@ -36,9 +36,10 @@ observable with its original error rather than becoming a generic backend error.
 - `KlvSink` preserves and exposes the exact `open_insert` error. Its `emit()` and
   `close()` return that same error when opening failed; callers check the sink's
   opening status before emitting and check every `emit()` and `close()` result.
-- Existing `Error` values are sufficient: parse errors, `Backend`, `Unsupported`,
-  and `ResourceLimit` cover the outcomes. No enum expansion or numeric-code
-  change is made.
+- Existing `Error` values are sufficient for the outcomes considered by this
+  decision: parse errors, `Backend`, `Unsupported`, and `ResourceLimit`.
+  This ADR makes no enum expansion or numeric-code change; ADR 0036 later
+  appended `SourceUnavailable` for a distinct live-source outcome.
 
 # Alternatives considered
 

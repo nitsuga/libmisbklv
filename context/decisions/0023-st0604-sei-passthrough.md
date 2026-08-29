@@ -44,7 +44,8 @@ Implementation approach:
 1. **Parse KLV in `push()`**: Extract ST 0601 `sensorTimestamp` (tag 2, absolute Unix µs)
 2. **PTS → timestamp map**: Thread-safe `std::map<uint64_t, uint64_t>` in `VideoCtx`
    - Populated in push(), queried in video pad probe
-   - No pruning — all entries persist for session lifetime
+   - The video pad probe evicts entries older than the current frame's matching
+     tolerance; a KLV burst remains until video consumes it
 3. **Fuzzy PTS matching**: Backward-only lookup with 200ms tolerance
    - Video pipeline can run ahead of KLV push() by a few frames
    - `upper_bound()` + step back ensures we never match future frames
@@ -52,7 +53,8 @@ Implementation approach:
    - Observed lag typically submillisecond; 200ms = 6 frames @ 30fps headroom
 4. **SEI generation** per ST 0604.6 §7:
    - UUID `MISPmicrosectime` (16 bytes)
-   - Time Status byte: Lock Unknown / Normal / Forward (`0x9F`, ST 0603.5 Table 3)
+   - Time Status byte: Lock Unknown, with Normal/Forward derived from the KLV
+     timestamp sequence (`0x9F` during normal running, ST 0603.5 Table 3)
    - Modified Precision Time Stamp (absolute Unix µs + 0xFF emulation prevention)
 5. **Picture Timing SEI stripping**: Remove type 1 SEI from source to prevent parser warnings
 6. **Injection**: Insert before first slice NAL (types 1-5, 19-21)
@@ -78,8 +80,9 @@ so the two interoperate without changes on their side.
 
 - **Video ES is larger** — ~35 bytes of SEI per frame (~24 KB over the 699-frame
   parrot-to-klv clip), less whatever Picture Timing SEI was stripped
-- **Test updated** — `gst_video_insert_test` checks ES size >= source instead of
-  byte-exact, and decodes the emitted SEI back (see Validation below)
+- **Test updated** — the initial test checked ES size >= source instead of
+  byte-exact. It now decodes every emitted SEI back and checks that each
+  timestamp came from the KLV input (see Validation below)
 - **Always enabled** — superseded 2026-07-28 by
   [`0024`](./0024-sei-generation-opt-in.md): callers opt in with
   `Sei0604::Generate`, and the default leaves the video alone
@@ -99,7 +102,8 @@ Revised 2026-07-28 (see Revision below); this describes the current shape.
 **Files:**
 - `src/gst/gst_insert.cpp` and `gst_video.cpp`:
   - `kPtsMatchToleranceNs` — 200 ms tolerance for the PTS match
-  - `VideoCtx::pts_to_sensor_timestamp` — mutex-guarded map (PTS ns → sensorTimestamp µs), no pruning
+  - `VideoCtx::pts_to_sensor_timestamp` — mutex-guarded map (PTS ns →
+    sensorTimestamp µs), with consumer-side eviction after video progress
   - `VideoCtx::h264_parser` — `GstH264NalParser` owned for the session, freed in `~VideoCtx`
   - `GstInserter::push()` — parses KLV item 2, populates the map
   - `generate_0604_sei_payload()` / `build_0604_sei_nal()` — the §7 payload and its NAL wrapper
@@ -133,10 +137,11 @@ Revised 2026-07-28 (see Revision below); this describes the current shape.
   passes through untouched
 - **Thread-safe** — the map is mutex-guarded (`push()` on the app thread, probe on the
   streaming thread); the parser is touched only by the probe
-- **No pruning** — the map persists for the session. The stated per-entry cost is a
-  `std::map` node (tens of bytes, not the ~16 originally claimed), so a long session is a
-  slow unbounded grower. An earlier 300-entry cap failed once the probe needed evicted
-  entries; a time-based bound is the sane version if this ever matters.
+- **Consumer-side eviction** — the video probe removes entries older than the
+  current frame minus the 200 ms matching tolerance. This bounds normal
+  operation by the KLV-vs-video lead without evicting timestamps before the
+  probe can use them. If Generate is on and KLV is pushed far ahead while
+  video never arrives, entries still accumulate until video consumes them.
 - Always builds a new buffer rather than mutating — safe for gstreamer refcounting
 
 # Wire format produced
@@ -155,7 +160,8 @@ xxxxxx  63 74 69 6d 65 9f XX XX  ff XX XX ff XX XX ff XX  |ctime...........|
 - `06` - SEI NAL type
 - `05 1c` - User Unregistered (type 5), length 28
 - `4d 49 53 50...` - "MISPmicrosectime" UUID
-- `9f` - Time Status: Lock Unknown / Normal / Forward (ST 0603.5 Table 3)
+- `9f` - Time Status during normal running: Lock Unknown / Normal / Forward;
+  the derived status bits may change on a discontinuity (ST 0603.5 Table 3)
 - `XX XX ff XX XX ff XX XX ff XX XX` - timestamp with 0xFF emulation prevention
 
 SEI appears only when `video_source` is set *and* `Sei0604::Generate` is asked
@@ -212,8 +218,9 @@ reader keying on `0x1F` will see a difference. Nothing in ST 0604.6 or ST 0603.5
 requires a particular value, and `gst_video_insert_test` now asserts `0x9F` on
 every SEI we generate, so the choice cannot regress silently.
 
-Bits 6/5 (Normal/Forward) remain asserted rather than computed — deriving
-discontinuity from the KLV timestamp sequence is a follow-on, not part of this.
+Bits 6/5 (Normal/Forward) were initially asserted rather than computed. They
+are now derived from the KLV timestamp sequence; normal running still emits
+`0x9F`, while a discontinuity is reported in the corresponding status bit.
 
 # Known limitations
 
@@ -221,8 +228,7 @@ discontinuity from the KLV timestamp sequence is a follow-on, not part of this.
 - **Always enabled** — superseded 2026-07-28: generation is opt-in via
   `Sei0604` ([`0024`](./0024-sei-generation-opt-in.md)), default `Preserve`
 - **Time Status: bit 7 is fixed at Lock Unknown**, per [`st0603`](../st0603.md)
-  §7.4 Table 3 (see the 2026-07-28 note below). Bits 6/5 were asserted here and
-  are now **derived** from the KLV timestamp sequence
+  §7.4 Table 3. Bits 6/5 are **derived** from the KLV timestamp sequence
   ([`0024`](./0024-sei-generation-opt-in.md)), so the byte is `0x9F` in normal
   running and reports a discontinuity when there is one.
 - **Picture Timing SEI stripping** now happens only under `Sei0604::Generate`
@@ -236,22 +242,30 @@ discontinuity from the KLV timestamp sequence is a follow-on, not part of this.
   within 1µs, which gstreamer provides.
 - **Emulation prevention correctness:** Generated per ST 0604.6 §7.4 Table 2
   (0xFF at byte positions 3, 6, 9); downstream must de-stuff correctly.
-- **Validation is manual; automated coverage is weak.** Verified by hand on a
-  parrot-to-klv run (SEI present by hexdump, and extracted successfully by the
-  downstream consumer's SEI decoder). `gst_video_insert_test` only
-  asserts the output ES is *no smaller* than the source — it does not look for
-  the `MISPmicrosectime` UUID, decode a timestamp, or check it against the KLV
-  it came from. A regression that emitted malformed or misaligned SEI would
-  still pass. Worth an assertion on the UUID and a round-trip of one frame's
-  timestamp. **Closed 2026-07-28** — `gst_video_insert_test` now decodes every
-  ST 0604 SEI out of the output ES and requires each one to be a timestamp the
-  KLV actually carried.
+- **Validation was initially manual and weak.** A parrot-to-klv run was first
+  checked by hexdump and the downstream consumer's decoder; the original test
+  only asserted that output ES was no smaller than the source. **Closed
+  2026-07-28** — `gst_video_insert_test` now decodes every ST 0604 SEI out of
+  the output ES and requires each one to be a timestamp the KLV actually
+  carried.
 - **Two ST 0604 SEIs per access unit on sources that already have one** —
   resolved by [`0024`](./0024-sei-generation-opt-in.md): under `Generate` the
   source's ST 0604 is replaced, not added to, so exactly one Precision Time
   Stamp survives per access unit. Writing the round-trip test is what surfaced
   it in the historical sample corpus — `klv_metadata_test_sync.ts` carried 418
   of its own.
+
+# Amendment — 2026-08-29
+
+Later implementation work amended the initial shape recorded by this decision:
+
+- The timestamp map initially retained every entry and was pruned by the
+  producer. Issue #26 moved eviction to the video-consumption path so a burst
+  of KLV cannot be discarded before a buffered video frame uses it.
+- Time Status bits 6/5 initially stayed asserted. They are now derived from
+  the KLV timestamp sequence, while bit 7 remains Lock Unknown.
+- The initial validation only checked output size and manual SEI decoding. The
+  current test decodes every generated SEI and checks it against the KLV input.
 
 # Citations
 
