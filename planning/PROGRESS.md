@@ -37,6 +37,10 @@ and `open_insert` distinguishes a live source that is absent right now
 
 ## Known gaps
 
+- Fork PRs never run on the self-hosted runners: approval is a gate, not an
+  isolation boundary, so `runs-on` routes them to `ubuntu-latest`. CI pins an
+  immutable image tag rather than `:latest`; bump it after **CI image**
+  publishes a new one.
 - The CI image must carry `git-lfs`: the repo sets `filter=lfs` attributes, so
   `actions/checkout`'s post-checkout hook fails the job without it.
 - CI's containerized jobs must run as the runner's uid (`--user 1000:1000`).

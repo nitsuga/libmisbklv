@@ -5,29 +5,32 @@ on:
   push:
   pull_request:
 
-# packages: read is what lets the container credentials pull the CI image.
+# The CI image package is public, so no packages scope is needed to pull it.
 permissions:
   contents: read
-  packages: read
 
 jobs:
   build-test:
-    runs-on: [self-hosted, libmisbklv]
+    # Fork PRs must never reach the persistent host: approving a fork PR is a
+    # gate, not an isolation boundary, and approved code would run here as the
+    # runner user. Forks go to a throwaway GitHub-hosted VM instead.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted", "libmisbklv"]') }}
     container:
-      image: ghcr.io/nitsuga/libmisbklv-ci:latest
-      # The runner pulls with a per-job docker config, so a host `docker
-      # login` is not visible here -- the job needs its own credentials.
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      # Pinned to an immutable commit tag, never :latest -- a queued run must
+      # get the image it was queued against, and the publisher workflow runs
+      # independently of this one. Bump this line when ci/Dockerfile changes,
+      # after CI image has published the new tag. The package is public, so
+      # no registry credentials are needed here.
+      image: ghcr.io/nitsuga/libmisbklv-ci:9eeeeae9701449e06eee671c40b00fe4892888a7
+      # On the host the workspace is bind-mounted and shared with native jobs,
+      # so a root container leaves root-owned files the next checkout cannot
+      # clean. A hosted VM is throwaway and expects the default root.
+      options: ${{ github.event.pull_request.head.repo.fork && ' ' || '--user 1000:1000' }}
       # Compiler cache shared by every job on this host. ccache is safe under
       # concurrent access, so parallel jobs warm one cache instead of three.
+      # A fork PR gets a throwaway path inside its own VM.
       volumes:
-        - /home/eric/ci-cache/ccache:/ccache
-      # Run as the runner's uid. The workspace is bind-mounted from the host
-      # and shared with native jobs, so a root container leaves root-owned
-      # files behind that the next job's checkout cannot clean.
-      options: --user 1000:1000
+        - ${{ github.event.pull_request.head.repo.fork && '/tmp/ccache:/ccache' || '/home/eric/ci-cache/ccache:/ccache' }}
     # A hung test otherwise runs to GitHub's 6-hour cap: gst_video_insert did
     # exactly that, nine times over, before finish() grew a drain timeout.
     timeout-minutes: 20
@@ -83,22 +86,26 @@ jobs:
     timeout-minutes: 20
     # Real-world hardening: the core parse/codec paths must be free of UB / OOB
     # on adversarial input. gstreamer is off so ASan isn't noised by gst internals.
-    runs-on: [self-hosted, libmisbklv]
+    # Fork PRs must never reach the persistent host: approving a fork PR is a
+    # gate, not an isolation boundary, and approved code would run here as the
+    # runner user. Forks go to a throwaway GitHub-hosted VM instead.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted", "libmisbklv"]') }}
     container:
-      image: ghcr.io/nitsuga/libmisbklv-ci:latest
-      # The runner pulls with a per-job docker config, so a host `docker
-      # login` is not visible here -- the job needs its own credentials.
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      # Pinned to an immutable commit tag, never :latest -- a queued run must
+      # get the image it was queued against, and the publisher workflow runs
+      # independently of this one. Bump this line when ci/Dockerfile changes,
+      # after CI image has published the new tag. The package is public, so
+      # no registry credentials are needed here.
+      image: ghcr.io/nitsuga/libmisbklv-ci:9eeeeae9701449e06eee671c40b00fe4892888a7
+      # On the host the workspace is bind-mounted and shared with native jobs,
+      # so a root container leaves root-owned files the next checkout cannot
+      # clean. A hosted VM is throwaway and expects the default root.
+      options: ${{ github.event.pull_request.head.repo.fork && ' ' || '--user 1000:1000' }}
       # Compiler cache shared by every job on this host. ccache is safe under
       # concurrent access, so parallel jobs warm one cache instead of three.
+      # A fork PR gets a throwaway path inside its own VM.
       volumes:
-        - /home/eric/ci-cache/ccache:/ccache
-      # Run as the runner's uid. The workspace is bind-mounted from the host
-      # and shared with native jobs, so a root container leaves root-owned
-      # files behind that the next job's checkout cannot clean.
-      options: --user 1000:1000
+        - ${{ github.event.pull_request.head.repo.fork && '/tmp/ccache:/ccache' || '/home/eric/ci-cache/ccache:/ccache' }}
     steps:
       - uses: actions/checkout@v5
       - name: Configure (ASan + UBSan, no gstreamer)
@@ -114,11 +121,14 @@ jobs:
   generated-drift:
     timeout-minutes: 10
     # ADRs 0012/0028: committed generated outputs must match fresh regeneration.
-    runs-on: [self-hosted, libmisbklv]
-    # No container: this job needs only python3 and git, which the host has.
-    # Under `container:` git reports every generated file as drift because it
-    # sees only a partial worktree -- unexplained, and not worth the risk for
-    # a job that gains nothing from the image.
+    # Fork PRs must never reach the persistent host: approving a fork PR is a
+    # gate, not an isolation boundary, and approved code would run here as the
+    # runner user. Forks go to a throwaway GitHub-hosted VM instead.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted", "libmisbklv"]') }}
+    # No container: this job needs only python3 and git, both present on the
+    # host and on ubuntu-latest. It also runs PR-supplied generator scripts
+    # directly, which is exactly why it must not land on the persistent host
+    # for a fork.
     steps:
       - uses: actions/checkout@v5
       - name: Regenerate committed outputs

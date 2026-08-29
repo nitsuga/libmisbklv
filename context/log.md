@@ -11,7 +11,12 @@
   preset). Build parallelism is pinned to `-j3` so three concurrent jobs fit
   the host. `generated-drift` stays on the native runner: under `container:`
   git reports every generated file as drift, which did not reproduce outside
-  CI on the same image and commit. Author: claude/opus-5.
+  CI on the same image and commit. Review (openai/gpt-5) then closed the
+  security gaps: fork PRs route to `ubuntu-latest` because approving a fork is
+  a gate rather than an isolation boundary, the image publisher no longer runs
+  on `pull_request` and scopes its registry credential to a per-job
+  `DOCKER_CONFIG`, and CI pins an immutable commit tag instead of racing
+  `:latest`. Author: claude/opus-5.
 
 * **Reconciled documentation and installed-package drift** (issue #64): the
   installed GStreamer config now recreates the codecparsers dependency and the
