@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
-      build-essential cmake ccache git git-lfs python3 ca-certificates \
+      build-essential cmake ccache git git-lfs python3 ca-certificates valgrind \
       libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
       libgstreamer-plugins-bad1.0-dev \
       gstreamer1.0-plugins-base gstreamer1.0-plugins-good \

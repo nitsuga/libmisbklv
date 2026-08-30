@@ -2,6 +2,12 @@
 
 ## 2026-08-30
 
+* **Added targeted GStreamer teardown memory checking** (issue #71): the CI
+  image now includes Valgrind and the standard jobs pin its published immutable
+  tag. The `build-test` job verifies that CTest registered `teardown_probe_uaf`
+  through Valgrind with the existing invalid-access exit code while leaving
+  leak checking disabled. Author: openai/gpt-5.6-sol.
+
 * **Closed the remaining bounded-extraction and timestamp-validation gaps**
   (issue #70): `extract_ts_klv` now caps aggregate pending PES bytes before the
   KLV framer runs, releases rejected PID candidates, preserves an exact-cap KLV

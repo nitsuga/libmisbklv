@@ -21,7 +21,7 @@ jobs:
       # independently of this one. Bump this line when ci/Dockerfile changes,
       # after CI image has published the new tag. The package is public, so
       # no registry credentials are needed here.
-      image: ghcr.io/nitsuga/libmisbklv-ci:9eeeeae9701449e06eee671c40b00fe4892888a7
+      image: ghcr.io/nitsuga/libmisbklv-ci:bc5b33d81da3f625650a2a90adc84adac26b04d9
       # On the host the workspace is bind-mounted and shared with native jobs,
       # so a root container leaves root-owned files the next checkout cannot
       # clean. A hosted VM is throwaway and expects the default root.
@@ -39,6 +39,8 @@ jobs:
       - uses: actions/checkout@v5
       - name: Configure
         run: bash ci/with-capacity.sh 1 cmake --preset release
+      - name: Verify teardown memory checker
+        run: ctest --test-dir build/release -N -V | grep -F 'valgrind "--error-exitcode=97"' | grep -F teardown_probe_uaf_test
       - name: Build
         run: bash ci/with-capacity.sh 1 cmake --build --preset release -j3
       - name: ccache stats
@@ -99,7 +101,7 @@ jobs:
       # independently of this one. Bump this line when ci/Dockerfile changes,
       # after CI image has published the new tag. The package is public, so
       # no registry credentials are needed here.
-      image: ghcr.io/nitsuga/libmisbklv-ci:9eeeeae9701449e06eee671c40b00fe4892888a7
+      image: ghcr.io/nitsuga/libmisbklv-ci:bc5b33d81da3f625650a2a90adc84adac26b04d9
       # On the host the workspace is bind-mounted and shared with native jobs,
       # so a root container leaves root-owned files the next checkout cannot
       # clean. A hosted VM is throwaway and expects the default root.

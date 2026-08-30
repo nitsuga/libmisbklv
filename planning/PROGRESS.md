@@ -38,7 +38,9 @@ No implementation work is currently in progress.
   immutable image tag rather than `:latest`; bump it after **CI image**
   publishes a new one.
 - The CI image must carry `git-lfs`: the repo sets `filter=lfs` attributes, so
-  `actions/checkout`'s post-checkout hook fails the job without it.
+  `actions/checkout`'s post-checkout hook fails the job without it. It must also
+  carry Valgrind: CMake only registers the targeted GStreamer teardown test
+  through its invalid-access checker when the executable is present.
 - CI's containerized jobs must run as the runner's uid (`--user 1000:1000`).
   The workspace is bind-mounted from the host and shared with native jobs, so a
   root container leaves root-owned files that the next checkout cannot clean --
