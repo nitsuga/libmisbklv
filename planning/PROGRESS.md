@@ -8,8 +8,7 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-**Issue #71:** publish the Valgrind-enabled CI image, pin the workflow to its
-immutable tag, and confirm CTest registers `teardown_probe_uaf` through it.
+No implementation work is currently in progress.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
@@ -39,7 +38,9 @@ immutable tag, and confirm CTest registers `teardown_probe_uaf` through it.
   immutable image tag rather than `:latest`; bump it after **CI image**
   publishes a new one.
 - The CI image must carry `git-lfs`: the repo sets `filter=lfs` attributes, so
-  `actions/checkout`'s post-checkout hook fails the job without it.
+  `actions/checkout`'s post-checkout hook fails the job without it. It must also
+  carry Valgrind: CMake only registers the targeted GStreamer teardown test
+  through its invalid-access checker when the executable is present.
 - CI's containerized jobs must run as the runner's uid (`--user 1000:1000`).
   The workspace is bind-mounted from the host and shared with native jobs, so a
   root container leaves root-owned files that the next checkout cannot clean --
