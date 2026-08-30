@@ -1,5 +1,18 @@
 # Knowledge Bundle Log
 
+## 2026-08-30
+
+* **Closed the remaining bounded-extraction and timestamp-validation gaps**
+  (issue #70): `extract_ts_klv` now caps aggregate pending PES bytes before the
+  KLV framer runs, releases rejected PID candidates, preserves an exact-cap KLV
+  frame plus transport overhead, and reports an incomplete final frame as
+  `Truncated` after delivering prior packets. Both GStreamer insertion overloads
+  reject timestamps below `kNoPts` while preserving the KLV-only sentinel, and
+  the public `Message` docs now spell out duplicate-tag read/edit behavior.
+  Focused boundary, multi-PID, tail, and span/vector regressions accompany the
+  changes. The full release and core sanitizer CTest suites pass. Author:
+  openai/gpt-5.6-sol.
+
 ## 2026-08-29
 
 * **CI review follow-up (PR #68, parrot-to-klv#109):** documented that the

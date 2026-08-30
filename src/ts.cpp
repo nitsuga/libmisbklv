@@ -15,6 +15,9 @@ namespace {
 
 constexpr std::uint8_t kSmpteUl[4] = {0x06, 0x0e, 0x2b, 0x34};
 constexpr std::size_t kPkt = 188;
+// Before the KLV PID is known, retain at most one maximum KLV frame plus the
+// largest legal PES header and one RP 217 AU-cell header.
+constexpr std::size_t kMaxPendingPesBytes = kDefaultMaxKlvPacketBytes + 264 + 5;
 
 std::uint8_t u8(std::span<const std::byte> s, std::size_t i) {
   return std::to_integer<std::uint8_t>(s[i]);
@@ -93,12 +96,24 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
   const std::int64_t origin_90k = earliest_pts_90k(ts);
   detail::KlvFramer framer;
   std::optional<Error> frame_error;  // first framing failure, returned at the end
+  std::size_t pending_pes_bytes = 0;
+  auto release = [&](std::vector<std::byte>& bytes) {
+    pending_pes_bytes -= bytes.size();
+    std::vector<std::byte>().swap(bytes);
+  };
 
   auto flush = [&](std::uint16_t pid) {
     auto it = pes.find(pid);
     if (it == pes.end() || it->second.empty()) return;
     const auto klv = unwrap_pes(it->second);
-    if (starts_with_ul(klv) && klv_pid < 0) klv_pid = pid;
+    if (starts_with_ul(klv) && klv_pid < 0) {
+      klv_pid = pid;
+      // Candidate buffers cannot contribute after the first KLV PID is found.
+      for (auto& [candidate, bytes] : pes) {
+        if (candidate == pid) continue;
+        release(bytes);
+      }
+    }
     // `klv_pid >= 0` first: before any PID is selected, uint16_t(-1) would
     // alias the reserved PID 0xFFFF and let a payload-bearing packet pollute
     // the reassembly buffer ahead of PID selection.
@@ -116,7 +131,11 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
           klv, (pts90 < 0 || origin_90k < 0) ? kNoPts : (pts90 - origin_90k) * 100'000 / 9,
           on_packet);
     }
-    it->second.clear();
+    pending_pes_bytes -= it->second.size();
+    if (pid == static_cast<std::uint16_t>(klv_pid))
+      it->second.clear();  // reuse the selected PID's bounded PES allocation
+    else
+      std::vector<std::byte>().swap(it->second);
   };
 
   for (std::size_t i = 0; i + kPkt <= ts.size(); i += kPkt) {
@@ -133,31 +152,45 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
     if (pusi) {
       flush(pid);
       if (frame_error) break;  // stop at the first framing failure
-      pes[pid].assign(payload.begin(), payload.end());
+      if (payload.size() > kMaxPendingPesBytes - pending_pes_bytes) {
+        frame_error = Error::ResourceLimit;
+        break;
+      }
+      auto& current = pes[pid];
+      current.assign(payload.begin(), payload.end());
+      pending_pes_bytes += current.size();
     } else {
       auto it = pes.find(pid);
-      if (it != pes.end() && !it->second.empty())
-      // GCC 12/13 report a false -Wstringop-overflow here: inlining
-      // vector::_M_range_insert's reallocation path loses the iterator
-      // bounds, and the diagnostic invents "writing between 2 and SIZE_MAX
-      // bytes into a region of size 0" with a self-contradictory offset range
-      // ([-SIZE_MAX, -1] into an object of size [1, SIZE_MAX]). Neither half
-      // is reachable: `payload` is bounded to [0, 184] by the `off > i + kPkt`
-      // guard above, and `it->second` is non-empty by the condition on this
-      // very `if`, so the destination is never size 0. Suppress narrowly —
-      // re-check when the toolchain moves (issue #41).
+      if (it != pes.end() && !it->second.empty()) {
+        // GCC 12/13 report a false -Wstringop-overflow here: inlining
+        // vector::_M_range_insert's reallocation path loses the iterator
+        // bounds, and the diagnostic invents "writing between 2 and SIZE_MAX
+        // bytes into a region of size 0" with a self-contradictory offset range
+        // ([-SIZE_MAX, -1] into an object of size [1, SIZE_MAX]). Neither half
+        // is reachable: `payload` is bounded to [0, 184] by the `off > i + kPkt`
+        // guard above, and `it->second` is non-empty by the condition on this
+        // very `if`, so the destination is never size 0. Suppress narrowly —
+        // re-check when the toolchain moves (issue #41).
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-overflow"
 #endif
-        it->second.insert(it->second.end(), payload.begin(), payload.end());
+        if (payload.size() > kMaxPendingPesBytes - pending_pes_bytes) {
+          frame_error = Error::ResourceLimit;
+        } else {
+          it->second.insert(it->second.end(), payload.begin(), payload.end());
+          pending_pes_bytes += payload.size();
+        }
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
+      }
+      if (frame_error) break;
     }
   }
   if (!frame_error) {
     for (auto& [pid, _] : pes) flush(pid);
+    if (!frame_error && !framer.remainder().empty()) frame_error = Error::Truncated;
   }
   if (frame_error) return Result<std::monostate>::err(*frame_error);
   return klv_pid >= 0 ? Result<std::monostate>::ok({})

@@ -137,6 +137,7 @@ class GstInserter : public Inserter {
   }
 
   Result<std::monostate> push(std::span<const std::byte> pkt, std::int64_t pts_ns) override {
+    if (pts_ns < kNoPts) return Result<std::monostate>::err(Error::RangeError);
     // With video passthrough both branches must share the source timeline. The
     // synthetic ~30fps KLV-only counter is therefore a caller error here.
     if (video_ && pts_ns == kNoPts) return Result<std::monostate>::err(Error::Unsupported);
@@ -157,6 +158,7 @@ class GstInserter : public Inserter {
   }
 
   Result<std::monostate> push(std::vector<std::byte>&& pkt, std::int64_t pts_ns) override {
+    if (pts_ns < kNoPts) return Result<std::monostate>::err(Error::RangeError);
     if (video_ && pts_ns == kNoPts) return Result<std::monostate>::err(Error::Unsupported);
     if (video_ && video_->generate_sei && pts_ns != kNoPts)
       record_sensor_timestamp(*video_, std::span<const std::byte>(pkt.data(), pkt.size()), pts_ns);
