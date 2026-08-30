@@ -592,6 +592,69 @@ static void test_ts_klv_robustness() {
         "extract_ts_klv declared frame over 16 MiB cap -> ResourceLimit");
   check(out2.empty(), "over-cap frame delivers nothing");
 
+  // The pending-PES allowance includes the largest optional PES header, so a
+  // KLV frame exactly at the public 16 MiB cap still reaches the framer.
+  {
+    constexpr std::size_t pes_header = 264;
+    std::vector<std::byte> exact_pes(pes_header + kDefaultMaxKlvPacketBytes);
+    exact_pes[2] = B(0x01);
+    exact_pes[3] = B(0xBD);
+    exact_pes[6] = B(0x80);
+    exact_pes[8] = B(0xFF);
+    for (std::size_t i = 0; i < std::size(kUas0601Key); ++i)
+      exact_pes[pes_header + i] = B(kUas0601Key[i]);
+    constexpr std::size_t value_len = kDefaultMaxKlvPacketBytes - 20;
+    exact_pes[pes_header + 16] = B(0x83);
+    exact_pes[pes_header + 17] = B(value_len >> 16);
+    exact_pes[pes_header + 18] = B(value_len >> 8);
+    exact_pes[pes_header + 19] = B(value_len);
+    std::uint8_t exact_cc = 0;
+    const auto exact_ts = packetize_pes(kPid, exact_pes, exact_cc);
+    std::size_t exact_callbacks = 0;
+    std::size_t exact_size = 0;
+    auto exact = extract_ts_klv(exact_ts, [&](const KlvPacket& kp) {
+      ++exact_callbacks;
+      exact_size = kp.bytes.size();
+    });
+    check(exact && exact_callbacks == 1 && exact_size == kDefaultMaxKlvPacketBytes,
+          "extract_ts_klv exact-cap frame with maximum PES header succeeds");
+  }
+
+  // (2b) Pending PES memory is bounded in aggregate before a KLV PID is
+  // discovered. Keep one candidate PID alive while another grows through
+  // continuations without a new PUSI; each individual candidate is below the
+  // limit, but their combined bytes exceed the frame plus transport allowance.
+  constexpr std::uint16_t kOtherPid = 0x0102;
+  constexpr std::size_t pending_limit = kDefaultMaxKlvPacketBytes + 264 + 5;
+  const std::array<std::byte, 184> filler = [] {
+    std::array<std::byte, 184> bytes{};
+    bytes.fill(B(0xA5));
+    return bytes;
+  }();
+  std::vector<std::byte> ts2b;
+  ts2b.reserve(((pending_limit / 184) + 2) * 188);
+  std::uint8_t cc2b = 0;
+  auto other = ts_packet(kOtherPid, true, 0, filler);
+  ts2b.insert(ts2b.end(), other.begin(), other.end());
+  std::size_t pending = filler.size();
+  const std::array<std::byte, 6> zero_length_pes = {B(0x00), B(0x00), B(0x01),
+                                                    B(0xC0), B(0x00), B(0x00)};
+  auto first = ts_packet(kPid, true, cc2b++, zero_length_pes);
+  ts2b.insert(ts2b.end(), first.begin(), first.end());
+  pending += zero_length_pes.size();
+  while (pending <= pending_limit) {
+    const std::size_t take = std::min<std::size_t>(filler.size(), pending_limit + 1 - pending);
+    auto continuation =
+        ts_packet(kPid, false, cc2b++, std::span<const std::byte>(filler).first(take));
+    ts2b.insert(ts2b.end(), continuation.begin(), continuation.end());
+    pending += take;
+  }
+  std::vector<std::vector<std::byte>> out2b;
+  auto r2b = run_extract(ts2b, out2b);
+  check(!r2b && r2b.error() == Error::ResourceLimit,
+        "extract_ts_klv aggregate pending PES limit -> ResourceLimit");
+  check(out2b.empty(), "aggregate pending PES over-limit delivers nothing");
+
   // (3) Garbage injected after packet A (same PES) with packet B in the next
   // PES: resync must skip the garbage and deliver both packets byte-exact.
   std::vector<std::byte> payload3 = pkt_a;
@@ -633,6 +696,20 @@ static void test_ts_klv_robustness() {
   auto r6 = run_extract(ts6, out6);
   check(static_cast<bool>(r6), "extract_ts_klv 0x15 AU cell split across PES succeeds");
   check(out6.size() == 1 && out6[0] == pkt_a, "split 0x15 KLV packet reassembled byte-exact");
+
+  // (6) A complete packet followed by an incomplete final frame is reported
+  // as truncated only after the complete packet has been delivered.
+  std::vector<std::byte> ts7;
+  append_pes(ts7, pes_packet(0xC0, pkt_a));
+  auto incomplete_tail = pkt_b;
+  incomplete_tail.pop_back();
+  append_pes(ts7, pes_packet(0xC0, incomplete_tail));
+  std::vector<std::vector<std::byte>> out7;
+  auto r7 = run_extract(ts7, out7);
+  check(!r7 && r7.error() == Error::Truncated,
+        "extract_ts_klv incomplete final KLV frame -> Truncated");
+  check(out7.size() == 1 && out7[0] == pkt_a,
+        "complete packet before incomplete tail stays delivered");
 }
 
 int main(int argc, char** argv) {

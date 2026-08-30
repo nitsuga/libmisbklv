@@ -344,7 +344,15 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
       g_pass = false;
       return 0;
     }
-    check("kNoPts rejected", !(*ins)->push(buf.subspan(0, packet_frame_length(buf)), kNoPts));
+    const auto first_packet = buf.subspan(0, packet_frame_length(buf));
+    const auto bad_span = (*ins)->push(first_packet, kNoPts - 1);
+    check("negative PTS rejected (span)", !bad_span && bad_span.error() == Error::RangeError);
+    std::vector<std::byte> bad_vector(first_packet.begin(), first_packet.end());
+    const auto bad_move = (*ins)->push(std::move(bad_vector), kNoPts - 1);
+    check("negative PTS rejected (vector)", !bad_move && bad_move.error() == Error::RangeError);
+    check("kNoPts rejected (span)", !(*ins)->push(first_packet, kNoPts));
+    std::vector<std::byte> untimed_vector(first_packet.begin(), first_packet.end());
+    check("kNoPts rejected (vector)", !(*ins)->push(std::move(untimed_vector), kNoPts));
     std::size_t off = 0;
     while (off < input.size()) {
       const std::size_t n = packet_frame_length(buf.subspan(off));

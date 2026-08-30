@@ -215,12 +215,15 @@ msg->set(tags::Uas0601::SensorLatitude, Value{lat + 1.0});
 auto bytes  = msg->encode();                 // Result<Bytes>; original packet extent if unedited
 ```
 
+- **Duplicate tags** — `get<T>(tag)` reads the first occurrence. `set(tag, Value)`
+  encodes at that occurrence's on-wire width, and `encode()` applies the edited
+  value to every occurrence of the tag.
 - **`get<T>(tag)`** returns `std::optional<T>`. `T` must match the item's kind:
   `double` for mapped items (lat/lon/angles), `std::uint64_t` for counts/times,
   `std::string_view` for text, `std::span<const std::byte>` for opaque/nested.
   Wrong type or absent tag → `nullopt`.
-- **`set(tag, Value)`** stages a typed edit (re-encoded at the item's on-wire
-  width). Unknown tag → error.
+- **`set(tag, Value)`** stages a typed edit (re-encoded at the first occurrence's
+  on-wire width). Unknown tag → error.
 - **`has(tag)`** reflects both items in the parsed source and staged additions.
 - **`encode()`** returns exactly the original packet extent for an unedited
   parsed Message — preserving noncanonical BER and checksum placement while

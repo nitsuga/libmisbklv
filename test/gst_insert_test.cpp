@@ -97,6 +97,28 @@ int main(int argc, char** argv) {
     return 2;
   }
   std::size_t off = 0, npush = 0;
+  const std::size_t insert_packet_size = packet_frame_length(buf);
+  const auto bad_span = (*ins)->push(buf.first(insert_packet_size), kNoPts - 1);
+  const bool bad_span_ok = !bad_span && bad_span.error() == Error::RangeError;
+  std::printf("INSERT NEGATIVE PTS (span): %s\n", bad_span_ok ? "PASS" : "MISMATCH");
+  if (!bad_span_ok) return 1;
+  std::vector<std::byte> bad_vector(buf.first(insert_packet_size).begin(),
+                                    buf.first(insert_packet_size).end());
+  const auto bad_move = (*ins)->push(std::move(bad_vector), kNoPts - 1);
+  const bool bad_move_ok = !bad_move && bad_move.error() == Error::RangeError;
+  std::printf("INSERT NEGATIVE PTS (vector): %s\n", bad_move_ok ? "PASS" : "MISMATCH");
+  if (!bad_move_ok) return 1;
+  const std::string sentinel_path = std::string(argv[2]) + ".sentinel.ts";
+  auto sentinel =
+      be->open_insert({std::string("file:") + sentinel_path, false, "", Sei0604::Preserve});
+  if (!sentinel) return 1;
+  const auto untimed_span = (*sentinel)->push(buf.first(insert_packet_size), kNoPts);
+  std::vector<std::byte> untimed_vector(buf.first(insert_packet_size).begin(),
+                                        buf.first(insert_packet_size).end());
+  const auto untimed_move = (*sentinel)->push(std::move(untimed_vector), kNoPts);
+  const bool untimed_ok = untimed_span && untimed_move && (*sentinel)->finish();
+  std::remove(sentinel_path.c_str());
+  if (!untimed_ok) return 1;
   while (off < input.size()) {
     const std::size_t n = packet_frame_length(buf.subspan(off));
     if (n == 0) break;

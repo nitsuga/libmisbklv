@@ -8,13 +8,7 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-**Shared self-hosted CI capacity (#67, [ADR 0037](../context/decisions/0037-shared-ci-capacity-gate.md)):** the normal jobs are being wired to a two-slot host gate shared with parrot-to-klv; each regular job uses one slot at `-j3`, while the image publisher uses both.
-
-`Inserter::poll()` / `KlvSink::poll()` report live insert failure without
-blocking ([ADR 0035](../context/decisions/0035-live-insert-terminal-status.md)),
-and `open_insert` distinguishes a live source that is absent right now
-(`SourceUnavailable`) from a configuration that can never run (`Unsupported`)
-([ADR 0036](../context/decisions/0036-source-unavailable-error.md)).
+No implementation work is currently in progress.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a

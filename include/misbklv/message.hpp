@@ -51,8 +51,9 @@ class Message {
     return has(static_cast<std::uint16_t>(tag));
   }
 
-  // Typed read: decodes the item (edited value if set()) and returns it iff the
-  // requested type matches the descriptor's ValueKind, else nullopt.
+  // Typed read: decodes the first item with `tag` (or the edited value) and
+  // returns it iff the requested type matches the descriptor's ValueKind.
+  // Duplicate source tags are read from their first occurrence.
   template <class T> std::optional<T> get(std::uint16_t tag) const {
     const ItemDescriptor* d = reg_->find(tag);
     if (!d) return std::nullopt;
@@ -74,8 +75,8 @@ class Message {
     return get<T>(static_cast<std::uint16_t>(tag));
   }
 
-  // Stage a typed edit (encoded at the item's source width, or the descriptor
-  // width for a new tag). Applied by encode().
+  // Stage a typed edit, encoded at the first matching item's source width (or
+  // the descriptor width for a new tag). Applied to every duplicate by encode().
   Result<std::monostate> set(std::uint16_t tag, Value v);
 
   // Named-tag overload: set(tags::Uas0601::SensorLatitude, Value{...}).
