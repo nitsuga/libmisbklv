@@ -8,7 +8,8 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-No implementation work is currently in progress.
+**Issue #71:** publish the Valgrind-enabled CI image, pin the workflow to its
+immutable tag, and confirm CTest registers `teardown_probe_uaf` through it.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a

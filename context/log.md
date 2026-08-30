@@ -2,6 +2,12 @@
 
 ## 2026-08-30
 
+* **Prepared targeted GStreamer teardown memory checking** (issue #71): the CI
+  image definition now includes Valgrind so the existing `teardown_probe_uaf`
+  CTest can run under its invalid-access checker. Immutable image publication
+  and workflow pinning follow from this exact definition commit. Author:
+  openai/gpt-5.6-sol.
+
 * **Closed the remaining bounded-extraction and timestamp-validation gaps**
   (issue #70): `extract_ts_klv` now caps aggregate pending PES bytes before the
   KLV framer runs, releases rejected PID candidates, preserves an exact-cap KLV
