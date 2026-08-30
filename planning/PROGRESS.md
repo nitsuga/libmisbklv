@@ -8,9 +8,7 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-**Remaining hardening gaps (#70):** bound gst-free pending-PES memory before
-framing, report incomplete final KLV frames, reject invalid negative insertion
-timestamps, and make the existing duplicate-tag contract explicit.
+No implementation work is currently in progress.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a

@@ -17,6 +17,8 @@ constexpr std::uint8_t kSmpteUl[4] = {0x06, 0x0e, 0x2b, 0x34};
 constexpr std::size_t kPkt = 188;
 // Before the KLV PID is known, retain at most one maximum KLV frame plus the
 // largest legal PES header and one RP 217 AU-cell header.
+// ponytail: one shared budget can reject an exact-cap KLV frame while another
+// PID is pending; preselect the KLV PID earlier if real multiplexes need that edge.
 constexpr std::size_t kMaxPendingPesBytes = kDefaultMaxKlvPacketBytes + 264 + 5;
 
 std::uint8_t u8(std::span<const std::byte> s, std::size_t i) {
@@ -132,7 +134,7 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
           on_packet);
     }
     pending_pes_bytes -= it->second.size();
-    if (pid == static_cast<std::uint16_t>(klv_pid))
+    if (klv_pid >= 0 && pid == static_cast<std::uint16_t>(klv_pid))
       it->second.clear();  // reuse the selected PID's bounded PES allocation
     else
       std::vector<std::byte>().swap(it->second);

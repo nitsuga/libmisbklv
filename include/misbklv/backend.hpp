@@ -144,7 +144,8 @@ class Inserter {
   // `pts_ns`: presentation time in nanoseconds from the start of the source
   // (the same timeline extraction reports on — KlvPacket::pts_ns). `kNoPts`
   // synthesizes a ~30 fps counter on a KLV-only pipeline, and is rejected when
-  // the config has a `video_source` (ADR 0020).
+  // the config has a `video_source` (ADR 0020). Values below `kNoPts` are invalid
+  // and return RangeError.
   virtual Result<std::monostate> push(std::span<const std::byte> klv_packet,
                                       std::int64_t pts_ns) = 0;
   // Ownership-transferring overload for zero-copy emit: by default forwards to

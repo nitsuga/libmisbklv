@@ -111,7 +111,7 @@ int main(int argc, char** argv) {
   const std::string sentinel_path = std::string(argv[2]) + ".sentinel.ts";
   auto sentinel =
       be->open_insert({std::string("file:") + sentinel_path, false, "", Sei0604::Preserve});
-  if (!sentinel) return 2;
+  if (!sentinel) return 1;
   const auto untimed_span = (*sentinel)->push(buf.first(insert_packet_size), kNoPts);
   std::vector<std::byte> untimed_vector(buf.first(insert_packet_size).begin(),
                                         buf.first(insert_packet_size).end());

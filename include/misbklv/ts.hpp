@@ -20,12 +20,15 @@ namespace misbklv {
 // Framing is bounded and terminal: a corrupt declared BER length after the UL
 // prefix fails the whole extract with BadLength, and a declared frame over the
 // 16 MiB reassembly cap (kDefaultMaxKlvPacketBytes) fails with ResourceLimit;
-// packets already delivered before the failure stay delivered. Garbage between
-// packets is tolerated — framing resyncs on the next SMPTE UL prefix and skips
-// anything before it. KLV packets are reassembled across PES boundaries, so a
-// packet larger than one PES (above the 16-bit PES_packet_length ceiling) or
-// split by a muxer is extracted whole. RP 217 (0x15) metadata AU cells are
-// supported in the non-fragmented form (the common case).
+// aggregate pending PES bytes are capped at that frame allowance plus transport
+// overhead and fail with the same error. A final incomplete KLV frame fails with
+// Truncated. Packets already delivered before any terminal failure stay
+// delivered. Garbage between packets is tolerated — framing resyncs on the next
+// SMPTE UL prefix and skips anything before it. KLV packets are reassembled
+// across PES boundaries, so a packet larger than one PES (above the 16-bit
+// PES_packet_length ceiling) or split by a muxer is extracted whole. RP 217
+// (0x15) metadata AU cells are supported in the non-fragmented form (the common
+// case).
 //
 // Each packet carries `pts_ns` — nanoseconds from the start of the source,
 // measured from the earliest PTS anywhere in `ts` (ADR 0021), or `kNoPts` if
