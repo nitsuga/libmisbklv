@@ -40,7 +40,7 @@ jobs:
       - name: Configure
         run: bash ci/with-capacity.sh 1 cmake --preset release
       - name: Verify teardown memory checker
-        run: ctest --test-dir build/release -N -V | grep -F 'valgrind "--error-exitcode=97"'
+        run: ctest --test-dir build/release -N -V | grep -F 'valgrind "--error-exitcode=97"' | grep -F teardown_probe_uaf_test
       - name: Build
         run: bash ci/with-capacity.sh 1 cmake --build --preset release -j3
       - name: ccache stats

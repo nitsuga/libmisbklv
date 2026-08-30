@@ -4,7 +4,7 @@
 
 * **Added targeted GStreamer teardown memory checking** (issue #71): the CI
   image now includes Valgrind and the standard jobs pin its published immutable
-  tag. The release job verifies that CTest registered `teardown_probe_uaf`
+  tag. The `build-test` job verifies that CTest registered `teardown_probe_uaf`
   through Valgrind with the existing invalid-access exit code while leaving
   leak checking disabled. Author: openai/gpt-5.6-sol.
 
