@@ -17,6 +17,7 @@
 //      re-emitted through a KlvSink with the same video, keeps its timing
 //   9. no output file after a failure LATER than open_insert either (ADR 0022) —
 //      a failing finish(), and a session abandoned without one
+//  10. bounded file video exposes its latest delivery time (ADR 0038)
 // Runs the whole battery twice: once on the generated MPEG-TS source, then again
 // on an MP4 remuxed from it (the `qtdemux` path — what a consumer converting MP4s
 // actually hits, and a different demuxer + caps negotiation into the muxer).
@@ -371,6 +372,7 @@ std::size_t run_case(MediaBackend& be, const std::string& source,
       g_pass = false;
       return 0;
     }
+    check("file video exposes delivery time", bool((*ins)->last_video_delivery()));
   }
   const auto out_ts = read_file(out_path.c_str());
   std::printf("  muxed %zu KLV packets + video -> %zu bytes\n", pushed.size(), out_ts.size());

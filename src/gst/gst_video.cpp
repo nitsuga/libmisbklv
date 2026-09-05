@@ -250,7 +250,10 @@ void attach_generate_probes(GstPad* pad, VideoCtx* ctx) {
 }
 
 GstPadProbeReturn on_video_buffer_delivered(GstPad*, GstPadProbeInfo*, gpointer user) {
-  static_cast<VideoCtx*>(user)->delivered_buffer.store(true, std::memory_order_release);
+  auto* ctx = static_cast<VideoCtx*>(user);
+  ctx->last_delivery_ticks.store(std::chrono::steady_clock::now().time_since_epoch().count(),
+                                 std::memory_order_release);
+  ctx->delivered_buffer.store(true, std::memory_order_release);
   return GST_PAD_PROBE_OK;
 }
 
@@ -1011,6 +1014,7 @@ static Result<std::monostate> prepare_file_branch(GstElement* pipeline, GstPad* 
   video->pipeline = pipeline;
   video->reserved_video_pad = reserved_video_pad;
   video->mux_element = mux;
+  attach_delivery_probe(video.get());
   video->generate_sei = sei_0604 == Sei0604::Generate;
   if (video->generate_sei) video->h264_parser = gst_h264_nal_parser_new();
   g_signal_connect(parse, "pad-added", G_CALLBACK(on_video_pad_added), video.get());
@@ -1249,7 +1253,7 @@ static Result<std::monostate> prepare_pipeline_branch(GstElement* pipeline,
   video->reserved_video_pad = reserved_video_pad;
   video->mux_element = mux;
   video->is_live_unbounded = (desc.find("num-buffers") == std::string::npos);
-  if (video->is_live_unbounded) attach_delivery_probe(video.get());
+  attach_delivery_probe(video.get());
   video->video_bin = bin;
   video->generate_sei = sei_0604 == Sei0604::Generate;
   if (video->generate_sei) video->h264_parser = gst_h264_nal_parser_new();

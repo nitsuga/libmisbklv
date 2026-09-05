@@ -131,6 +131,11 @@ class KlvSink {
   // Message arrives, instead of at close() (ADR 0035).
   Result<std::monostate> poll();
 
+  // Monotonic time when the most recent video buffer reached the muxer. nullopt
+  // means none has arrived (or this sink has no video source).
+  // Safe to query during other session operations; the sink must outlive it.
+  std::optional<std::chrono::steady_clock::time_point> last_video_delivery() const;
+
   // Failure from open_insert(), if any. Runtime emit()/close() failures remain
   // reported by their Result values and do not change this accessor.
   std::optional<Error> error() const { return open_error_; }

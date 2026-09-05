@@ -71,6 +71,25 @@ Serialize `poll()`, `emit()`, and `close()` from the same consumer context.
 Synchronous backends and sinks without an asynchronous source retain the `ok()`
 default.
 
+`last_video_delivery()` reports the monotonic time when a video buffer most
+recently reached the muxer. It returns `nullopt` before the first buffer (and for
+a sink without video), so a live consumer can detect startup or later stalls
+with its own timeout:
+
+```cpp
+if (auto delivered = out.last_video_delivery();
+    delivered && std::chrono::steady_clock::now() - *delivered > std::chrono::seconds(10)) {
+  // The video source has been idle for this consumer's chosen limit.
+}
+```
+
+Use it alongside `poll()`: delivery time reports progress, while `poll()`
+reports terminal backend failure. Video-branch EOS is not exposed because muxer
+backpressure can prevent it from reaching the observation pad while KLV is
+idle ([ADR 0038](../context/decisions/0038-live-video-delivery-timestamp.md)).
+The timestamp is safe to query while the session runs; the `KlvSink` must not be
+destroyed concurrently with the call.
+
 - **Timing carries through.** `m.pts()` is where the packet sat in the source —
   nanoseconds from the start of it — and `emit` writes it back at that time, so
   an edit does not re-time the stream. A source whose KLV carries no PES

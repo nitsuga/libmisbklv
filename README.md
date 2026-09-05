@@ -33,7 +33,8 @@ ffmpeg backend are deferred — see
   byte-exact `encode`) plus a `KlvStream` / `KlvSink` read-edit-write facade —
   read and write share one timeline, so editing a stream doesn't re-time it;
   terminal read errors are checked explicitly after iteration, and a live sink's
-  backend failure can be polled for without blocking.
+  backend failure can be polled and latest video delivery observed without
+  blocking.
 
 ## Quick start
 

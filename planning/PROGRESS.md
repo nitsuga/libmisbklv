@@ -16,9 +16,6 @@ No implementation work is currently in progress.
 
 ## Next
 
-- **Live insert liveness — #60**: expose video delivery progress (and settle
-  whether the video branch's EOS is useful) for live consumers. This is an open
-  design fork; the delivery timestamp is the reliable signal.
 - **Registry breadth — 0903 side**: the remaining VMTI/VTarget items, as data
   needs them. (0601 is complete.)
 - **Remaining maintenance issue**: #50 benchmarks Generate-SEI end to end through

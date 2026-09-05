@@ -1,5 +1,11 @@
 # Knowledge Bundle Log
 
+## 2026-09-05
+
+* **Accepted live video liveness as a last-delivery timestamp**
+  ([ADR 0038](./decisions/0038-live-video-delivery-timestamp.md), fork 34,
+  issue #60). Release and core sanitizer suites pass. Author: openai/gpt-5.
+
 ## 2026-08-30
 
 * **Added targeted GStreamer teardown memory checking** (issue #71): the CI

@@ -74,9 +74,10 @@ struct VideoCtx {
   // Unbounded live branches never EOS on their own; finish() pushes EOS through
   // their final src pad while it remains linked so mpegtsmux can drain safely.
   bool is_live_unbounded = false;  // true if no num-buffers (pipeline) or RTSP
-  // Set by a persistent probe on the reserved mux sink pad. Unlike a probe
-  // armed only during finish(), this remembers that a long-running branch has
-  // already established a real mux stream even if it stalls at close time.
+  // Updated by a persistent probe on the reserved mux sink pad to expose
+  // source progress. `delivered_buffer` separately preserves the exact
+  // first-buffer readiness latch used by live close.
+  std::atomic<std::chrono::steady_clock::rep> last_delivery_ticks{0};
   std::atomic<bool> delivered_buffer{false};
   // Set as soon as rtspsrc announces any pad, which means the server answered
   // and described its streams. It separates "nothing there" from "there, but

@@ -67,6 +67,7 @@ int main() {
   check(mi && mi->finished, "finish recorded");
   const auto polled = (*ins)->poll();
   check(static_cast<bool>(polled), "Inserter poll is a no-op for a synchronous backend");
+  check(!(*ins)->last_video_delivery(), "synchronous backend has no video delivery time");
 
   std::printf("MockBackend: %s\n", failures == 0 ? "PASS" : "FAIL");
   return failures == 0 ? 0 : 1;

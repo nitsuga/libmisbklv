@@ -4,10 +4,12 @@
 // (no gstreamer); GstBackend / MockBackend implement it.
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <span>
 #include <stop_token>
 #include <string>
@@ -172,6 +174,15 @@ class Inserter {
   // asynchronous source keep the default no-op result. Callers must serialize
   // poll(), push(), and finish().
   virtual Result<std::monostate> poll() { return Result<std::monostate>::ok({}); }
+  // Monotonic time when the most recent video buffer reached the muxer, or
+  // nullopt before the first delivery / when no video source exists.
+  // Compare it with steady_clock::now() to detect a stalled live source. The
+  // timestamp may be read while other session operations run; the Inserter
+  // must still outlive the call. The default keeps backends without
+  // asynchronous video source-compatible.
+  virtual std::optional<std::chrono::steady_clock::time_point> last_video_delivery() const {
+    return std::nullopt;
+  }
   virtual ~Inserter() = default;
 };
 

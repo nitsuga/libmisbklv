@@ -204,6 +204,12 @@ class GstInserter : public Inserter {
     return Result<std::monostate>::err(*terminal_error_);
   }
 
+  std::optional<std::chrono::steady_clock::time_point> last_video_delivery() const override {
+    if (!video_ || !video_->delivered_buffer.load(std::memory_order_acquire)) return std::nullopt;
+    const auto ticks = video_->last_delivery_ticks.load(std::memory_order_acquire);
+    return std::chrono::steady_clock::time_point{std::chrono::steady_clock::duration{ticks}};
+  }
+
   // An unbounded live video source will never produce EOS by itself. Send EOS
   // from its final src pad while it remains linked to mpegtsmux, then wait for
   // the muxer/sink to drain both the video and KLV pads. In particular, do not
