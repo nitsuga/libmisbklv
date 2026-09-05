@@ -137,4 +137,8 @@ Result<std::monostate> KlvSink::poll() {
   return inserter_->poll();
 }
 
+std::optional<std::chrono::steady_clock::time_point> KlvSink::last_video_delivery() const {
+  return inserter_ ? inserter_->last_video_delivery() : std::nullopt;
+}
+
 }  // namespace misbklv

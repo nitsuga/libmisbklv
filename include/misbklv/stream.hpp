@@ -6,6 +6,7 @@
 // this header stays gstreamer-free.
 #pragma once
 
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -130,6 +131,11 @@ class KlvSink {
   // one. Poll it while ingesting so a failed pipeline surfaces before the first
   // Message arrives, instead of at close() (ADR 0035).
   Result<std::monostate> poll();
+
+  // Monotonic time when the most recent video buffer reached the muxer. nullopt
+  // means none has arrived (or this sink has no video source).
+  // Serialize with poll(), emit(), and close(); the value freezes after close().
+  std::optional<std::chrono::steady_clock::time_point> last_video_delivery() const;
 
   // Failure from open_insert(), if any. Runtime emit()/close() failures remain
   // reported by their Result values and do not change this accessor.
