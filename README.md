@@ -23,9 +23,10 @@ ffmpeg backend are deferred — see
 - **MPEG-TS via GStreamer**: extract `stream_type` 0x06 from a file or live
   `udp:` / `srt:` source, and insert to a file or live sink (clock-paced), all
   with stock GStreamer — no custom plugin.
-- **Video passthrough on insert**: point the sink at a source file and its video
-  elementary stream is re-muxed unchanged (parsed, never decoded) alongside your
-  KLV — one call writes a TS with both a video PID and a KLV PID.
+- **Video passthrough on insert**: point the sink at a source file, RTSP URI, or
+  explicit GStreamer pipeline and its video elementary stream is re-muxed
+  unchanged (parsed, never decoded) alongside your KLV — one call writes a TS
+  with both a video PID and a KLV PID.
 - **gst-free file extraction**: pull `stream_type` 0x06 **and** 0x15 KLV from a
   `.ts` buffer with zero dependencies (`extract_ts_klv`); GStreamer is only
   needed for live sources.

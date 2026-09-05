@@ -176,7 +176,7 @@ class Inserter {
   virtual Result<std::monostate> poll() { return Result<std::monostate>::ok({}); }
   // Monotonic time when the most recent video buffer reached the muxer, or
   // nullopt before the first delivery / when no video source exists.
-  // Compare it with steady_clock::now() to detect a stalled live source. The
+  // Compare it with steady_clock::now() to detect a stalled live source.
   // Backends may update the timestamp from an internal streaming thread, but
   // callers serialize this query with poll(), push(), and finish(). The value
   // freezes after finish(). The default keeps backends without an asynchronous
