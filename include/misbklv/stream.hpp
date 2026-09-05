@@ -6,6 +6,7 @@
 // this header stays gstreamer-free.
 #pragma once
 
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -133,7 +134,7 @@ class KlvSink {
 
   // Monotonic time when the most recent video buffer reached the muxer. nullopt
   // means none has arrived (or this sink has no video source).
-  // Safe to query during other session operations; the sink must outlive it.
+  // Serialize with poll(), emit(), and close(); the value freezes after close().
   std::optional<std::chrono::steady_clock::time_point> last_video_delivery() const;
 
   // Failure from open_insert(), if any. Runtime emit()/close() failures remain

@@ -77,7 +77,7 @@ struct VideoCtx {
   // Updated by a persistent probe on the reserved mux sink pad to expose
   // source progress. `delivered_buffer` separately preserves the exact
   // first-buffer readiness latch used by live close.
-  std::atomic<std::chrono::steady_clock::rep> last_delivery_ticks{0};
+  std::atomic<std::chrono::steady_clock::duration> last_delivery{};
   std::atomic<bool> delivered_buffer{false};
   // Set as soon as rtspsrc announces any pad, which means the server answered
   // and described its streams. It separates "nothing there" from "there, but

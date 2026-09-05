@@ -177,9 +177,10 @@ class Inserter {
   // Monotonic time when the most recent video buffer reached the muxer, or
   // nullopt before the first delivery / when no video source exists.
   // Compare it with steady_clock::now() to detect a stalled live source. The
-  // timestamp may be read while other session operations run; the Inserter
-  // must still outlive the call. The default keeps backends without
-  // asynchronous video source-compatible.
+  // Backends may update the timestamp from an internal streaming thread, but
+  // callers serialize this query with poll(), push(), and finish(). The value
+  // freezes after finish(). The default keeps backends without an asynchronous
+  // video source compatible.
   virtual std::optional<std::chrono::steady_clock::time_point> last_video_delivery() const {
     return std::nullopt;
   }

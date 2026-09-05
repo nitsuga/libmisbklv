@@ -87,8 +87,10 @@ Use it alongside `poll()`: delivery time reports progress, while `poll()`
 reports terminal backend failure. Video-branch EOS is not exposed because muxer
 backpressure can prevent it from reaching the observation pad while KLV is
 idle ([ADR 0038](../context/decisions/0038-live-video-delivery-timestamp.md)).
-The timestamp is safe to query while the session runs; the `KlvSink` must not be
-destroyed concurrently with the call.
+Serialize the query with `poll()`, `emit()`, and `close()`; its atomic storage
+protects updates from the backend's streaming thread, not concurrent facade
+operations. The final value remains available after `close()` but no longer
+changes.
 
 - **Timing carries through.** `m.pts()` is where the packet sat in the source —
   nanoseconds from the start of it — and `emit` writes it back at that time, so

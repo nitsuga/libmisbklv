@@ -740,6 +740,7 @@ int main(int argc, char** argv) {
     auto r = be->open_insert({"file:" + p, false, "", Sei0604::Preserve});
     check(static_cast<bool>(r), "empty video_source -> KLV-only ok");
     if (r) {
+      check(!(*r)->last_video_delivery(), "KLV-only has no video delivery time");
       // push one packet with kNoPts should be ok (KLV-only)
       size_t n = packet_frame_length(klv);
       check(static_cast<bool>((*r)->push(klv.subspan(0, n), kNoPts)), "KLV-only kNoPts push ok");
@@ -1008,22 +1009,19 @@ int main(int argc, char** argv) {
         while (!(*r)->last_video_delivery() && std::chrono::steady_clock::now() < delivery_deadline)
           std::this_thread::sleep_for(std::chrono::milliseconds(10));
         const auto delivered = (*r)->last_video_delivery();
-        check(delivered && *delivered <= std::chrono::steady_clock::now(),
-              "video delivery exposes a monotonic timestamp");
-        if (delivered) {
-          const size_t n = packet_frame_length(klv);
-          auto pr = (*r)->push(klv.subspan(0, n), 1'300'000'000LL);
-          check(static_cast<bool>(pr), "later unbounded push ok");
-          if (pr) sent.insert(sent.end(), klv.begin(), klv.begin() + n);
-          const auto advance_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
-          auto later = (*r)->last_video_delivery();
-          while (later && *later <= *delivered &&
-                 std::chrono::steady_clock::now() < advance_deadline) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            later = (*r)->last_video_delivery();
-          }
-          check(later && *later > *delivered, "video delivery timestamp advances");
+        const size_t n = packet_frame_length(klv);
+        auto pr = (*r)->push(klv.subspan(0, n), 1'300'000'000LL);
+        check(static_cast<bool>(pr), "later unbounded push ok");
+        if (pr) sent.insert(sent.end(), klv.begin(), klv.begin() + n);
+        const auto advance_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+        auto later = (*r)->last_video_delivery();
+        while (delivered && later && *later <= *delivered &&
+               std::chrono::steady_clock::now() < advance_deadline) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+          later = (*r)->last_video_delivery();
         }
+        check(delivered && later && *later > *delivered,
+              "video delivery timestamp appears and advances");
         auto fr = (*r)->finish();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                            std::chrono::steady_clock::now() - t0)

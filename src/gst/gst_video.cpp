@@ -251,8 +251,8 @@ void attach_generate_probes(GstPad* pad, VideoCtx* ctx) {
 
 GstPadProbeReturn on_video_buffer_delivered(GstPad*, GstPadProbeInfo*, gpointer user) {
   auto* ctx = static_cast<VideoCtx*>(user);
-  ctx->last_delivery_ticks.store(std::chrono::steady_clock::now().time_since_epoch().count(),
-                                 std::memory_order_release);
+  ctx->last_delivery.store(std::chrono::steady_clock::now().time_since_epoch(),
+                           std::memory_order_release);
   ctx->delivered_buffer.store(true, std::memory_order_release);
   return GST_PAD_PROBE_OK;
 }

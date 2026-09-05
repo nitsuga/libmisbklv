@@ -5,7 +5,7 @@ decision_status: accepted
 tags: [decision, api, backend, streaming, phase-5]
 generated:
   by: openai/gpt-5
-  at: 2026-09-05T03:15:18Z
+  at: 2026-09-05T03:43:05Z
 sources:
   - id: libmisbklv-60
     resource: https://github.com/nitsuga/libmisbklv/issues/60
@@ -37,8 +37,8 @@ Expose only the reliable signal:
 
 - `Inserter::last_video_delivery()` returns the monotonic
   `std::chrono::steady_clock::time_point` when the most recent video buffer
-  reached the muxer, or `std::nullopt` before the first delivery and for a
-  backend without video progress.
+  reached the muxer, or `std::nullopt` before the first delivery and when the
+  inserter has no video source.
 - `KlvSink::last_video_delivery()` forwards the same query through the
   high-level facade.
 - The existing mux-pad delivery probe updates the timestamp for file, RTSP, and
