@@ -931,7 +931,7 @@ void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt, st
   const auto pts = static_cast<std::uint64_t>(pts_ns);
   std::lock_guard<std::mutex> lock(video.timestamp_mu);
   // Derive ST 0603 Time Status from absolute time against the media timeline.
-  // No producer-side pruning: the map is consumed by the video-pad SEI probe
+  // No producer-side timeline pruning: the map is consumed by the video-pad SEI probe
   // asynchronously, so KLV can be pushed more than a second ahead of the
   // frames being processed (bursty push, clock-paced replay, encoder
   // buffering). Eviction follows video-consumption progress in the SEI
@@ -939,9 +939,7 @@ void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt, st
   // frame_pts - kPtsMatchToleranceNs are discarded — under monotonic video
   // PTS those can never match a future frame. This bounds the map by the
   // actual KLV-vs-video lead (about one tolerance window at 30 fps) rather
-  // than a wall-clock guess. If Generate is on and KLV is pushed far ahead
-  // with video never arriving, entries accumulate until consumed — inherent,
-  // as the data may still be needed.
+  // than a wall-clock guess. A separate hard cap covers a stalled video source.
   SensorTime entry{sensor_timestamp_us, kTimeStatusBase};
   if (video.have_prev_push) {
     entry.status = sensor_time_status(
@@ -953,6 +951,19 @@ void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt, st
   video.have_prev_push = true;
   video.prev_push_pts_ns = pts;
   video.prev_push_ts_us = sensor_timestamp_us;
+  if (video.pts_to_sensor_timestamp.find(pts) == video.pts_to_sensor_timestamp.end() &&
+      video.pts_to_sensor_timestamp.size() >= kMaxSensorTimestamps) {
+    video.pts_to_sensor_timestamp.erase(video.pts_to_sensor_timestamp.begin());
+    ++video.dropped_sensor_timestamps;
+    const auto now = std::chrono::steady_clock::now();
+    if (now - video.last_sensor_timestamp_drop_warning >= std::chrono::seconds(1)) {
+      g_warning(
+          "misbklv: video timestamp map full; dropping oldest KLV timestamp (%" G_GUINT64_FORMAT
+          " dropped)",
+          video.dropped_sensor_timestamps);
+      video.last_sensor_timestamp_drop_warning = now;
+    }
+  }
   video.pts_to_sensor_timestamp[pts] = entry;
 }
 

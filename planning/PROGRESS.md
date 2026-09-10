@@ -20,11 +20,6 @@ No implementation work is currently in progress.
   needs them. (0601 is complete.)
 - **Remaining maintenance issue**: #50 benchmarks Generate-SEI end to end through
   `mpegtsmux` after the merged core benchmark closed its other speculative work.
-- **An SRT-specific hermetic streaming test** — the udp live path is covered,
-  SRT isn't. Live `extract()` ends on `udpsrc`'s idle-`timeout` message, which
-  `srtsrc` has no equivalent for (its properties are `poll-timeout` / `latency` /
-  `mode` / `wait-for-connection`), so the test likely has to terminate via the
-  ADR 0019 stop token — and may surface a real gap in live SRT extraction.
 - Candidate *forks* that need a decision first live in [ROADMAP](./ROADMAP.md)'s
   backlog — not enumerated here.
 

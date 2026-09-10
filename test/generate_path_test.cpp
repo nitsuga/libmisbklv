@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// Issue #26: bounded pts_to_sensor_timestamp map and codec latch.
+// Issues #26 and #75: Generate-path timestamp map and codec latch.
 // Direct unit coverage via internal header seam (like udp_multicast_test).
-// Updated for consumer-side eviction: the map is bounded by video consumption,
-// not by producer prune. Includes lagging-video regression.
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>
@@ -113,11 +111,12 @@ static void test_lagging_map_regression() {
 }
 
 static void test_bounded_map_with_consumption() {
-  std::printf("== bounded-map: bounded by consumption, not producer prune ==\n");
+  std::printf("== bounded-map: stalled video cap plus consumption ==\n");
   VideoCtx ctx;
-  constexpr int kCount = 10000;
+  constexpr int kCount = static_cast<int>(kMaxSensorTimestamps) + 1;
   constexpr std::int64_t kStepNs = 33'333'333;
-  // Phase 1: push without consumption — map grows without bound (producer no longer prunes).
+  // Phase 1: push without consumption. A stalled video source must retain only
+  // the newest capped window, not grow without bound.
   for (int i = 0; i < kCount; ++i) {
     auto pkt = make_packet(1'600'000'000'000'000ULL + static_cast<std::uint64_t>(i) * 33'333);
     if (pkt.empty()) {
@@ -129,15 +128,14 @@ static void test_bounded_map_with_consumption() {
   {
     std::lock_guard<std::mutex> lk(ctx.timestamp_mu);
     size_t sz = ctx.pts_to_sensor_timestamp.size();
-    std::printf(
-        "  after %d pushes without consumption: size %zu (expected %d, no producer bound)\n",
-        kCount, sz, kCount);
-    check(sz == static_cast<size_t>(kCount),
-          "map grows to push count when video never arrives (inherent)");
+    std::printf("  after %d pushes without consumption: size %zu (cap %zu)\n", kCount, sz,
+                kMaxSensorTimestamps);
+    check(sz == kMaxSensorTimestamps, "stalled video timestamp map stays capped");
+    check(ctx.dropped_sensor_timestamps == 1, "stalled video drops oldest timestamp at cap");
+    check(ctx.pts_to_sensor_timestamp.find(0) == ctx.pts_to_sensor_timestamp.end(),
+          "stalled video evicts the oldest timestamp");
   }
-  // Phase 2: simulate video consumption catching up to the far-ahead KLV.
-  // While video lags, the map stays large (bounded by lead, not just tolerance);
-  // after consumption finishes, only the tolerance window remains.
+  // Phase 2: simulate video consumption catching up to the retained KLV.
   {
     std::lock_guard<std::mutex> lk(ctx.timestamp_mu);
     for (int i = 0; i < kCount; ++i) {

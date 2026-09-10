@@ -1,5 +1,14 @@
 # Knowledge Bundle Log
 
+## 2026-09-10
+
+* **Hardened stalled-video timestamp handling and parser/live-SRT coverage**
+  (issue #75): Generate-mode timestamp state now caps at 10,000 entries with
+  oldest-first eviction, a rate-limited warning, and a diagnostic drop count;
+  partial long-form BER lengths report `Truncated`; and CTest covers cancellation
+  of a live SRT listener. Release, sanitizer, and Valgrind-backed teardown tests
+  pass. Author: openai/gpt-5.
+
 ## 2026-09-05
 
 * **Accepted live video liveness as a last-delivery timestamp**

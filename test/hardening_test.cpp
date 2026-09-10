@@ -358,6 +358,17 @@ static void test_parser_boundaries() {
   auto len2 = ber::read_length(nonmin2, 0);
   check(len2 && len2->value == 5 && len2->consumed == 3,
         "non-minimal BER length 0x82 0x00 0x05 -> 5 (accepted)");
+
+  const std::vector<std::byte> partial_length{B(0x82), B(0x00)};
+  auto truncated_length = ber::read_length(partial_length, 0);
+  check(!truncated_length && truncated_length.error() == Error::Truncated,
+        "partial BER long-form length -> Truncated");
+  std::vector<std::byte> partial_packet;
+  for (std::uint8_t b : kUas0601Key) partial_packet.push_back(B(b));
+  partial_packet.insert(partial_packet.end(), partial_length.begin(), partial_length.end());
+  auto truncated_packet = parse_packet(partial_packet);
+  check(!truncated_packet && truncated_packet.error() == Error::Truncated,
+        "packet with partial BER long-form length -> Truncated");
 }
 
 // --- (5) bounded live-frame inspection -------------------------------------

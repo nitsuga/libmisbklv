@@ -41,7 +41,8 @@ Result<Parsed> read_length(std::span<const std::byte> buf, std::size_t pos) {
   auto b = std::to_integer<std::uint8_t>(buf[pos]);
   if (b < 0x80) return Result<Parsed>::ok({b, 1});
   std::size_t n = b & 0x7F;
-  if (n == 0 || n > 8 || pos + 1 + n > buf.size()) return Result<Parsed>::err(Error::BadLength);
+  if (n == 0 || n > 8) return Result<Parsed>::err(Error::BadLength);
+  if (n > buf.size() - pos - 1) return Result<Parsed>::err(Error::Truncated);
   // Non-minimal long forms (`0x81 0x05`, `0x82 0x00 0x05`) are accepted, not
   // rejected: ST 0107 §6.3.2 prescribes the fewest-bytes form, but leniency here
   // is safe — write_length() always emits the minimal form, so we never produce
