@@ -65,6 +65,8 @@ bool push_live_eos_when_idle(GstPad* source_pad, GstPad* mux_pad, std::stop_toke
 
 enum class CodecLatch { Unknown, IsH264, NotH264 };
 
+inline constexpr std::size_t kMaxSensorTimestamps = 10'000;
+
 struct VideoCtx {
   GstElement* pipeline = nullptr;  // for creating fakesinks
   // The muxer sink pad reserved for video while the pipeline was still NULL,
@@ -95,6 +97,8 @@ struct VideoCtx {
 
   std::mutex timestamp_mu;
   std::map<std::uint64_t, SensorTime> pts_to_sensor_timestamp;
+  std::uint64_t dropped_sensor_timestamps = 0;  // diagnostic; timestamp_mu protects it
+  std::chrono::steady_clock::time_point last_sensor_timestamp_drop_warning{};
   bool have_prev_push = false;
   std::uint64_t prev_push_pts_ns = 0;
   std::uint64_t prev_push_ts_us = 0;

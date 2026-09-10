@@ -189,6 +189,8 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
   add_executable(gst_stream_test test/gst_stream_test.cpp)  # B4 real-time udp round-trip
   target_link_libraries(gst_stream_test PRIVATE misbklv-gst Threads::Threads)
   add_test(NAME gst_stream COMMAND gst_stream_test ${_basic})
+  add_test(NAME gst_srt_stream_stop COMMAND gst_stream_test ${_timed_06} 15006 srt-stop)
+  set_tests_properties(gst_srt_stream_stop PROPERTIES TIMEOUT 10)
 
   # Multicast/broadcast knobs on udp: sinks (ADR 0031). Uses the internal
   # make_sink seam to inspect udpsink properties without a full pipeline.
