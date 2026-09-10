@@ -145,8 +145,8 @@ What the suites guard, so a change lands in the right one:
 - `jmisb_crosscheck` — our output read back by an independent implementation.
 
 CI runs build+test, a **consumer smoke test** (`find_package(misbklv COMPONENTS
-gst)` against a real out-of-tree build), a **sanitizer** job (core only), and
-**generated-output drift** checks for the registry tables and synthetic fixtures
+gst)` against a real out-of-tree build), **core-only and GStreamer sanitizer**
+jobs, and **generated-output drift** checks for the registry tables and synthetic fixtures
 ([ADR 0012](context/decisions/0012-registry-codegen.md),
 [ADR 0028](context/decisions/0028-hermetic-synthetic-fixtures.md)).
 

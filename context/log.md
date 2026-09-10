@@ -2,6 +2,12 @@
 
 ## 2026-09-10
 
+* **Added isolated GStreamer ASan+UBSan coverage** (issue #76): CI now runs a
+  dedicated sanitizer lane with `MISBKLV_GSTREAMER=ON` and LeakSanitizer
+  disabled for third-party plugin noise. The teardown harness runs directly
+  under ASan in sanitizer builds, while release retains its Valgrind wrapper.
+  All GStreamer and core sanitizer tests pass. Author: openai/gpt-5.
+
 * **Hardened stalled-video timestamp handling and parser/live-SRT coverage**
   (issue #75): Generate-mode timestamp state now caps at 10,000 entries with
   oldest-first eviction, a rate-limited warning, and a diagnostic drop count;
