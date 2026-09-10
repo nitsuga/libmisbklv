@@ -952,7 +952,7 @@ void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt, st
   video.prev_push_pts_ns = pts;
   video.prev_push_ts_us = sensor_timestamp_us;
   if (video.pts_to_sensor_timestamp.find(pts) == video.pts_to_sensor_timestamp.end() &&
-      video.pts_to_sensor_timestamp.size() == kMaxSensorTimestamps) {
+      video.pts_to_sensor_timestamp.size() >= kMaxSensorTimestamps) {
     video.pts_to_sensor_timestamp.erase(video.pts_to_sensor_timestamp.begin());
     ++video.dropped_sensor_timestamps;
     const auto now = std::chrono::steady_clock::now();
