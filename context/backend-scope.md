@@ -4,8 +4,8 @@ title: gstreamer media backend — scope & design
 description: Environment findings, component breakdown, and the phased plan for the gstreamer MPEG-TS backend.
 tags: [component, backend, gstreamer, mpegts, phase-3]
 generated:
-  by: claude/opus-5
-  at: 2026-07-19T06:00:00Z
+  by: openai/gpt-5
+  at: 2026-09-10T00:00:00Z
 ---
 
 # gstreamer backend — scope
@@ -187,8 +187,9 @@ Opened here during scoping, each resolved by an ADR (see the
 - **Live 0x15 extraction gap** — stock `tsdemux` cannot surface 0x15, so the
   live GStreamer path handles 0x06 only. The gst-free whole-buffer extractor
   handles both offline; live 0x15 needs an incremental TS demux.
-- **CI** — the gst backend is exercised in the main build/test job; the
-  core-only sanitizer job keeps the core build independent of GStreamer.
+- **CI** — the gst backend is exercised in the main build/test job and a
+  dedicated ASan+UBSan job (LeakSanitizer disabled for plugin noise); the
+  core-only sanitizer job keeps the dependency-free core independent too.
 
 ## Outcome
 

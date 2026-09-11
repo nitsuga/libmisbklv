@@ -124,6 +124,29 @@ jobs:
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
           ASAN_OPTIONS: abort_on_error=1
 
+  sanitizers-gst:
+    timeout-minutes: 20
+    # GStreamer plugin leaks are third-party noise, but ASan/UBSan must still
+    # cover the backend's callbacks, buffers, and pad negotiation.
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || fromJSON('["self-hosted", "libmisbklv"]') }}
+    container:
+      image: ghcr.io/nitsuga/libmisbklv-ci:bc5b33d81da3f625650a2a90adc84adac26b04d9
+      options: ${{ github.event.pull_request.head.repo.fork && ' ' || '--user 1000:1000' }}
+      volumes:
+        - ${{ github.event.pull_request.head.repo.fork && '/tmp/ccache:/ccache' || '/home/eric/ci-cache/ccache:/ccache' }}
+        - ${{ github.event.pull_request.head.repo.fork && '/tmp/ci-capacity:/ci-capacity' || '/home/eric/ci-cache:/ci-capacity' }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Configure (ASan + UBSan + gstreamer)
+        run: bash ci/with-capacity.sh 1 cmake --preset sanitize -DMISBKLV_GSTREAMER=ON
+      - name: Build
+        run: bash ci/with-capacity.sh 1 cmake --build --preset sanitize -j3
+      - name: Test under sanitizers
+        run: bash ci/with-capacity.sh 1 ctest --test-dir build/sanitize --output-on-failure --timeout 600
+        env:
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+          ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
+
   generated-drift:
     timeout-minutes: 10
     # ADRs 0012/0028: committed generated outputs must match fresh regeneration.

@@ -235,7 +235,7 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
   add_executable(teardown_probe_uaf_test test/teardown_probe_uaf_test.cpp)
   target_link_libraries(teardown_probe_uaf_test PRIVATE misbklv-gst Threads::Threads)
   find_program(VALGRIND_EXECUTABLE valgrind)
-  if(VALGRIND_EXECUTABLE)
+  if(VALGRIND_EXECUTABLE AND NOT MISBKLV_SANITIZE)
     add_test(NAME teardown_probe_uaf COMMAND ${VALGRIND_EXECUTABLE}
       --error-exitcode=97 --leak-check=no --errors-for-leak-kinds=none
       $<TARGET_FILE:teardown_probe_uaf_test> 8 200)
