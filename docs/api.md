@@ -251,6 +251,11 @@ auto bytes  = msg->encode();                 // Result<Bytes>; original packet e
   excluding trailing input bytes. An edited Message is rebuilt: source items
   without edits pass through byte-exact, edits and additions use the codec, and
   the checksum is recomputed.
+- **`checksum_valid()`** — `parse()` does **not** verify the ST 0601 checksum, and
+  an unedited `encode()` re-emits a corrupt one unchanged. Call
+  `msg->checksum_valid()` (`Result<bool>`) to check the source packet as parsed
+  (staged edits are ignored); accept/reject is your policy. No checksum item is
+  an error.
 - **Named tags** — `tag` may be a plain number or a generated per-registry enum:
   `tags::Uas0601::SensorLatitude`, `tags::Vmti0903::…`, `tags::Vtarget0903::…`
   (generated from the registry, so the value equals the ST tag number). Names and

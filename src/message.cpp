@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "misbklv/message.hpp"
 
+#include <algorithm>
+
 #include "misbklv/builder.hpp"
 
 namespace misbklv {
@@ -107,6 +109,30 @@ Result<ber::Bytes> Message::encode() const {
   // re-encoding an already-non-conformant capture after a single edit.
   const bool authoring = bytes_.empty();
   return std::move(b).finalize(reg_->ul_key, /*enforce_mandatory=*/authoring);
+}
+
+Result<bool> Message::checksum_valid() const {
+  const auto key = std::span<const std::uint8_t>(kUas0601Key);
+  if (pkt_.total_size < 2 || pkt_.ul_key.size() != key.size() ||
+      !std::equal(key.begin(), key.end(), pkt_.ul_key.begin(), [](std::uint8_t a, std::byte b) {
+        return a == std::to_integer<std::uint8_t>(b);
+      }))
+    return Result<bool>::err(Error::UnknownTag);
+  const Item* cs = nullptr;
+  for (const auto& it : pkt_.items)
+    if (it.tag == 1) {
+      cs = &it;
+      break;
+    }
+  if (!cs) return Result<bool>::err(Error::UnknownTag);
+  const std::byte* end = bytes_.data() + pkt_.total_size;
+  if (cs->value.size() != 2 || cs->value.data() + 2 != end)
+    return Result<bool>::err(Error::BadLength);
+  const std::uint16_t want =
+      codec::bcc16(std::span<const std::byte>(bytes_.data(), pkt_.total_size - 2));
+  const std::uint16_t got = static_cast<std::uint16_t>(
+      (std::to_integer<unsigned>(cs->value[0]) << 8) | std::to_integer<unsigned>(cs->value[1]));
+  return Result<bool>::ok(want == got);
 }
 
 std::span<const std::byte> Message::original_bytes() const {

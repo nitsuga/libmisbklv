@@ -93,6 +93,13 @@ class Message {
   // checksum is re-emitted.
   Result<ber::Bytes> encode() const;
 
+  // Whether the ST 0601 Item 1 checksum of the source packet as parsed matches a
+  // recomputed bcc16 (key..checksum length, as LocalSetBuilder writes it). Ignores
+  // staged edits. parse()/adopt() never verify; policy is the caller's. Errors:
+  // UnknownTag (no checksum item / not a 0601 packet), BadLength (tag 1 is not a
+  // 2-byte value ending the packet).
+  Result<bool> checksum_valid() const;
+
   // True if any `set()` has staged an edit/append.
   bool edited() const { return !edits_.empty(); }
 

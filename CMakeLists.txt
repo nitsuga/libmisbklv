@@ -161,6 +161,10 @@ add_executable(klv_framer_test test/klv_framer_test.cpp)  # KlvFramer resync (is
 target_link_libraries(klv_framer_test PRIVATE misbklv)
 add_test(NAME klv_framer COMMAND klv_framer_test)
 
+add_executable(checksum_test test/checksum_test.cpp)  # Message::checksum_valid (issue #82)
+target_link_libraries(checksum_test PRIVATE misbklv)
+add_test(NAME checksum COMMAND checksum_test)
+
 add_executable(message_test test/message_test.cpp)  # high-level Message (ADR 0018)
 target_link_libraries(message_test PRIVATE misbklv)
 add_test(NAME message COMMAND message_test ${_first})

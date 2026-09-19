@@ -2,6 +2,13 @@
 
 ## 2026-09-19
 
+* **Added `Message::checksum_valid()`** (issue #82, smallest slice): parse never
+  verified the ST 0601 Item 1 checksum. The new call recomputes bcc16 over the
+  source packet as parsed (staged edits ignored) and returns `Result<bool>`; no
+  checksum item is `UnknownTag`, a malformed one `BadLength`. Parse, adopt and
+  encode are unchanged; whether the edit path should refuse an invalid checksum
+  stays open. New core `checksum` test. Author: claude/sonnet-5.
+
 * **Fixed `KlvFramer` wedging on a malformed BER header** (issue #80, F2): a
   frame error left `pos` at the bad UL, so the same bytes were re-parsed on every
   feed and the reassembly buffer grew without bound. The framer now keeps the
