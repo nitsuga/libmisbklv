@@ -8,8 +8,9 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-The `KlvFramer` resync fix (issue #80, F2) is in review. The rest of #80 is
-still decision-first; #82 (ST 0601 checksum) is next after it.
+#82 `Message::checksum_valid()` is in review; the policy question on the edit
+path (refuse or flag recomputing over an invalid checksum) is still open. The
+rest of #80 is decision-first.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
