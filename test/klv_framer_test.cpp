@@ -21,8 +21,8 @@ static void check(bool ok, const char* what) {
   if (!ok) ++failures;
 }
 
-static std::vector<std::byte> make_packet() {
-  const std::byte payload[] = {std::byte{0xAB}, std::byte{0xCD}};
+static std::vector<std::byte> make_packet(std::size_t payload_bytes = 2) {
+  const std::vector<std::byte> payload(payload_bytes, std::byte{0xAB});
   LocalSetBuilder b(gen::uas_0601);
   b.append_raw(143, payload);
   auto pkt = std::move(b).finalize(std::span{kUas0601Key}, /*enforce=*/false);
@@ -54,13 +54,65 @@ int main() {
   check(framer.remainder().size() < bad.size(), "bad bytes not retained in remainder");
 
   const std::size_t before = framer.remainder().size();
+  bool junk_ok = true;
   for (int i = 0; i < 100; ++i) {
     auto e = framer.feed(bad, i, [&](const KlvPacket&) { ++packets; });
-    check(e && *e == Error::BadLength, "junk feed reports BadLength") ;
-    if (failures) break;
+    if (!(e && *e == Error::BadLength)) {
+      junk_ok = false;
+      break;
+    }
   }
+  check(junk_ok, "100 junk feeds each report BadLength");
   check(framer.remainder().size() <= before + bad.size(), "buffer does not grow on repeated junk");
   check(packets == 2, "junk emits no packets");
+
+  // Over-cap: a valid-but-too-large packet is ResourceLimit, skipped without
+  // wedging; the following packet that fits the cap still emits.
+  {
+    const auto big = make_packet(40);
+    check(big.size() > good.size(), "oversize packet is larger than the normal one");
+    std::vector<std::byte> s2 = big;
+    s2.insert(s2.end(), good.begin(), good.end());
+    KlvFramer capped(good.size());
+    int n = 0;
+    auto e = capped.feed(s2, 0, [&](const KlvPacket&) { ++n; });
+    check(e && *e == Error::ResourceLimit, "over-cap packet reports ResourceLimit");
+    check(n == 1, "packet under the cap still emitted after over-cap packet");
+    check(capped.remainder().empty(), "oversize UL not retained (framer not wedged)");
+  }
+
+  // Next feed completes a packet split across feeds.
+  {
+    const std::span<const std::byte> all(good);
+    const auto half = all.subspan(0, good.size() / 2);
+    const auto rest = all.subspan(good.size() / 2);
+    KlvFramer f;
+    int n = 0;
+    auto e1 = f.feed(half, 0, [&](const KlvPacket&) { ++n; });
+    check(!e1 && n == 0, "half packet: no error, nothing emitted");
+    check(f.remainder().size() == half.size(), "half packet stays buffered");
+    auto e2 = f.feed(rest, 1, [&](const KlvPacket&) { ++n; });
+    check(!e2 && n == 1, "rest completes exactly one packet");
+    check(f.remainder().empty(), "remainder empty after completion");
+  }
+
+  // Same, after a bad frame in the first feed: resync and reassembly compose.
+  {
+    const std::span<const std::byte> all(good);
+    const auto half = all.subspan(0, good.size() / 2);
+    const auto rest = all.subspan(good.size() / 2);
+    std::vector<std::byte> first = bad;
+    first.insert(first.end(), half.begin(), half.end());
+    KlvFramer f;
+    int n = 0;
+    auto e1 = f.feed(first, 0, [&](const KlvPacket&) { ++n; });
+    check(e1 && *e1 == Error::BadLength && n == 0,
+          "bad frame then half packet: BadLength, nothing emitted");
+    check(f.remainder().size() == half.size(), "only the half packet stays buffered");
+    auto e2 = f.feed(rest, 1, [&](const KlvPacket&) { ++n; });
+    check(!e2 && n == 1, "rest completes exactly one packet after resync");
+    check(f.remainder().empty(), "remainder empty after completion");
+  }
 
   std::printf("%s\n", failures == 0 ? "KLV_FRAMER: all PASS" : "KLV_FRAMER: FAIL");
   return failures == 0 ? 0 : 1;
