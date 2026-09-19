@@ -8,7 +8,8 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-Issue #76's GStreamer ASan+UBSan CI lane is ready for review.
+The `KlvFramer` resync fix (issue #80, F2) is in review. The rest of #80 is
+still decision-first; #82 (ST 0601 checksum) is next after it.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a

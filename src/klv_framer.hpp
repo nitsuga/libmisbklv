@@ -23,8 +23,10 @@ class KlvFramer {
       : max_packet_bytes_(max_packet_bytes) {}
 
   // Append one timestamped transport unit and emit every complete packet.
-  // Returns the first malformed or over-cap frame; an incomplete frame stays
-  // buffered for the next feed.
+  // Returns the first malformed or over-cap frame; the bad UL is skipped (one
+  // byte, then resync) so later valid packets in the same feed still emit and
+  // the bad bytes are not retained. An incomplete frame stays buffered for the
+  // next feed.
   std::optional<Error> feed(std::span<const std::byte> bytes, std::int64_t pts_ns,
                             const PacketHandler& on_packet) {
     marks_.mark(stream_off_ + reassembly_.size(), pts_ns);
@@ -53,8 +55,11 @@ class KlvFramer {
       rest = std::span<const std::byte>(reassembly_).subspan(pos);
       auto frame = inspect_packet_frame(rest, max_packet_bytes_);
       if (!frame) {
-        error = frame.error();
-        break;
+        // Keep the first error, but consume the bad UL's first byte so the UL
+        // search resyncs instead of re-parsing the same bytes on every feed.
+        if (!error) error = frame.error();
+        pos += 1;
+        continue;
       }
       if (!*frame) break;
       const std::size_t n = **frame;
