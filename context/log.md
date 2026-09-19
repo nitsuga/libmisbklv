@@ -1,5 +1,15 @@
 # Knowledge Bundle Log
 
+## 2026-09-19
+
+* **Fixed `KlvFramer` wedging on a malformed BER header** (issue #80, F2): a
+  frame error left `pos` at the bad UL, so the same bytes were re-parsed on every
+  feed and the reassembly buffer grew without bound. The framer now keeps the
+  first error, skips one byte, and resyncs, so later valid packets still emit.
+  Callers still treat the returned error as terminal; that policy stays with the
+  pending #80 decision. New core `klv_framer` test; it fails on the old code.
+  Author: claude/sonnet-5.
+
 ## 2026-09-10
 
 * **Added isolated GStreamer ASan+UBSan coverage** (issue #76): CI now runs a
