@@ -44,6 +44,13 @@ across the entire frame: the 16-byte SMPTE UL, BER length, and declared value.
   `ResourceLimit` and fatal. Neither condition resynchronizes inside the
   claimed payload, because doing so could reinterpret payload bytes as a new
   packet.
+  - *Amended 2026-09-19 (issue #80, PR #84):* extraction still stops at the
+    first framing error. `KlvFramer` itself now keeps that first error, skips
+    one byte past the bad UL, and resyncs, so it can no longer re-parse the same
+    bytes forever or grow its buffer. This does resynchronize inside the claimed
+    payload after an over-cap rejection, so the reinterpretation risk above is
+    open again; how the framer should resync after `ResourceLimit` is part of the
+    pending #80 decision.
 - Cancellation succeeds without treating retained incomplete input as an
   extraction error.
 - The gst-free whole-buffer parser remains outside this default: offline parsing
