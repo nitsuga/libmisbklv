@@ -164,7 +164,8 @@ class Inserter {
   // see ADR 0032. A default token is never signaled, so finish() runs to the
   // natural EOS, unchanged for every existing caller. On cancellation any
   // partial sink file is discarded (ADR 0022) and finish() returns ok, matching
-  // extract()'s cooperative-stop convention (ADR 0019).
+  // extract()'s cooperative-stop convention (ADR 0019). The GStreamer backend
+  // latches: a repeated finish() returns the first call's result immediately.
   virtual Result<std::monostate> finish(std::stop_token stop = {}) = 0;
   // Nonblocking terminal-state observation for asynchronous insert sources.
   // ok() means no terminal failure has been observed; an error means the

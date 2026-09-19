@@ -28,8 +28,9 @@ class Message {
   static Result<Message> parse(std::span<const std::byte> bytes);
 
   // Move-adopt an already-owned packet buffer; parses in place without copying.
-  // Transfers ownership of `bytes` into the Message (caller’s vector is empty
-  // on success). Preserves `parse` copy semantics for public API.
+  // On success ownership of `bytes` moves into the Message (caller's vector is
+  // left empty). On failure the caller's vector is untouched. Same errors as
+  // `parse`.
   static Result<Message> adopt(std::vector<std::byte>&& bytes);
 
   // Author a fresh, empty packet for `registry` — ST 0601 (`RegistryId::Uas0601`)

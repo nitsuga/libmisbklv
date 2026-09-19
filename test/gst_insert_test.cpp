@@ -4,6 +4,7 @@
 // KLV (0x06+KLVA) losslessly, so no klvpmtrewrite is needed.
 // argv: <input.klv> <temp.ts>
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <fstream>
 #include <span>
@@ -134,6 +135,17 @@ int main(int argc, char** argv) {
     return 2;
   }
   std::printf("inserted %zu packets -> %s\n", npush, argv[2]);
+
+  // finish() is idempotent: a second call returns promptly with the same result.
+  {
+    const auto t0 = std::chrono::steady_clock::now();
+    const auto again = (*ins)->finish();
+    const auto took = std::chrono::steady_clock::now() - t0;
+    if (!again || took > std::chrono::seconds(5)) {
+      std::fprintf(stderr, "second finish() not idempotent (ok=%d)\n", static_cast<int>(!!again));
+      return 1;
+    }
+  }
 
   // --- re-extract and compare ----------------------------------------------
   std::vector<std::byte> out;

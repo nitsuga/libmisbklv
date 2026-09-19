@@ -147,6 +147,7 @@ class GstInserter : public Inserter {
       record_sensor_timestamp(*video_, pkt, pts_ns);
 
     GstBuffer* buf = gst_buffer_new_allocate(nullptr, pkt.size(), nullptr);
+    if (!buf) return Result<std::monostate>::err(Error::Backend);
     gst_buffer_fill(buf, 0, pkt.data(), pkt.size());
     // KLV-only output with kNoPts retains the historic ~30fps pacing counter.
     GST_BUFFER_PTS(buf) = (pts_ns == kNoPts) ? pts_ : static_cast<GstClockTime>(pts_ns);
@@ -215,7 +216,17 @@ class GstInserter : public Inserter {
   // the muxer/sink to drain both the video and KLV pads. In particular, do not
   // unlink or release the mux request pad while PLAYING: mpegtsmux can still be
   // traversing its request-pad list on a streaming thread (issue #39).
+  //
+  // Idempotent: the first call's result is cached and returned by every later
+  // call without touching the (already NULL) pipeline.
   Result<std::monostate> finish(std::stop_token stop) override {
+    if (finished_) return *finished_;
+    finished_ = do_finish(std::move(stop));
+    return *finished_;
+  }
+
+ private:
+  Result<std::monostate> do_finish(std::stop_token stop) {
     if (terminal_error_) {
       quiesce_to_null();
       discard_output();
@@ -320,7 +331,6 @@ class GstInserter : public Inserter {
     return Result<std::monostate>::err(Error::Backend);
   }
 
- private:
   // Sever every probe holding VideoCtx, then take the pipeline to NULL before
   // freeing it. remove_probes() blocks until any in-flight callback returns;
   // this closes the issue #57 SEI-probe use-after-free and also owns the live
@@ -363,6 +373,7 @@ class GstInserter : public Inserter {
   GstClockTime pts_ = 0;
   std::string removable_sink_;
   std::optional<Error> terminal_error_;
+  std::optional<Result<std::monostate>> finished_;  // finish() latch
 };
 
 }  // namespace

@@ -155,6 +155,26 @@ int main(int argc, char** argv) {
   check(!msg->get<double>(250).has_value(), "get of absent tag -> nullopt");
   check(!msg->get<std::string_view>(13).has_value(), "type mismatch -> nullopt");
 
+  // adopt(): success consumes the caller's vector; failure leaves it intact.
+  {
+    std::vector<std::byte> good = bytes;
+    auto adopted = Message::adopt(std::move(good));
+    auto alat = adopted ? adopted->get<double>(13) : std::nullopt;
+    check(adopted && alat && std::fabs(*alat - 12.5) < 0.001, "adopt success reads correctly");
+
+    std::vector<std::byte> garbage(32, B(0xA5));
+    const auto garbage_copy = garbage;
+    auto bad = Message::adopt(std::move(garbage));
+    check(!bad && garbage == garbage_copy, "failed adopt (garbage) leaves caller buffer intact");
+
+    std::vector<std::byte> unknown =
+        std::vector<std::byte>(bytes.begin(), bytes.begin() + packet_frame_length(bytes));
+    unknown[4] = B(0x00);  // valid structure, UL not in the registry
+    const auto unknown_copy = unknown;
+    auto unk = Message::adopt(std::move(unknown));
+    check(!unk && unknown == unknown_copy, "failed adopt (unknown UL) leaves caller buffer intact");
+  }
+
   // Parsing a buffer with extra bytes is permitted, but byte-exact passthrough
   // stops at the one parsed packet's total_size.
   const std::size_t source_size = packet_frame_length(bytes);

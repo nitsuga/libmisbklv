@@ -2,6 +2,15 @@
 
 ## 2026-09-19
 
+* **Hardened insert/adopt** (issue #79, F1/F3/F4): `Message::adopt` now parses
+  the caller's vector in place and moves it only on success, so a failed adopt
+  (parse error or unknown UL) no longer loses the caller's buffer. `push(span)`
+  returns `Backend` when `gst_buffer_new_allocate` yields NULL instead of
+  dereferencing it. `GstInserter::finish()` latches its first result; a repeated
+  `finish()`/`KlvSink::close()` returns that same result immediately. Tests added
+  to `message` and `gst_insert`; both fail on the old code. The F4 allocation
+  failure is not unit-tested (no seam). Author: claude/sonnet-5.
+
 * **Added `Message::checksum_valid()`** (issue #82, smallest slice): parse never
   verified the Item 1 checksum (ST 0601 and standalone ST 0903 VMTI, same BCC16;
   any registry whose tag 1 is the 2-byte Checksum qualifies). The new call
