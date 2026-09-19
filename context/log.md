@@ -3,10 +3,12 @@
 ## 2026-09-19
 
 * **Added `Message::checksum_valid()`** (issue #82, smallest slice): parse never
-  verified the ST 0601 Item 1 checksum. The new call recomputes bcc16 over the
-  source packet as parsed (staged edits ignored) and returns `Result<bool>`; no
-  checksum item is `UnknownTag`, a malformed one `BadLength`. Parse, adopt and
-  encode are unchanged; whether the edit path should refuse an invalid checksum
+  verified the Item 1 checksum (ST 0601 and standalone ST 0903 VMTI, same BCC16;
+  any registry whose tag 1 is the 2-byte Checksum qualifies). The new call
+  recomputes bcc16 over the source packet as parsed (staged edits ignored) and
+  returns `Result<bool>`; no checksum item, no source packet or a registry
+  without a checksum is `UnknownTag`, a malformed one `BadLength`. Parse, adopt
+  and encode are unchanged; whether the edit path should refuse an invalid checksum
   stays open. New core `checksum` test. Author: claude/sonnet-5.
 
 * **Fixed `KlvFramer` wedging on a malformed BER header** (issue #80, F2): a

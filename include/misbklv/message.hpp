@@ -93,11 +93,13 @@ class Message {
   // checksum is re-emitted.
   Result<ber::Bytes> encode() const;
 
-  // Whether the ST 0601 Item 1 checksum of the source packet as parsed matches a
-  // recomputed bcc16 (key..checksum length, as LocalSetBuilder writes it). Ignores
-  // staged edits. parse()/adopt() never verify; policy is the caller's. Errors:
-  // UnknownTag (no checksum item / not a 0601 packet), BadLength (tag 1 is not a
-  // 2-byte value ending the packet).
+  // Whether the Item 1 checksum of the source packet as parsed matches a
+  // recomputed bcc16 (key..checksum length, as LocalSetBuilder writes it). Works
+  // for any registry whose tag 1 is the 2-byte checksum (ST 0601 and standalone
+  // ST 0903 VMTI). Ignores staged edits. parse()/adopt() never verify; policy is
+  // the caller's. Errors: UnknownTag (no checksum item / no source packet /
+  // registry without a checksum), BadLength (tag 1 is not a 2-byte value ending
+  // the packet).
   Result<bool> checksum_valid() const;
 
   // True if any `set()` has staged an edit/append.

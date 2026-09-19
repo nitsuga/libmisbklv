@@ -112,11 +112,11 @@ Result<ber::Bytes> Message::encode() const {
 }
 
 Result<bool> Message::checksum_valid() const {
-  const auto key = std::span<const std::uint8_t>(kUas0601Key);
-  if (pkt_.total_size < 2 || pkt_.ul_key.size() != key.size() ||
-      !std::equal(key.begin(), key.end(), pkt_.ul_key.begin(), [](std::uint8_t a, std::byte b) {
-        return a == std::to_integer<std::uint8_t>(b);
-      }))
+  // Only registries whose tag 1 is the 2-byte BCC16 checksum qualify (ST 0601 and
+  // standalone ST 0903 share it). Decided from the descriptor, not the registry.
+  const ItemDescriptor* d = reg_ ? reg_->find(1) : nullptr;
+  if (pkt_.total_size < 2 || !d || d->name != "Checksum" || d->kind != ValueKind::UInt ||
+      d->variable || d->fixed_len != 2)
     return Result<bool>::err(Error::UnknownTag);
   const Item* cs = nullptr;
   for (const auto& it : pkt_.items)
