@@ -8,9 +8,10 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-#82 `Message::checksum_valid()` is in review; the policy question on the edit
-path (refuse or flag recomputing over an invalid checksum) is still open. The
-rest of #80 is decision-first.
+No PR in flight. Two decisions are open: #80 (foreign UL, second KLV PID, live
+0x15, fragmented RP217, and how the framer resyncs after an over-cap rejection)
+and #82's edit-path policy (refuse or flag recomputing over an invalid
+checksum). The next fix candidate is #79 F3/F4.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
