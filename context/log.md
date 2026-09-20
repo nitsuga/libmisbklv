@@ -2,6 +2,15 @@
 
 ## 2026-09-20
 
+* **Result deref, extract-cap floor, view lifetime** (issue #83, F8/F9/F10):
+  `Result<T>::operator*`/`->` assert success (const `->` added). An
+  `ExtractOptions::max_packet_bytes` below `kMinKlvPacketBytes` (17) now fails
+  `extract()` with `RangeError` in the GStreamer backend and `MockBackend`
+  (so `KlvStream` too), rather than a generic `ResourceLimit` on every frame.
+  `Message::get` string/byte views are documented as borrowed from the Message.
+  The `GstInserter` test seam stays open.
+  Author: claude/sonnet-5.
+
 * **Edit-path checksum policy** (issue #82): kept the current behavior and
   documented it. An edited `Message::encode()` recomputes a valid checksum even
   over an invalid source checksum; callers check `checksum_valid()` first. See

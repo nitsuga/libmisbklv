@@ -43,6 +43,8 @@ class MockBackend : public MediaBackend {
 
   Result<std::monostate> extract(std::string_view, const PacketHandler& on_packet,
                                  std::stop_token stop = {}, ExtractOptions options = {}) override {
+    if (options.max_packet_bytes < kMinKlvPacketBytes)
+      return Result<std::monostate>::err(Error::RangeError);
     for (std::size_t i = 0; i < packets_.size(); ++i) {
       if (stop.stop_requested()) break;  // cooperative cancel (ADR 0019)
       if (packets_[i].size() > options.max_packet_bytes)

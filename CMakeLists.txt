@@ -174,6 +174,10 @@ add_executable(mock_backend_test test/mock_backend_test.cpp)
 target_link_libraries(mock_backend_test PRIVATE misbklv)
 add_test(NAME mock_backend COMMAND mock_backend_test)
 
+add_executable(result_test test/result_test.cpp)  # Result<T> deref contract (F8)
+target_link_libraries(result_test PRIVATE misbklv)
+add_test(NAME result COMMAND result_test)
+
 if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
   add_executable(gst_backend_test test/gst_backend_test.cpp)
   target_link_libraries(gst_backend_test PRIVATE misbklv-gst)

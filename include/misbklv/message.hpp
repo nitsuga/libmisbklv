@@ -54,7 +54,11 @@ class Message {
 
   // Typed read: decodes the first item with `tag` (or the edited value) and
   // returns it iff the requested type matches the descriptor's ValueKind.
-  // Duplicate source tags are read from their first occurrence.
+  // Duplicate source tags are read from their first occurrence. The views
+  // returned by get<std::string_view> and get<std::span<const std::byte>>
+  // borrow from the Message's own storage (its source bytes, or the staged
+  // edit for a set() tag) and are valid only while the Message is alive and
+  // unmodified: destroying, moving from, or set()-ing it invalidates them.
   template <class T> std::optional<T> get(std::uint16_t tag) const {
     const ItemDescriptor* d = reg_->find(tag);
     if (!d) return std::nullopt;

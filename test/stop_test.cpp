@@ -192,6 +192,17 @@ int main(int argc, char** argv) {
     check(messages == 0 && stream.error() == Error::ResourceLimit,
           "KlvStream forwards ExtractOptions to backend");
   }
+  {
+    KlvStream stream(std::make_unique<MockBackend>(std::vector<ber::Bytes>{pkt}), "badcap",
+                     ExtractOptions{.max_packet_bytes = kMinKlvPacketBytes - 1});
+    int messages = 0;
+    for (Message& m : stream) {
+      (void)m;
+      ++messages;
+    }
+    check(messages == 0 && stream.error() == Error::RangeError,
+          "KlvStream surfaces RangeError for a cap below the floor");
+  }
 
   // The default GStreamer facade reports an unreadable source as Backend rather
   // than producing an empty, apparently-clean stream.

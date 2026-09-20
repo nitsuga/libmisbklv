@@ -16,6 +16,7 @@
 #include <string_view>
 #include <variant>
 
+#include "misbklv/packet.hpp"
 #include "misbklv/types.hpp"
 
 namespace misbklv {
@@ -25,6 +26,9 @@ inline constexpr std::size_t kDefaultMaxKlvPacketBytes = 16 * 1024 * 1024;
 
 struct ExtractOptions {
   // Cap for one complete KLV frame (UL + BER length + value) during extraction.
+  // Must be at least kMinKlvPacketBytes (17, the smallest possible frame): a
+  // smaller cap could reject every frame, so extract() (every backend, and
+  // therefore KlvStream) fails with Error::RangeError before reading the source.
   std::size_t max_packet_bytes = kDefaultMaxKlvPacketBytes;
 };
 
