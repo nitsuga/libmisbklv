@@ -31,11 +31,12 @@ namespace misbklv {
 // fragmented: each cell's bytes are concatenated through the framer and every
 // cell in a PES is extracted, not only the first. Fragment service id, sequence
 // number and first/middle/last indication are NOT validated, so a lost or
-// reordered fragment can splice into a bogus frame (the framer usually, not
-// always, catches it by BER length). On the selected PID a cell whose declared
-// length overruns the PES, or 1-4 trailing bytes too short for a cell header,
-// fails with BadLength. A foreign (unregistered) UL is not a
-// framing error here; it surfaces later as UnknownTag from Message::parse.
+// reordered fragment is not reliably detected: once a first fragment has
+// supplied the UL and BER length, the next cells' bytes fill the declared length
+// and a corrupt packet can be emitted without a framing error. On the selected
+// PID a cell whose declared length overruns the PES, or 1-4 trailing bytes too
+// short for a cell header, fails with BadLength. A foreign (unregistered) UL is
+// not a framing error here; it surfaces later as UnknownTag from Message::parse.
 //
 // Single KLV PID: the first PID with a PES in which any cell starts with a UL is
 // selected by content; any other KLV PID in the stream is ignored (ADR 0039).

@@ -163,8 +163,10 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
           (pts90 < 0 || origin_90k < 0) ? kNoPts : (pts90 - origin_90k) * 100'000 / 9;
       // ponytail: fragment cells are concatenated as-is; service id, sequence
       // number and first/middle/last transitions are not validated, so a lost or
-      // reordered fragment can splice into a bogus frame (the KLV framer usually,
-      // not always, catches it by BER length). Upgrade path: validate the cell
+      // reordered fragment is not reliably detected: after a first fragment
+      // supplies the UL and BER length, the next cells' bytes fill the declared
+      // length and a corrupt packet can be emitted with no framing error.
+      // Upgrade path: validate the cell
       // sequence byte and indication transitions per PID once the RP 217 layout
       // is confirmed from a source in references/ (ADR 0039).
       for (const auto cell : cells) {

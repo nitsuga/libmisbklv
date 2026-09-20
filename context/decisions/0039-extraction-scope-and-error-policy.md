@@ -53,8 +53,9 @@ the policy on top of it and resolves the open questions left in
    packet extracts whole. Every cell in a PES is extracted, not only the first,
    and the PID is selected when any cell in a PES starts with the UL. **Ceiling:**
    service id, sequence number and first/middle/last indication transitions are
-   NOT checked, so a lost or reordered fragment can splice into a bogus KLV
-   frame; the framer usually, not always, catches that by BER length. Upgrade
+   NOT checked, so a lost or reordered fragment is not reliably detected: once a
+   first fragment supplies the UL and BER length, the next cells' bytes fill the
+   declared length and a corrupt packet can be emitted with no framing error. Upgrade
    path: validate the cell sequence byte and indication transitions per PID once
    the RP 217 layout is confirmed from a source in `references/` (it is not
    there today). A malformed wrapper on the selected PID (a declared cell length
@@ -90,8 +91,8 @@ the policy on top of it and resolves the open questions left in
 - Behavior on bad input is explicit and testable: `UnknownTag` or the first
   framing error. Well-formed split cells extract whole, and several cells in one
   PES all extract (`test/hardening_test.cpp`). Fragment order and loss are not
-  validated, so a lost or reordered fragment can yield a bogus frame the framer
-  does not always reject.
+  validated, so a lost or reordered fragment is not reliably detected and can
+  yield a corrupt packet with no framing error.
 - One corrupted length byte ends a live session; callers that must survive it
   restart the stream.
 - Live capability is a strict subset of offline: `0x15` is offline-only.
