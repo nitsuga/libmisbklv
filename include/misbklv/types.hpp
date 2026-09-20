@@ -3,6 +3,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -43,9 +44,24 @@ template <class T> class Result {
   static Result err(Error e) { return Result(e); }
 
   explicit operator bool() const { return ok_; }
-  T& operator*() { return value_; }
-  const T& operator*() const { return value_; }
-  T* operator->() { return &value_; }
+  // Dereferencing an error Result is a precondition violation (asserted in
+  // debug builds); check `operator bool` first.
+  T& operator*() {
+    assert(ok_);
+    return value_;
+  }
+  const T& operator*() const {
+    assert(ok_);
+    return value_;
+  }
+  T* operator->() {
+    assert(ok_);
+    return &value_;
+  }
+  const T* operator->() const {
+    assert(ok_);
+    return &value_;
+  }
   Error error() const { return error_; }
 
  private:

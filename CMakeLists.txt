@@ -174,6 +174,10 @@ add_executable(mock_backend_test test/mock_backend_test.cpp)
 target_link_libraries(mock_backend_test PRIVATE misbklv)
 add_test(NAME mock_backend COMMAND mock_backend_test)
 
+add_executable(result_test test/result_test.cpp)  # Result<T> deref contract (F8)
+target_link_libraries(result_test PRIVATE misbklv)
+add_test(NAME result COMMAND result_test)
+
 if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
   add_executable(gst_backend_test test/gst_backend_test.cpp)
   target_link_libraries(gst_backend_test PRIVATE misbklv-gst)
@@ -237,6 +241,12 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
   target_link_libraries(generate_path_test PRIVATE misbklv-gst)
   target_include_directories(generate_path_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/gst)
   add_test(NAME generate_path COMMAND generate_path_test)
+
+  # Appsrc refusal before the first finish() (issue #83), via the push hook.
+  add_executable(push_refusal_test test/push_refusal_test.cpp)
+  target_link_libraries(push_refusal_test PRIVATE misbklv-gst)
+  target_include_directories(push_refusal_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/gst)
+  add_test(NAME push_refusal COMMAND push_refusal_test ${_basic} "${CMAKE_CURRENT_BINARY_DIR}/push_refusal.ts")
 
   # SEI-probe teardown use-after-free guard (issue #57): destroys the Inserter
   # mid-stream so a probe is in flight at the VideoCtx free. Run under valgrind

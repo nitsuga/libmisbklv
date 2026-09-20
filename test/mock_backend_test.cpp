@@ -33,18 +33,31 @@ int main() {
 
   // MockBackend applies the byte cap without requiring its canned packets to
   // be structurally valid KLV. An over-limit canned packet is never delivered.
+  const ber::Bytes big(kMinKlvPacketBytes + 1, std::byte{7});
   got.clear();
-  auto limited = be.extract(
+  MockBackend over({big});
+  auto limited = over.extract(
       "mock", [&](const KlvPacket& kp) { got.emplace_back(kp.bytes.begin(), kp.bytes.end()); }, {},
-      ExtractOptions{.max_packet_bytes = 2});
+      ExtractOptions{.max_packet_bytes = kMinKlvPacketBytes});
   check(!limited && limited.error() == Error::ResourceLimit && got.empty(),
         "MockBackend limit rejects over-limit canned packet before callback");
   got.clear();
   auto arbitrary = be.extract(
       "mock", [&](const KlvPacket& kp) { got.emplace_back(kp.bytes.begin(), kp.bytes.end()); }, {},
-      ExtractOptions{.max_packet_bytes = 3});
+      ExtractOptions{.max_packet_bytes = kMinKlvPacketBytes});
   check(arbitrary && got.size() == 2 && got[0] == p1 && got[1] == p2,
         "MockBackend cap preserves within-limit arbitrary canned bytes");
+
+  // A cap below the smallest possible KLV frame is a bad config, not a stream
+  // failure: RangeError before any packet is delivered. The floor itself is ok.
+  for (std::size_t cap : {std::size_t{0}, kMinKlvPacketBytes - 1}) {
+    got.clear();
+    auto bad = be.extract(
+        "mock", [&](const KlvPacket& kp) { got.emplace_back(kp.bytes.begin(), kp.bytes.end()); },
+        {}, ExtractOptions{.max_packet_bytes = cap});
+    check(!bad && bad.error() == Error::RangeError && got.empty(),
+          "max_packet_bytes below the floor is RangeError");
+  }
 
   // ...and a timed one replays its timestamps (ADR 0021): the interface says
   // pts_ns is ns from the start of the source, so the test double must be able

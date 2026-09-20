@@ -39,7 +39,7 @@ Result<std::vector<Item>> parse_items(std::span<const std::byte> buf) {
 }
 
 Result<Packet> parse_packet(std::span<const std::byte> buf) {
-  if (buf.size() < 17) return Result<Packet>::err(Error::Truncated);
+  if (buf.size() < kMinKlvPacketBytes) return Result<Packet>::err(Error::Truncated);
   Packet pkt;
   pkt.ul_key = buf.subspan(0, 16);
 
@@ -67,7 +67,7 @@ Result<std::optional<std::size_t>> inspect_packet_frame(std::span<const std::byt
   if (prefix_bytes < std::size(kSmpteUlPrefix))
     return Result<std::optional<std::size_t>>::ok(std::nullopt);
 
-  if (buf.size() < 17) return Result<std::optional<std::size_t>>::ok(std::nullopt);
+  if (buf.size() < kMinKlvPacketBytes) return Result<std::optional<std::size_t>>::ok(std::nullopt);
 
   const auto first_length_byte = std::to_integer<std::uint8_t>(buf[16]);
   std::size_t length_bytes = 0;
@@ -78,12 +78,14 @@ Result<std::optional<std::size_t>> inspect_packet_frame(std::span<const std::byt
     length_bytes = first_length_byte & 0x7F;
     if (length_bytes == 0 || length_bytes > 8)
       return Result<std::optional<std::size_t>>::err(Error::BadLength);
-    if (buf.size() - 17 < length_bytes) return Result<std::optional<std::size_t>>::ok(std::nullopt);
+    if (buf.size() - kMinKlvPacketBytes < length_bytes)
+      return Result<std::optional<std::size_t>>::ok(std::nullopt);
     for (std::size_t i = 0; i < length_bytes; ++i)
-      value_length = (value_length << 8) | std::to_integer<std::uint8_t>(buf[17 + i]);
+      value_length =
+          (value_length << 8) | std::to_integer<std::uint8_t>(buf[kMinKlvPacketBytes + i]);
   }
 
-  const std::size_t header_size = 17 + length_bytes;
+  const std::size_t header_size = kMinKlvPacketBytes + length_bytes;
   if (header_size > max_packet_bytes || value_length > max_packet_bytes - header_size)
     return Result<std::optional<std::size_t>>::err(Error::ResourceLimit);
   const std::size_t total_size = header_size + static_cast<std::size_t>(value_length);

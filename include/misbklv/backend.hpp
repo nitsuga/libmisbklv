@@ -16,6 +16,7 @@
 #include <string_view>
 #include <variant>
 
+#include "misbklv/packet.hpp"
 #include "misbklv/types.hpp"
 
 namespace misbklv {
@@ -25,6 +26,9 @@ inline constexpr std::size_t kDefaultMaxKlvPacketBytes = 16 * 1024 * 1024;
 
 struct ExtractOptions {
   // Cap for one complete KLV frame (UL + BER length + value) during extraction.
+  // Must be at least kMinKlvPacketBytes (17, the smallest possible frame): a
+  // smaller cap could reject every frame, so extract() (every backend, and
+  // therefore KlvStream) fails with Error::RangeError before reading the source.
   std::size_t max_packet_bytes = kDefaultMaxKlvPacketBytes;
 };
 
@@ -204,6 +208,8 @@ class MediaBackend {
   // `stop` cancels a live extract early (cooperative, polled from another thread —
   // e.g. a KlvStream consumer that breaks); a default token is never signaled, so
   // extract runs to the natural end (ADR 0019).
+  // Every backend must reject `options.max_packet_bytes < kMinKlvPacketBytes`
+  // with `Error::RangeError` before doing any work (KlvStream also enforces it).
   virtual Result<std::monostate> extract(std::string_view source, const PacketHandler& on_packet,
                                          std::stop_token stop = {},
                                          ExtractOptions options = {}) = 0;

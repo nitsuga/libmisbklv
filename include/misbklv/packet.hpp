@@ -16,6 +16,9 @@ namespace misbklv {
 inline constexpr std::uint8_t kUas0601Key[16] = {0x06, 0x0e, 0x2b, 0x34, 0x02, 0x0b, 0x01, 0x01,
                                                  0x0e, 0x01, 0x03, 0x01, 0x01, 0x00, 0x00, 0x00};
 
+// Smallest possible KLV frame: 16-byte UL + a one-byte BER length (empty value).
+inline constexpr std::size_t kMinKlvPacketBytes = 17;
+
 struct Item {
   std::uint16_t tag;
   std::span<const std::byte> value;  // borrowed view into the source buffer

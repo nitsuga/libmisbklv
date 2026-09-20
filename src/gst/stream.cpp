@@ -11,6 +11,13 @@ namespace misbklv {
 KlvStream::KlvStream(std::unique_ptr<MediaBackend> backend, std::string source,
                      ExtractOptions options)
     : backend_(std::move(backend)), source_(std::move(source)), options_(options) {
+  if (options_.max_packet_bytes < kMinKlvPacketBytes) {
+    // Enforce the floor here so it holds for any backend (issue #83); skip the
+    // backend call. pop_frame() surfaces this once the (empty) queue drains.
+    backend_error_ = Error::RangeError;
+    done_ = true;
+    return;
+  }
   producer_ = std::thread([this] {
     auto result = backend_->extract(
         source_,

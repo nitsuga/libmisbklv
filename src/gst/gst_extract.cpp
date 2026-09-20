@@ -122,6 +122,8 @@ GstElement* make_src(const std::string& spec, bool* udp) {
 
 Result<std::monostate> extract(std::string_view source, const PacketHandler& on_packet,
                                std::stop_token stop, ExtractOptions options) {
+  if (options.max_packet_bytes < kMinKlvPacketBytes)
+    return Result<std::monostate>::err(Error::RangeError);
   GstElement* pipeline = gst_pipeline_new("misbklv-extract");
   bool udp = false;
   GstElement* src = make_src(std::string(source), &udp);

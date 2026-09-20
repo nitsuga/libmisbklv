@@ -38,7 +38,10 @@ file output; the default token still drains normally. See
 [ADR 0032](../context/decisions/0032-cancellable-insert-drain.md).
 
 `KlvStream` accepts `ExtractOptions` to change the 16 MiB default cap on a
-complete incrementally reassembled KLV frame. A declared frame above that cap
+complete incrementally reassembled KLV frame. The cap must be at least
+`kMinKlvPacketBytes` (17, the smallest possible frame); a smaller value ends
+iteration immediately with `Error::RangeError` (the backend's `extract()`
+rejects it before reading the source). A declared frame above that cap
 ends iteration with `Error::ResourceLimit`; already queued valid Messages still
 arrive before the terminal `in.error()` check. A Message that cannot be parsed
 ends the stream at that packet rather than being skipped. Normal EOS and
@@ -243,6 +246,10 @@ auto bytes  = msg->encode();                 // Result<Bytes>; original packet e
   `double` for mapped items (lat/lon/angles), `std::uint64_t` for counts/times,
   `std::string_view` for text, `std::span<const std::byte>` for opaque/nested.
   Wrong type or absent tag → `nullopt`.
+  The `std::string_view` and `std::span<const std::byte>` results borrow from the
+  Message's own storage (its source bytes, or the staged edit for a `set()` tag)
+  and are valid only while the Message is alive and unmodified; destroying or
+  `set()`-ing it invalidates them, and a move is not guaranteed to preserve them.
 - **`set(tag, Value)`** stages a typed edit (re-encoded at the first occurrence's
   on-wire width). Unknown tag → error.
 - **`has(tag)`** reflects both items in the parsed source and staged additions.

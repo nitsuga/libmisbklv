@@ -37,7 +37,9 @@ observable with its original error rather than becoming a generic backend error.
   `close()` return that same error when opening failed; callers check the sink's
   opening status before emitting and check every `emit()` and `close()` result.
 - Existing `Error` values are sufficient for the outcomes considered by this
-  decision: parse errors, `Backend`, `Unsupported`, and `ResourceLimit`.
+  decision: parse errors, `Backend`, `Unsupported`, and `ResourceLimit`
+  (and, added for issue #83, `RangeError` for an `ExtractOptions` cap below the
+  minimum frame size).
   This ADR makes no enum expansion or numeric-code change; ADR 0036 later
   appended `SourceUnavailable` for a distinct live-source outcome.
 
