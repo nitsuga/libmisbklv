@@ -8,10 +8,10 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-A PR is in review for #83 (`Result` deref assert, extract-cap floor, view-lifetime
-docs, plus a test hook for the pre-`finish()` appsrc refusal). One decision is
-open: #80 (foreign UL, second KLV PID, live 0x15, fragmented RP217, and
-how the framer resyncs after an over-cap rejection).
+No PR in flight. One decision is open: #80 (foreign UL, second KLV PID, live
+0x15, fragmented RP217, and how the framer resyncs after an over-cap rejection).
+The remaining open work is #81 (Generate-mode SEI: `pic_timing`, stuffing
+invariant, timestamp-cap eviction direction) and #50 (benchmark, parked).
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
