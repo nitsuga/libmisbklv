@@ -26,10 +26,11 @@ namespace misbklv {
 // delivered. Garbage between packets is tolerated — framing resyncs on the next
 // SMPTE UL prefix and skips anything before it. KLV packets are reassembled
 // across PES boundaries, so a packet larger than one PES (above the 16-bit
-// PES_packet_length ceiling) or split by a muxer is extracted whole. RP 217
-// (0x15) metadata AU cells are supported in the non-fragmented form (the common
-// case); a fragmented cell on the selected PID fails with Unsupported (packets
-// already delivered stay delivered). A foreign (unregistered) UL is not a
+// PES_packet_length ceiling) or split by a muxer is extracted whole, for 0x06
+// and 0x15 alike. RP 217 (0x15) metadata AU cells are extracted whether or not
+// fragmented (each fragment has its own cell header; the fragmentation
+// indication is ignored), and every cell in a PES is extracted, not only the
+// first. A foreign (unregistered) UL is not a
 // framing error here; it surfaces later as UnknownTag from Message::parse.
 //
 // Single KLV PID: the first PID whose PES payload starts with a UL is selected

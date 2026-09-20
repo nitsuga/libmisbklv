@@ -45,8 +45,9 @@ rejects it before reading the source). A declared frame above that cap
 ends iteration with `Error::ResourceLimit`; already queued valid Messages still
 arrive before the terminal `in.error()` check. A Message that cannot be parsed
 (including an unregistered UL, `UnknownTag`) ends the stream at that packet
-rather than being skipped; custom ULs need a registry extension. Normal EOS and
-cooperative cancellation leave `error()` empty.
+rather than being skipped; custom ULs need a new descriptor and a regenerate
+(build-time, not runtime). Normal EOS and cooperative cancellation leave
+`error()` empty.
 
 `KlvSink` construction stores its exact `open_insert` error for `error()`, and
 the same error is returned by `emit()` and `close()`. Check it before sending,
@@ -227,8 +228,7 @@ relock is visible to a reader instead of being smoothed over.
 uses the same nanosecond units and relative source timing as `KlvStream` — its
 absolute origin can differ by about a frame, and it does not handle the 33-bit
 PTS wrap (about 26.5 h); it also reads the `0x15` sync-KLV streams gstreamer's
-demuxer drops, which the live path does not — offline only, single KLV PID, a
-fragmented RP 217 cell fails `Unsupported`; see
+demuxer drops, which the live path does not — offline only, single KLV PID; see
 [ADR 0039](../context/decisions/0039-extraction-scope-and-error-policy.md)):
 
 ```cpp

@@ -30,27 +30,33 @@ bool starts_with_ul(std::span<const std::byte> s) {
          u8(s, 2) == kSmpteUl[2] && u8(s, 3) == kSmpteUl[3];
 }
 
-// Unwrap a full PES packet into its KLV payload (empty if not KLV/parseable).
-// `fragmented` is set for an RP 217 AU cell whose cell_fragmentation_indication
-// (top two bits of the cell header's third byte; 0b11 = one complete cell, ADR
-// 0016) says otherwise.
-std::span<const std::byte> unwrap_pes(std::span<const std::byte> pes, bool& fragmented) {
-  fragmented = false;
-  if (pes.size() < 9 || u8(pes, 0) != 0 || u8(pes, 1) != 0 || u8(pes, 2) != 1) return {};
+// Unwrap a full PES packet into its KLV payload pieces, in order; never empty
+// (a lone empty span if not KLV/parseable). A 0x06 PES is one piece. A 0xFC PES
+// (SMPTE RP 217) holds one or more metadata AU cells, each a 5-byte header whose
+// last two bytes are the big-endian data length, then that many bytes; every
+// cell is one piece. The cell_fragmentation_indication bits are ignored: each
+// fragment carries its own header and length, and the framer reassembles them
+// across cells and PES. A cell clipped by the PES end yields the bytes present;
+// fewer than 5 trailing bytes are not a cell and are dropped.
+std::vector<std::span<const std::byte>> unwrap_pes(std::span<const std::byte> pes) {
+  constexpr std::span<const std::byte> kNone;
+  if (pes.size() < 9 || u8(pes, 0) != 0 || u8(pes, 1) != 0 || u8(pes, 2) != 1) return {kNone};
   const std::uint8_t stream_id = u8(pes, 3);
   const std::size_t pes_len = (u8(pes, 4) << 8) | u8(pes, 5);
   const std::size_t poff = ((u8(pes, 6) & 0xC0) == 0x80) ? 9 + u8(pes, 8) : 6;
   const std::size_t end =
       (pes_len > 0) ? std::min<std::size_t>(6 + pes_len, pes.size()) : pes.size();
-  if (poff > end) return {};
+  if (poff > end) return {kNone};
   auto payload = pes.subspan(poff, end - poff);
-  if (stream_id == 0xFC) {  // metadata AU cell (SMPTE RP 217): 5-byte header
-    if (payload.size() < 5) return {};
-    fragmented = (u8(payload, 2) >> 6) != 0x3;
+  if (stream_id != 0xFC) return {payload};  // 0x06: KLV directly in the PES
+  if (payload.size() < 5) return {kNone};
+  std::vector<std::span<const std::byte>> cells;
+  while (payload.size() >= 5) {
     const std::size_t clen = (u8(payload, 3) << 8) | u8(payload, 4);
-    return payload.subspan(5, std::min(clen, payload.size() - 5));
+    cells.push_back(payload.subspan(5, std::min(clen, payload.size() - 5)));
+    payload = payload.subspan(std::min(5 + clen, payload.size()));
   }
-  return payload;  // 0x06: KLV directly in the PES
+  return cells;
 }
 
 // The PES header's 33-bit PTS in 90 kHz ticks, or -1 if the packet carries none
@@ -117,9 +123,8 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
   auto flush = [&](std::uint16_t pid) {
     auto it = pes.find(pid);
     if (it == pes.end() || it->second.empty()) return;
-    bool fragmented = false;
-    const auto klv = unwrap_pes(it->second, fragmented);
-    if (starts_with_ul(klv) && klv_pid < 0) {
+    const auto cells = unwrap_pes(it->second);
+    if (starts_with_ul(cells.front()) && klv_pid < 0) {
       klv_pid = pid;
       // Candidate buffers cannot contribute after the first KLV PID is found.
       for (auto& [candidate, bytes] : pes) {
@@ -140,12 +145,11 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
       // with the UL — the UL prefix only selects the PID, once, at the first
       // payload that carries it.
       const std::int64_t pts90 = pes_pts_90k(it->second);
-      if (fragmented) {
-        frame_error = Error::Unsupported;  // fragmented RP 217 cells: not reassembled
-      } else {
-        frame_error = framer.feed(
-            klv, (pts90 < 0 || origin_90k < 0) ? kNoPts : (pts90 - origin_90k) * 100'000 / 9,
-            on_packet);
+      const std::int64_t pts_ns =
+          (pts90 < 0 || origin_90k < 0) ? kNoPts : (pts90 - origin_90k) * 100'000 / 9;
+      for (const auto cell : cells) {
+        frame_error = framer.feed(cell, pts_ns, on_packet);
+        if (frame_error) break;
       }
     }
     pending_pes_bytes -= it->second.size();

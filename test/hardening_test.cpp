@@ -484,9 +484,10 @@ std::vector<std::byte> pes_packet(std::uint8_t stream_id, std::span<const std::b
 // generator's construction. unwrap_pes() strips the header and trusts its
 // 16-bit length, so each fragment gets a cell header of its own. `flags`
 // overrides the third byte; its top two bits are cell_fragmentation_indication
-// (0b11 = complete), so e.g. 0x9F marks a fragmented cell.
-std::vector<std::byte> au_cell_pes(std::uint8_t seq, std::span<const std::byte> klv_fragment,
-                                   std::uint8_t flags = 0xDF) {
+// (0b11 complete, 0b10 first, 0b00 middle, 0b01 last; the extractor ignores
+// them).
+std::vector<std::byte> au_cell(std::uint8_t seq, std::span<const std::byte> klv_fragment,
+                               std::uint8_t flags = 0xDF) {
   std::vector<std::byte> cell;
   cell.push_back(B(0x00));
   cell.push_back(B(seq));
@@ -494,7 +495,12 @@ std::vector<std::byte> au_cell_pes(std::uint8_t seq, std::span<const std::byte> 
   cell.push_back(B(klv_fragment.size() >> 8));
   cell.push_back(B(klv_fragment.size() & 0xFF));
   cell.insert(cell.end(), klv_fragment.begin(), klv_fragment.end());
-  return pes_packet(0xFC, cell);
+  return cell;
+}
+
+std::vector<std::byte> au_cell_pes(std::uint8_t seq, std::span<const std::byte> klv_fragment,
+                                   std::uint8_t flags = 0xDF) {
+  return pes_packet(0xFC, au_cell(seq, klv_fragment, flags));
 }
 
 // Packetize one PES into 188-byte TS packets on `pid`, advancing `cc`.
@@ -599,29 +605,39 @@ static void test_ts_klv_robustness() {
   check(!r1b && r1b.error() == Error::BadLength, "first framing error is the one returned");
   check(out1b.size() == 1 && out1b[0] == pkt_a, "nothing after the first framing error delivered");
 
-  // (1c) A fragmented RP 217 cell (cell_fragmentation_indication != 0b11) on the
-  // selected PID fails with Unsupported instead of feeding partial bytes to the
-  // framer; packets before it stay delivered. Positive control: the same two
-  // cells, both non-fragmented, extract cleanly.
+  // (1c) A KLV packet split across two RP 217 cells in two PES (indication 0b10
+  // first, 0b01 last) is reassembled by the framer into the original packet.
+  // Control: the same packet in one complete cell (0xDF) extracts identically.
   {
+    const std::size_t half = pkt_b.size() / 2;
     std::vector<std::byte> frag_ts;
-    append_pes(frag_ts, au_cell_pes(0, pkt_a));
-    append_pes(frag_ts, au_cell_pes(1, pkt_b, 0x9F));  // indication 0b10: first fragment
+    append_pes(frag_ts, au_cell_pes(0, std::span(pkt_b).first(half), 0x9F));
+    append_pes(frag_ts, au_cell_pes(1, std::span(pkt_b).subspan(half), 0x5F));
     std::vector<std::vector<std::byte>> frag_out;
     auto fr = run_extract(frag_ts, frag_out);
-    check(!fr && fr.error() == Error::Unsupported,
-          "extract_ts_klv fragmented RP 217 cell -> Unsupported");
-    check(frag_out.size() == 1 && frag_out[0] == pkt_a,
-          "packet before the fragmented cell stays delivered");
+    check(static_cast<bool>(fr) && frag_out.size() == 1 && frag_out[0] == pkt_b,
+          "extract_ts_klv fragmented RP 217 cells reassemble into one packet");
 
     std::vector<std::byte> whole_ts;
-    append_pes(whole_ts, au_cell_pes(0, pkt_a));
-    append_pes(whole_ts, au_cell_pes(1, pkt_b));
+    append_pes(whole_ts, au_cell_pes(0, pkt_b));
     std::vector<std::vector<std::byte>> whole_out;
     auto wr = run_extract(whole_ts, whole_out);
-    check(static_cast<bool>(wr) && whole_out.size() == 2 && whole_out[0] == pkt_a &&
-              whole_out[1] == pkt_b,
-          "non-fragmented RP 217 cells still extract");
+    check(static_cast<bool>(wr) && whole_out.size() == 1 && whole_out[0] == pkt_b,
+          "non-fragmented RP 217 cell extracts");
+  }
+
+  // (1d) Two complete cells packed into ONE PES yield two packets, in order.
+  {
+    auto cells = au_cell(0, pkt_a);
+    auto second = au_cell(1, pkt_b);
+    cells.insert(cells.end(), second.begin(), second.end());
+    std::vector<std::byte> multi_ts;
+    append_pes(multi_ts, pes_packet(0xFC, cells));
+    std::vector<std::vector<std::byte>> multi_out;
+    auto mr = run_extract(multi_ts, multi_out);
+    check(static_cast<bool>(mr) && multi_out.size() == 2 && multi_out[0] == pkt_a &&
+              multi_out[1] == pkt_b,
+          "extract_ts_klv several RP 217 cells in one PES all extract");
   }
 
   // (2) Declared frame over the 16 MiB reassembly cap: a tiny buffer with a

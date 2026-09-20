@@ -8,8 +8,8 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-A PR in review records the #80 decisions
-([ADR 0039](../context/decisions/0039-extraction-scope-and-error-policy.md));
+The #80 decisions are recorded in
+[ADR 0039](../context/decisions/0039-extraction-scope-and-error-policy.md);
 #80 is no longer an open decision. The remaining open work is #81
 (Generate-mode SEI: `pic_timing`, stuffing invariant, timestamp-cap eviction
 direction) and #50 (benchmark, parked).
