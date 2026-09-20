@@ -203,6 +203,43 @@ static void test_rollback_sensor_timestamp() {
         "rollback restores an overwritten duplicate");
   rollback_sensor_timestamp(ctx, SensorTimestampUndo{});
   check(ctx.pts_to_sensor_timestamp.size() == 1, "rollback of nothing recorded is a no-op");
+
+  {  // Time Status state: a rolled-back B must not feed C's derivation.
+    auto c = make_packet(1'600'000'000'066'666ULL);
+    VideoCtx with_b, without_b;
+    record_sensor_timestamp(with_b, a, 1000);
+    record_sensor_timestamp(without_b, a, 1000);
+    const auto ub = record_sensor_timestamp(with_b, b, 500'000'000);  // far apart: status differs
+    rollback_sensor_timestamp(with_b, ub);
+    check(with_b.have_prev_push == without_b.have_prev_push &&
+              with_b.prev_push_pts_ns == without_b.prev_push_pts_ns &&
+              with_b.prev_push_ts_us == without_b.prev_push_ts_us,
+          "rollback restores the previous push state directly");
+    record_sensor_timestamp(with_b, c, 2000);
+    record_sensor_timestamp(without_b, c, 2000);
+    check(with_b.pts_to_sensor_timestamp.at(2000).status ==
+                  without_b.pts_to_sensor_timestamp.at(2000).status &&
+              with_b.prev_push_pts_ns == without_b.prev_push_pts_ns &&
+              with_b.prev_push_ts_us == without_b.prev_push_ts_us,
+          "rollback restores Time Status derivation state");
+  }
+  {  // Cap eviction: the evicted entry and drop count come back.
+    VideoCtx cap;
+    for (std::size_t i = 0; i < kMaxSensorTimestamps; ++i)
+      record_sensor_timestamp(cap, make_packet(1'600'000'000'000'000ULL + i * 33'333),
+                              static_cast<std::int64_t>(i) * 1000);
+    const auto oldest = cap.pts_to_sensor_timestamp.at(0);
+    const auto ue =
+        record_sensor_timestamp(cap, b, static_cast<std::int64_t>(kMaxSensorTimestamps) * 1000);
+    check(cap.dropped_sensor_timestamps == 1 && cap.pts_to_sensor_timestamp.count(0) == 0,
+          "cap record evicts oldest and counts it");
+    rollback_sensor_timestamp(cap, ue);
+    check(cap.pts_to_sensor_timestamp.size() == kMaxSensorTimestamps &&
+              cap.pts_to_sensor_timestamp.count(0) == 1 &&
+              cap.pts_to_sensor_timestamp.at(0).timestamp_us == oldest.timestamp_us &&
+              cap.dropped_sensor_timestamps == 0,
+          "rollback restores the evicted entry and the drop count");
+  }
 }
 
 static void test_codec_latch_initial() {

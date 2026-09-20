@@ -6,8 +6,12 @@
   the caller's vector in place and moves it only on success, so a failed adopt
   (parse error or unknown UL) no longer loses the caller's buffer. `push(span)`
   returns `Backend` when `gst_buffer_new_allocate` yields NULL instead of
-  dereferencing it (and records the sensor timestamp only after allocation, rolling it back if
-  the appsrc refuses the buffer).
+  dereferencing it (and records the sensor timestamp only after allocation).
+  If the appsrc refuses the buffer, the record is rolled back in full: the
+  entry (or overwritten duplicate), the Time Status derivation state, and any
+  entry evicted at the 10,000-entry cap along with its drop count. The
+  rate-limited drop-warning time is not restored (already logged). Assumes
+  pushes are serialized by the caller.
   `GstInserter::finish()` latches its first result; a repeated
   `finish()`/`KlvSink::close()` returns that same result immediately. Tests added
   to `message` and `gst_insert`; both fail on the old code. The F4 allocation

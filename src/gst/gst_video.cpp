@@ -949,11 +949,18 @@ SensorTimestampUndo record_sensor_timestamp(VideoCtx& video, std::span<const std
         (static_cast<std::int64_t>(pts) - static_cast<std::int64_t>(video.prev_push_pts_ns)) /
             1000);
   }
+  SensorTimestampUndo undo;
+  undo.recorded = true;
+  undo.pts = pts;
+  undo.had_prev_push = video.have_prev_push;
+  undo.prev_push_pts_ns = video.prev_push_pts_ns;
+  undo.prev_push_ts_us = video.prev_push_ts_us;
   video.have_prev_push = true;
   video.prev_push_pts_ns = pts;
   video.prev_push_ts_us = sensor_timestamp_us;
   if (video.pts_to_sensor_timestamp.find(pts) == video.pts_to_sensor_timestamp.end() &&
       video.pts_to_sensor_timestamp.size() >= kMaxSensorTimestamps) {
+    undo.evicted = *video.pts_to_sensor_timestamp.begin();
     video.pts_to_sensor_timestamp.erase(video.pts_to_sensor_timestamp.begin());
     ++video.dropped_sensor_timestamps;
     const auto now = std::chrono::steady_clock::now();
@@ -965,9 +972,6 @@ SensorTimestampUndo record_sensor_timestamp(VideoCtx& video, std::span<const std
       video.last_sensor_timestamp_drop_warning = now;
     }
   }
-  SensorTimestampUndo undo;
-  undo.recorded = true;
-  undo.pts = pts;
   if (auto it = video.pts_to_sensor_timestamp.find(pts); it != video.pts_to_sensor_timestamp.end())
     undo.prev = it->second;
   video.pts_to_sensor_timestamp[pts] = entry;
@@ -977,8 +981,19 @@ SensorTimestampUndo record_sensor_timestamp(VideoCtx& video, std::span<const std
 void rollback_sensor_timestamp(VideoCtx& video, const SensorTimestampUndo& undo) {
   if (!undo.recorded) return;
   std::lock_guard<std::mutex> lock(video.timestamp_mu);
-  // Restores a duplicate-pts overwrite. An entry evicted at the cap is not
-  // resurrected, and prev_push_* is left as is (the next status is a hint).
+  // Assumes KLV pushes are serialized by the caller (Inserter::push contract,
+  // backend.hpp), so nothing else touched this state since the record.
+  // Reverse order of record_sensor_timestamp: Time Status derivation state,
+  // the entry evicted at the cap and its drop count, then this record's entry.
+  // last_sensor_timestamp_drop_warning is left alone: an emitted warning cannot
+  // be un-logged, and restoring the old time could repeat it.
+  video.have_prev_push = undo.had_prev_push;
+  video.prev_push_pts_ns = undo.prev_push_pts_ns;
+  video.prev_push_ts_us = undo.prev_push_ts_us;
+  if (undo.evicted) {
+    video.pts_to_sensor_timestamp.insert(*undo.evicted);
+    --video.dropped_sensor_timestamps;
+  }
   if (undo.prev)
     video.pts_to_sensor_timestamp[undo.pts] = *undo.prev;
   else
