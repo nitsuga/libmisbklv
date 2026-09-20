@@ -7,9 +7,12 @@
   (parse error or unknown UL) no longer loses the caller's buffer. `push(span)`
   returns `Backend` when `gst_buffer_new_allocate` yields NULL instead of
   dereferencing it (and records the sensor timestamp only after allocation).
-  A non-OK appsrc push (flushing/EOS) is terminal for the session: the video
-  probe can consume the timestamp while the push is in flight, so a per-buffer
-  rollback cannot be made atomic and was not kept.
+  A non-OK appsrc push (flushing/EOS) is terminal for the session: it latches
+  `terminal_error_`, so later pushes fail fast without touching the appsrc and
+  `finish()` discards the output and returns the error. The video probe can
+  consume the timestamp while the push is in flight, so a per-buffer rollback
+  cannot be made atomic and was not kept. The NULL-allocation `Backend` and the
+  RangeError/Unsupported validation errors do not latch (nothing was queued).
   `GstInserter::finish()` latches its first result; a repeated
   `finish()`/`KlvSink::close()` returns that same result immediately. Tests added
   to `message` and `gst_insert`; both fail on the old code. The F4 allocation

@@ -147,10 +147,13 @@ class Inserter {
   // (the same timeline extraction reports on — KlvPacket::pts_ns). `kNoPts`
   // synthesizes a ~30 fps counter on a KLV-only pipeline, and is rejected when
   // the config has a `video_source` (ADR 0020). Values below `kNoPts` are invalid
-  // and return RangeError. A non-OK result from the GStreamer backend means the
-  // appsrc is flushing or at EOS and is terminal for the session: in Generate
-  // mode the video probe may already have used that packet's timestamp, so do
-  // not retry the same packet.
+  // and return RangeError. A Backend error caused by the appsrc refusing the
+  // buffer (flushing or EOS) is terminal: later push() calls return the same
+  // error, and finish() discards partial output and reports it. In Generate
+  // mode the probe may already have used that packet's timestamp, so do not
+  // retry the same packet. Not terminal, and state is left untouched: a
+  // Backend error from a failed buffer allocation (nothing was queued), and
+  // the RangeError/Unsupported validation errors.
   virtual Result<std::monostate> push(std::span<const std::byte> klv_packet,
                                       std::int64_t pts_ns) = 0;
   // Ownership-transferring overload for zero-copy emit: by default forwards to

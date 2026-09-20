@@ -137,6 +137,7 @@ class GstInserter : public Inserter {
   }
 
   Result<std::monostate> push(std::span<const std::byte> pkt, std::int64_t pts_ns) override {
+    if (terminal_error_) return Result<std::monostate>::err(*terminal_error_);
     if (pts_ns < kNoPts) return Result<std::monostate>::err(Error::RangeError);
     // With video passthrough both branches must share the source timeline. The
     // synthetic ~30fps KLV-only counter is therefore a caller error here.
@@ -153,12 +154,11 @@ class GstInserter : public Inserter {
     GST_BUFFER_PTS(buf) = (pts_ns == kNoPts) ? pts_ : static_cast<GstClockTime>(pts_ns);
     GST_BUFFER_DURATION(buf) = kFrameDur;
     pts_ += kFrameDur;
-    const GstFlowReturn ret = gst_app_src_push_buffer(GST_APP_SRC(appsrc_), buf);
-    return ret == GST_FLOW_OK ? Result<std::monostate>::ok({})
-                              : Result<std::monostate>::err(Error::Backend);
+    return push_to_appsrc(buf);
   }
 
   Result<std::monostate> push(std::vector<std::byte>&& pkt, std::int64_t pts_ns) override {
+    if (terminal_error_) return Result<std::monostate>::err(*terminal_error_);
     if (pts_ns < kNoPts) return Result<std::monostate>::err(Error::RangeError);
     if (video_ && pts_ns == kNoPts) return Result<std::monostate>::err(Error::Unsupported);
     if (video_ && video_->generate_sei && pts_ns != kNoPts)
@@ -176,9 +176,7 @@ class GstInserter : public Inserter {
     GST_BUFFER_PTS(buf) = (pts_ns == kNoPts) ? pts_ : static_cast<GstClockTime>(pts_ns);
     GST_BUFFER_DURATION(buf) = kFrameDur;
     pts_ += kFrameDur;
-    const GstFlowReturn ret = gst_app_src_push_buffer(GST_APP_SRC(appsrc_), buf);
-    return ret == GST_FLOW_OK ? Result<std::monostate>::ok({})
-                              : Result<std::monostate>::err(Error::Backend);
+    return push_to_appsrc(buf);
   }
 
   // Pops ERROR only. A pipeline EOS cannot reach the bus before finish() sends
@@ -226,6 +224,15 @@ class GstInserter : public Inserter {
   }
 
  private:
+  // A non-OK push means the appsrc is flushing or at EOS: terminal for the
+  // session. Latch it so later push() fails fast and finish() discards output.
+  Result<std::monostate> push_to_appsrc(GstBuffer* buf) {
+    if (gst_app_src_push_buffer(GST_APP_SRC(appsrc_), buf) == GST_FLOW_OK)
+      return Result<std::monostate>::ok({});
+    terminal_error_ = Error::Backend;
+    return Result<std::monostate>::err(*terminal_error_);
+  }
+
   Result<std::monostate> do_finish(std::stop_token stop) {
     if (terminal_error_) {
       quiesce_to_null();
