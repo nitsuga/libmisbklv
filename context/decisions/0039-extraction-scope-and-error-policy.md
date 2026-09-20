@@ -47,13 +47,20 @@ the policy on top of it and resolves the open questions left in
    0x15` as `meta/x-klv` (finding in [`backend-scope`](../backend-scope.md),
    observed on GStreamer 1.24.2; behavior is version-dependent). Offline
    `extract_ts_klv` reads both `0x06` and `0x15`.
-5. **Fragmented RP 217 cells are reassembled by the existing framer.** For
-   `stream_id 0xFC`, `extract_ts_klv` does not check
-   `cell_fragmentation_indication`: each fragment carries its own 5-byte
-   header and length, so its bytes go to `KlvFramer`, which reassembles across
-   cells and PES. Every cell in a PES is extracted, not only the first. A
-   cell's indication bits are ignored; a lost fragment is handled by the
-   framer's normal `Truncated`/resync path.
+5. **RP 217 cells are concatenated through the framer, not validated.** For
+   `stream_id 0xFC`, `extract_ts_klv` feeds every cell's bytes, in order, to
+   `KlvFramer`, which reassembles across cells and PES; a well-formed split
+   packet extracts whole. Every cell in a PES is extracted, not only the first,
+   and the PID is selected when any cell in a PES starts with the UL. **Ceiling:**
+   service id, sequence number and first/middle/last indication transitions are
+   NOT checked, so a lost or reordered fragment can splice into a bogus KLV
+   frame; the framer usually, not always, catches that by BER length. Upgrade
+   path: validate the cell sequence byte and indication transitions per PID once
+   the RP 217 layout is confirmed from a source in `references/` (it is not
+   there today). A malformed wrapper on the selected PID (a declared cell length
+   past the PES end, or 1-4 trailing bytes too short for a cell header) is a
+   terminal `BadLength`; PES on other PIDs or before selection are not checked,
+   and `0x06` PES are unaffected.
 6. **33-bit PTS wrap: limit documented, no code change.** A capture crossing
    the wrap (about every 26.5 h) gets `extract_ts_klv` timestamps about 26.5 h
    off, since the origin is the minimum PTS. Workaround: KLV Item 2 (Precision
@@ -71,23 +78,28 @@ the policy on top of it and resolves the open questions left in
   surface for a case no deployment has reported. Deferred.
 - **Multi-PID extraction** — requires a `pid` on `KlvPacket`. Deferred.
 - **Reject fragmented RP 217 cells with `Unsupported`** — considered and
-  dropped: the framer already reassembles fragments, so a packet
-  split across two cells extracts whole (`test/hardening_test.cpp`), and
-  rejecting removed working behavior. The premise of silent mis-framing did not hold.
+  dropped: a well-formed split packet extracts whole
+  (`test/hardening_test.cpp`), and rejecting removed working behavior.
+- **Fragment state machine (sequence and first/middle/last checks)** — not
+  built: the RP 217 layout is not in `references/`. Deferred; see decision 5.
 - **Unroll PTS across the wrap** — needs a false-positive guard for reordered
   PES; not worth it before a real capture hits it. Deferred.
 
 # Consequences
 
 - Behavior on bad input is explicit and testable: `UnknownTag` or the first
-  framing error. Fragmented cells extract whole, and several cells in one PES
-  all extract (`test/hardening_test.cpp`).
+  framing error. Well-formed split cells extract whole, and several cells in one
+  PES all extract (`test/hardening_test.cpp`). Fragment order and loss are not
+  validated, so a lost or reordered fragment can yield a bogus frame the framer
+  does not always reject.
 - One corrupted length byte ends a live session; callers that must survive it
   restart the stream.
 - Live capability is a strict subset of offline: `0x15` is offline-only.
 
 # Assumptions / open questions
 
+- Fragment validation (sequence byte, first/middle/last transitions per PID)
+  needs the RP 217 cell layout confirmed from a source in `references/`.
 - Upgrade paths, only if a deployment hits the ceiling: skip by declared
   length after a rejection, non-terminal extraction as an opt-in, a `pid` on
   `KlvPacket`, PTS unrolling.

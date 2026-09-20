@@ -28,13 +28,17 @@ namespace misbklv {
 // across PES boundaries, so a packet larger than one PES (above the 16-bit
 // PES_packet_length ceiling) or split by a muxer is extracted whole, for 0x06
 // and 0x15 alike. RP 217 (0x15) metadata AU cells are extracted whether or not
-// fragmented (each fragment has its own cell header; the fragmentation
-// indication is ignored), and every cell in a PES is extracted, not only the
-// first. A foreign (unregistered) UL is not a
+// fragmented: each cell's bytes are concatenated through the framer and every
+// cell in a PES is extracted, not only the first. Fragment service id, sequence
+// number and first/middle/last indication are NOT validated, so a lost or
+// reordered fragment can splice into a bogus frame (the framer usually, not
+// always, catches it by BER length). On the selected PID a cell whose declared
+// length overruns the PES, or 1-4 trailing bytes too short for a cell header,
+// fails with BadLength. A foreign (unregistered) UL is not a
 // framing error here; it surfaces later as UnknownTag from Message::parse.
 //
-// Single KLV PID: the first PID whose PES payload starts with a UL is selected
-// by content; any other KLV PID in the stream is ignored (ADR 0039).
+// Single KLV PID: the first PID with a PES in which any cell starts with a UL is
+// selected by content; any other KLV PID in the stream is ignored (ADR 0039).
 //
 // Offline only: this extractor reads both stream_type 0x06 and 0x15, but the
 // live gstreamer path (tsdemux) does not surface 0x15 (ADR 0039).

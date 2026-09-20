@@ -606,7 +606,8 @@ static void test_ts_klv_robustness() {
   check(out1b.size() == 1 && out1b[0] == pkt_a, "nothing after the first framing error delivered");
 
   // (1c) A KLV packet split across two RP 217 cells in two PES (indication 0b10
-  // first, 0b01 last) is reassembled by the framer into the original packet.
+  // first, 0b01 last) is concatenated by the framer into the original packet.
+  // Fragment order, sequence numbers and loss are NOT validated (ADR 0039).
   // Control: the same packet in one complete cell (0xDF) extracts identically.
   {
     const std::size_t half = pkt_b.size() / 2;
@@ -616,7 +617,7 @@ static void test_ts_klv_robustness() {
     std::vector<std::vector<std::byte>> frag_out;
     auto fr = run_extract(frag_ts, frag_out);
     check(static_cast<bool>(fr) && frag_out.size() == 1 && frag_out[0] == pkt_b,
-          "extract_ts_klv fragmented RP 217 cells reassemble into one packet");
+          "extract_ts_klv well-formed split RP 217 cells concatenate into one packet");
 
     std::vector<std::byte> whole_ts;
     append_pes(whole_ts, au_cell_pes(0, pkt_b));
@@ -638,6 +639,51 @@ static void test_ts_klv_robustness() {
     check(static_cast<bool>(mr) && multi_out.size() == 2 && multi_out[0] == pkt_a &&
               multi_out[1] == pkt_b,
           "extract_ts_klv several RP 217 cells in one PES all extract");
+  }
+
+  // (1e) PID selection looks at every cell of the first 0xFC PES: a PES that
+  // opens with a non-UL (continuation) cell and carries the KLV packet in a
+  // later cell still selects the PID and extracts the packet.
+  {
+    const std::vector<std::byte> filler(8, B(0x55));
+    auto cells = au_cell(0, filler, 0x00);
+    auto second = au_cell(1, pkt_a);
+    cells.insert(cells.end(), second.begin(), second.end());
+    std::vector<std::byte> sel_ts;
+    append_pes(sel_ts, pes_packet(0xFC, cells));
+    std::vector<std::vector<std::byte>> sel_out;
+    auto sr = run_extract(sel_ts, sel_out);
+    check(static_cast<bool>(sr) && sel_out.size() == 1 && sel_out[0] == pkt_a,
+          "extract_ts_klv selects the PID from a later cell in the PES");
+  }
+
+  // (1f) Malformed AU-cell wrappers on the selected PID are terminal BadLength.
+  {
+    // Overrun: declared cell length exceeds the bytes left in the PES.
+    auto overrun = au_cell(1, pkt_b);
+    overrun[3] = B(0x7F);
+    overrun[4] = B(0xFF);
+    std::vector<std::byte> ov_ts;
+    append_pes(ov_ts, au_cell_pes(0, pkt_a));
+    append_pes(ov_ts, pes_packet(0xFC, overrun));
+    std::vector<std::vector<std::byte>> ov_out;
+    auto orr = run_extract(ov_ts, ov_out);
+    check(!orr && orr.error() == Error::BadLength, "overrun RP 217 cell length -> BadLength");
+    check(ov_out.size() == 1 && ov_out[0] == pkt_a,
+          "packet before an overrun cell stays delivered");
+
+    // 1-4 trailing bytes after the last cell are too short for a cell header.
+    auto trailing = au_cell(1, pkt_b);
+    for (int i = 0; i < 3; ++i) trailing.push_back(B(0x00));
+    std::vector<std::byte> tr_ts;
+    append_pes(tr_ts, au_cell_pes(0, pkt_a));
+    append_pes(tr_ts, pes_packet(0xFC, trailing));
+    std::vector<std::vector<std::byte>> tr_out;
+    auto trr = run_extract(tr_ts, tr_out);
+    check(!trr && trr.error() == Error::BadLength,
+          "trailing bytes after RP 217 cells -> BadLength");
+    check(tr_out.size() == 2 && tr_out[0] == pkt_a && tr_out[1] == pkt_b,
+          "cells before the trailing bytes stay delivered");
   }
 
   // (2) Declared frame over the 16 MiB reassembly cap: a tiny buffer with a

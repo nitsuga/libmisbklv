@@ -4,9 +4,8 @@
 
 * **Extraction policy** (issue #80,
   [`0039`](./decisions/0039-extraction-scope-and-error-policy.md)):
-  `extract_ts_klv` now extracts every RP 217 cell in a PES (only the first was
-  fed before); `ponytail:` comments added for the PTS wrap and the framer
-  resync. Author: claude/sonnet-5.
+  `extract_ts_klv` cell handling and `ponytail:` comments for the PTS wrap and
+  fragments landed. Author: claude/sonnet-5.
 
 * **Result deref, extract-cap floor, view lifetime** (issue #83, F8/F9/F10):
   `Result<T>::operator*`/`->` assert success (const `->` added). An

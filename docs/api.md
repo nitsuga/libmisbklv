@@ -228,7 +228,8 @@ relock is visible to a reader instead of being smoothed over.
 uses the same nanosecond units and relative source timing as `KlvStream` — its
 absolute origin can differ by about a frame, and it does not handle the 33-bit
 PTS wrap (about 26.5 h); it also reads the `0x15` sync-KLV streams gstreamer's
-demuxer drops, which the live path does not — offline only, single KLV PID; see
+demuxer drops, which the live path does not — offline only, single KLV PID;
+fragmented 0x15 cells are concatenated without sequence or loss validation; see
 [ADR 0039](../context/decisions/0039-extraction-scope-and-error-policy.md)):
 
 ```cpp

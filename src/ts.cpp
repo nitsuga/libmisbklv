@@ -30,33 +30,46 @@ bool starts_with_ul(std::span<const std::byte> s) {
          u8(s, 2) == kSmpteUl[2] && u8(s, 3) == kSmpteUl[3];
 }
 
-// Unwrap a full PES packet into its KLV payload pieces, in order; never empty
-// (a lone empty span if not KLV/parseable). A 0x06 PES is one piece. A 0xFC PES
-// (SMPTE RP 217) holds one or more metadata AU cells, each a 5-byte header whose
-// last two bytes are the big-endian data length, then that many bytes; every
-// cell is one piece. The cell_fragmentation_indication bits are ignored: each
-// fragment carries its own header and length, and the framer reassembles them
-// across cells and PES. A cell clipped by the PES end yields the bytes present;
-// fewer than 5 trailing bytes are not a cell and are dropped.
-std::vector<std::span<const std::byte>> unwrap_pes(std::span<const std::byte> pes) {
+// A PES unwrapped into its KLV payload pieces, in order; never empty (a lone
+// empty span if not KLV/parseable). `malformed` is set for a 0xFC PES whose AU
+// cells do not tile the payload exactly (see unwrap_pes); `cells` then holds
+// only the well-formed cells before the defect.
+struct PesCells {
+  std::vector<std::span<const std::byte>> cells;
+  bool malformed = false;
+};
+
+// Unwrap a full PES packet. A 0x06 PES is one piece. A 0xFC PES (SMPTE RP 217)
+// holds one or more metadata AU cells, each a 5-byte header whose last two bytes
+// are the big-endian data length, then that many bytes; every cell is one piece.
+// The cell_fragmentation_indication bits are ignored: each fragment carries its
+// own header and length, and the framer reassembles them across cells and PES.
+// A declared length past the PES end, or 1-4 trailing bytes too short for a cell
+// header, is malformed (the caller raises it only for the selected PID).
+PesCells unwrap_pes(std::span<const std::byte> pes) {
   constexpr std::span<const std::byte> kNone;
-  if (pes.size() < 9 || u8(pes, 0) != 0 || u8(pes, 1) != 0 || u8(pes, 2) != 1) return {kNone};
+  if (pes.size() < 9 || u8(pes, 0) != 0 || u8(pes, 1) != 0 || u8(pes, 2) != 1) return {{kNone}};
   const std::uint8_t stream_id = u8(pes, 3);
   const std::size_t pes_len = (u8(pes, 4) << 8) | u8(pes, 5);
   const std::size_t poff = ((u8(pes, 6) & 0xC0) == 0x80) ? 9 + u8(pes, 8) : 6;
   const std::size_t end =
       (pes_len > 0) ? std::min<std::size_t>(6 + pes_len, pes.size()) : pes.size();
-  if (poff > end) return {kNone};
+  if (poff > end) return {{kNone}};
   auto payload = pes.subspan(poff, end - poff);
-  if (stream_id != 0xFC) return {payload};  // 0x06: KLV directly in the PES
-  if (payload.size() < 5) return {kNone};
-  std::vector<std::span<const std::byte>> cells;
+  if (stream_id != 0xFC) return {{payload}};  // 0x06: KLV directly in the PES
+  PesCells out;
   while (payload.size() >= 5) {
     const std::size_t clen = (u8(payload, 3) << 8) | u8(payload, 4);
-    cells.push_back(payload.subspan(5, std::min(clen, payload.size() - 5)));
-    payload = payload.subspan(std::min(5 + clen, payload.size()));
+    if (clen > payload.size() - 5) {
+      out.malformed = true;
+      return out;
+    }
+    out.cells.push_back(payload.subspan(5, clen));
+    payload = payload.subspan(5 + clen);
   }
-  return cells;
+  if (!payload.empty()) out.malformed = true;
+  if (out.cells.empty()) out.cells.push_back(kNone);
+  return out;
 }
 
 // The PES header's 33-bit PTS in 90 kHz ticks, or -1 if the packet carries none
@@ -123,8 +136,9 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
   auto flush = [&](std::uint16_t pid) {
     auto it = pes.find(pid);
     if (it == pes.end() || it->second.empty()) return;
-    const auto cells = unwrap_pes(it->second);
-    if (starts_with_ul(cells.front()) && klv_pid < 0) {
+    const auto [cells, malformed] = unwrap_pes(it->second);
+    // Any cell may start the KLV packet: a PES can open with a continuation.
+    if (klv_pid < 0 && std::any_of(cells.begin(), cells.end(), starts_with_ul)) {
       klv_pid = pid;
       // Candidate buffers cannot contribute after the first KLV PID is found.
       for (auto& [candidate, bytes] : pes) {
@@ -147,10 +161,17 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
       const std::int64_t pts90 = pes_pts_90k(it->second);
       const std::int64_t pts_ns =
           (pts90 < 0 || origin_90k < 0) ? kNoPts : (pts90 - origin_90k) * 100'000 / 9;
+      // ponytail: fragment cells are concatenated as-is; service id, sequence
+      // number and first/middle/last transitions are not validated, so a lost or
+      // reordered fragment can splice into a bogus frame (the KLV framer usually,
+      // not always, catches it by BER length). Upgrade path: validate the cell
+      // sequence byte and indication transitions per PID once the RP 217 layout
+      // is confirmed from a source in references/ (ADR 0039).
       for (const auto cell : cells) {
         frame_error = framer.feed(cell, pts_ns, on_packet);
         if (frame_error) break;
       }
+      if (!frame_error && malformed) frame_error = Error::BadLength;
     }
     pending_pes_bytes -= it->second.size();
     if (klv_pid >= 0 && pid == static_cast<std::uint16_t>(klv_pid))
