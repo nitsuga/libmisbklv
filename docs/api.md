@@ -255,7 +255,9 @@ auto bytes  = msg->encode();                 // Result<Bytes>; original packet e
   (ST 0601 or standalone ST 0903 VMTI), and an unedited `encode()` re-emits a
   corrupt one unchanged. Call `msg->checksum_valid()` (`Result<bool>`) to check
   the source packet as parsed (staged edits are ignored); accept/reject is your
-  policy. No checksum item is an error.
+  policy. No checksum item is an error. An edited Message's `encode()`
+  recomputes a valid checksum even over an invalid source checksum, so call
+  `checksum_valid()` before editing if integrity matters.
 - **Named tags** — `tag` may be a plain number or a generated per-registry enum:
   `tags::Uas0601::SensorLatitude`, `tags::Vmti0903::…`, `tags::Vtarget0903::…`
   (generated from the registry, so the value equals the ST tag number). Names and

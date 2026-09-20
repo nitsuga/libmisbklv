@@ -8,10 +8,9 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-No PR in flight. Two decisions are open: #80 (foreign UL, second KLV PID, live
-0x15, fragmented RP217, and how the framer resyncs after an over-cap rejection)
-and #82's edit-path policy (refuse or flag recomputing over an invalid
-checksum). The open follow-up is #83 (`Result` deref assert, extract-cap
+No PR in flight. One decision is open: #80 (foreign UL, second KLV PID, live
+0x15, fragmented RP217, and how the framer resyncs after an over-cap rejection).
+The open follow-up is #83 (`Result` deref assert, extract-cap
 validation, view-lifetime docs).
 
 <!-- Keep this section about where the WORK is. A sentence that would still be

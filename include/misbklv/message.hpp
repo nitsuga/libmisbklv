@@ -91,16 +91,17 @@ class Message {
   // With no staged edits on a parsed Message, returns an owned byte-for-byte copy
   // of that packet only (excluding trailing parse input). Otherwise rebuilds:
   // untouched items pass through byte-exact, edited/added via the codec, and the
-  // checksum is re-emitted.
+  // checksum is re-emitted, valid even if the source checksum was invalid; call
+  // checksum_valid() before editing if integrity matters.
   Result<ber::Bytes> encode() const;
 
   // Whether the Item 1 checksum of the source packet as parsed matches a
   // recomputed bcc16 (key..checksum length, as LocalSetBuilder writes it). Works
   // for any registry whose tag 1 is the 2-byte checksum (ST 0601 and standalone
   // ST 0903 VMTI). Ignores staged edits. parse()/adopt() never verify; policy is
-  // the caller's. Errors: UnknownTag (no checksum item / no source packet /
-  // registry without a checksum), BadLength (tag 1 is not a 2-byte value ending
-  // the packet).
+  // the caller's. An edited encode() recomputes a valid checksum regardless.
+  // Errors: UnknownTag (no checksum item / no source packet / registry without a
+  // checksum), BadLength (tag 1 is not a 2-byte value ending the packet).
   Result<bool> checksum_valid() const;
 
   // True if any `set()` has staged an edit/append.
