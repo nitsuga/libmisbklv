@@ -137,6 +137,9 @@ class GstInserter : public Inserter {
   }
 
   Result<std::monostate> push(std::span<const std::byte> pkt, std::int64_t pts_ns) override {
+    // After finish() the output is committed: refuse without touching the appsrc
+    // or latching a new error (a later finish() returns its cached result).
+    if (finished_) return Result<std::monostate>::err(Error::Backend);
     if (terminal_error_) return Result<std::monostate>::err(*terminal_error_);
     if (pts_ns < kNoPts) return Result<std::monostate>::err(Error::RangeError);
     // With video passthrough both branches must share the source timeline. The
@@ -158,6 +161,9 @@ class GstInserter : public Inserter {
   }
 
   Result<std::monostate> push(std::vector<std::byte>&& pkt, std::int64_t pts_ns) override {
+    // After finish() the output is committed: refuse without touching the appsrc
+    // or latching a new error (a later finish() returns its cached result).
+    if (finished_) return Result<std::monostate>::err(Error::Backend);
     if (terminal_error_) return Result<std::monostate>::err(*terminal_error_);
     if (pts_ns < kNoPts) return Result<std::monostate>::err(Error::RangeError);
     if (video_ && pts_ns == kNoPts) return Result<std::monostate>::err(Error::Unsupported);

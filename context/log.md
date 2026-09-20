@@ -13,6 +13,8 @@
   consume the timestamp while the push is in flight, so a per-buffer rollback
   cannot be made atomic and was not kept. The NULL-allocation `Backend` and the
   RangeError/Unsupported validation errors do not latch (nothing was queued).
+  A `push()` after `finish()` returns `Backend` without touching the appsrc or
+  the cached finish result.
   `GstInserter::finish()` latches its first result; a repeated
   `finish()`/`KlvSink::close()` returns that same result immediately. Tests added
   to `message` and `gst_insert`; both fail on the old code. The F4 allocation

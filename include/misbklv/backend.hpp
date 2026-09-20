@@ -151,7 +151,8 @@ class Inserter {
   // buffer (flushing or EOS) is terminal: later push() calls return the same
   // error, and finish() discards partial output and reports it. In Generate
   // mode the probe may already have used that packet's timestamp, so do not
-  // retry the same packet. Not terminal, and state is left untouched: a
+  // retry the same packet. push() after finish() returns Backend without
+  // touching the sink or the finished result. Not terminal, and state is left untouched: a
   // Backend error from a failed buffer allocation (nothing was queued), and
   // the RangeError/Unsupported validation errors.
   virtual Result<std::monostate> push(std::span<const std::byte> klv_packet,

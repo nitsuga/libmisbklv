@@ -147,15 +147,16 @@ int main(int argc, char** argv) {
     }
   }
 
-  // A push after finish() is refused by the appsrc (EOS); that is terminal, so
-  // a further push fails fast with the same error.
+  // push() after finish() is refused without touching the appsrc, and does not
+  // disturb the cached finish() result or the committed output.
   {
     const auto first = (*ins)->push(buf.first(insert_packet_size), kNoPts);
     const auto second = (*ins)->push(buf.first(insert_packet_size), kNoPts);
-    const auto polled = (*ins)->poll();  // surfaces the latched terminal error
+    const auto again = (*ins)->finish();
+    const auto polled = (*ins)->poll();  // must not report a newly latched error
     if (first || second || first.error() != Error::Backend || second.error() != Error::Backend ||
-        polled || polled.error() != Error::Backend) {
-      std::fprintf(stderr, "push after finish() not a latched Backend error\n");
+        !again || !polled) {
+      std::fprintf(stderr, "push after finish() not refused, or finish() result disturbed\n");
       return 1;
     }
   }
