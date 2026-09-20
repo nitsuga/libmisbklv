@@ -2,6 +2,12 @@
 
 ## 2026-09-20
 
+* **Extraction scope and error policy decided** (issue #80): see
+  [`0039`](./decisions/0039-extraction-scope-and-error-policy.md). A fragmented
+  RP 217 cell now fails `extract_ts_klv` with `Unsupported`; the PTS-wrap limit,
+  single-PID and offline-only `0x15` scope are documented.
+  Author: claude/sonnet-5.
+
 * **Result deref, extract-cap floor, view lifetime** (issue #83, F8/F9/F10):
   `Result<T>::operator*`/`->` assert success (const `->` added). An
   `ExtractOptions::max_packet_bytes` below `kMinKlvPacketBytes` (17) now fails

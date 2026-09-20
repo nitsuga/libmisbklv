@@ -49,8 +49,8 @@ across the entire frame: the 16-byte SMPTE UL, BER length, and declared value.
     one byte past the bad UL, and resyncs, so it can no longer re-parse the same
     bytes forever or grow its buffer. This does resynchronize inside the claimed
     payload after an over-cap rejection, so the reinterpretation risk above is
-    open again; how the framer should resync after `ResourceLimit` is part of the
-    pending #80 decision.
+    open again; the decision is to accept it and keep extraction terminal
+    (see [`0039`](./0039-extraction-scope-and-error-policy.md)).
   - *Amended 2026-09-20 (issue #83):* a cap below the 17-byte minimum frame
     (`kMinKlvPacketBytes`) can never admit a frame, so it is rejected with
     `RangeError` at `extract()` entry, and by `KlvStream` itself for any

@@ -482,12 +482,15 @@ std::vector<std::byte> pes_packet(std::uint8_t stream_id, std::span<const std::b
 // 5-byte header precedes the cell payload (service id 0, sequence number, and
 // fragmentation flags 0xDF for one complete cell) — mirroring the fixture
 // generator's construction. unwrap_pes() strips the header and trusts its
-// 16-bit length, so each fragment gets a cell header of its own.
-std::vector<std::byte> au_cell_pes(std::uint8_t seq, std::span<const std::byte> klv_fragment) {
+// 16-bit length, so each fragment gets a cell header of its own. `flags`
+// overrides the third byte; its top two bits are cell_fragmentation_indication
+// (0b11 = complete), so e.g. 0x9F marks a fragmented cell.
+std::vector<std::byte> au_cell_pes(std::uint8_t seq, std::span<const std::byte> klv_fragment,
+                                   std::uint8_t flags = 0xDF) {
   std::vector<std::byte> cell;
   cell.push_back(B(0x00));
   cell.push_back(B(seq));
-  cell.push_back(B(0xDF));
+  cell.push_back(B(flags));
   cell.push_back(B(klv_fragment.size() >> 8));
   cell.push_back(B(klv_fragment.size() & 0xFF));
   cell.insert(cell.end(), klv_fragment.begin(), klv_fragment.end());
@@ -586,6 +589,40 @@ static void test_ts_klv_robustness() {
   check(!r1 && r1.error() == Error::BadLength,
         "extract_ts_klv corrupt declared BER length -> BadLength");
   check(out1.size() == 1 && out1[0] == pkt_a, "packet before the corruption stays delivered");
+
+  // (1b) Extraction stops at the first framing error: a valid packet AFTER the
+  // corrupt one is not delivered, even though the framer itself resyncs.
+  std::vector<std::byte> ts1b = ts1;
+  append_pes(ts1b, pes_packet(0xC0, pkt_b));
+  std::vector<std::vector<std::byte>> out1b;
+  auto r1b = run_extract(ts1b, out1b);
+  check(!r1b && r1b.error() == Error::BadLength, "first framing error is the one returned");
+  check(out1b.size() == 1 && out1b[0] == pkt_a, "nothing after the first framing error delivered");
+
+  // (1c) A fragmented RP 217 cell (cell_fragmentation_indication != 0b11) on the
+  // selected PID fails with Unsupported instead of feeding partial bytes to the
+  // framer; packets before it stay delivered. Positive control: the same two
+  // cells, both non-fragmented, extract cleanly.
+  {
+    std::vector<std::byte> frag_ts;
+    append_pes(frag_ts, au_cell_pes(0, pkt_a));
+    append_pes(frag_ts, au_cell_pes(1, pkt_b, 0x9F));  // indication 0b10: first fragment
+    std::vector<std::vector<std::byte>> frag_out;
+    auto fr = run_extract(frag_ts, frag_out);
+    check(!fr && fr.error() == Error::Unsupported,
+          "extract_ts_klv fragmented RP 217 cell -> Unsupported");
+    check(frag_out.size() == 1 && frag_out[0] == pkt_a,
+          "packet before the fragmented cell stays delivered");
+
+    std::vector<std::byte> whole_ts;
+    append_pes(whole_ts, au_cell_pes(0, pkt_a));
+    append_pes(whole_ts, au_cell_pes(1, pkt_b));
+    std::vector<std::vector<std::byte>> whole_out;
+    auto wr = run_extract(whole_ts, whole_out);
+    check(static_cast<bool>(wr) && whole_out.size() == 2 && whole_out[0] == pkt_a &&
+              whole_out[1] == pkt_b,
+          "non-fragmented RP 217 cells still extract");
+  }
 
   // (2) Declared frame over the 16 MiB reassembly cap: a tiny buffer with a
   // huge declared length must fail with ResourceLimit, not wait forever.

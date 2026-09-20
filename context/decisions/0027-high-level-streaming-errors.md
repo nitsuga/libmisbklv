@@ -31,7 +31,9 @@ observable with its original error rather than becoming a generic backend error.
   queue is empty does iteration end and `error()` report that failure.
 - A `Message::parse` failure is terminal at its position. The stream cancels the
   backend and drops later queued or arriving data rather than silently skipping
-  the bad packet and continuing.
+  the bad packet and continuing. *Amended 2026-09-20 (issue #80):* this includes
+  an unregistered UL (`UnknownTag`); fail-closed is confirmed in
+  [`0039`](./0039-extraction-scope-and-error-policy.md).
 - Normal file EOS and cooperative cancellation are successful terminal states.
 - `KlvSink` preserves and exposes the exact `open_insert` error. Its `emit()` and
   `close()` return that same error when opening failed; callers check the sink's

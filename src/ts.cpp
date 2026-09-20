@@ -31,7 +31,11 @@ bool starts_with_ul(std::span<const std::byte> s) {
 }
 
 // Unwrap a full PES packet into its KLV payload (empty if not KLV/parseable).
-std::span<const std::byte> unwrap_pes(std::span<const std::byte> pes) {
+// `fragmented` is set for an RP 217 AU cell whose cell_fragmentation_indication
+// (top two bits of the cell header's third byte; 0b11 = one complete cell, ADR
+// 0016) says otherwise.
+std::span<const std::byte> unwrap_pes(std::span<const std::byte> pes, bool& fragmented) {
+  fragmented = false;
   if (pes.size() < 9 || u8(pes, 0) != 0 || u8(pes, 1) != 0 || u8(pes, 2) != 1) return {};
   const std::uint8_t stream_id = u8(pes, 3);
   const std::size_t pes_len = (u8(pes, 4) << 8) | u8(pes, 5);
@@ -42,6 +46,7 @@ std::span<const std::byte> unwrap_pes(std::span<const std::byte> pes) {
   auto payload = pes.subspan(poff, end - poff);
   if (stream_id == 0xFC) {  // metadata AU cell (SMPTE RP 217): 5-byte header
     if (payload.size() < 5) return {};
+    fragmented = (u8(payload, 2) >> 6) != 0x3;
     const std::size_t clen = (u8(payload, 3) << 8) | u8(payload, 4);
     return payload.subspan(5, std::min(clen, payload.size() - 5));
   }
@@ -72,6 +77,11 @@ std::int64_t pes_pts_90k(std::span<const std::byte> pes) {
 // reordered video the first PES in the file is not the earliest presentation
 // time, and picking it would shift every reported timestamp by the reorder
 // delay.
+//
+// ponytail: the PTS is 33 bits (wraps every ~26.5 h), so a capture crossing the
+// wrap has a minimum near zero and timestamps come out ~26.5 h off. Upgrade
+// path: unroll PTS to 64 bits before picking the origin, with a false-positive
+// guard so reordered PES near the wrap are not read as a wrap.
 std::int64_t earliest_pts_90k(std::span<const std::byte> ts) {
   std::int64_t best = -1;
   for (std::size_t i = 0; i + kPkt <= ts.size(); i += kPkt) {
@@ -107,7 +117,8 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
   auto flush = [&](std::uint16_t pid) {
     auto it = pes.find(pid);
     if (it == pes.end() || it->second.empty()) return;
-    const auto klv = unwrap_pes(it->second);
+    bool fragmented = false;
+    const auto klv = unwrap_pes(it->second, fragmented);
     if (starts_with_ul(klv) && klv_pid < 0) {
       klv_pid = pid;
       // Candidate buffers cannot contribute after the first KLV PID is found.
@@ -129,9 +140,13 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
       // with the UL — the UL prefix only selects the PID, once, at the first
       // payload that carries it.
       const std::int64_t pts90 = pes_pts_90k(it->second);
-      frame_error = framer.feed(
-          klv, (pts90 < 0 || origin_90k < 0) ? kNoPts : (pts90 - origin_90k) * 100'000 / 9,
-          on_packet);
+      if (fragmented) {
+        frame_error = Error::Unsupported;  // fragmented RP 217 cells: not reassembled
+      } else {
+        frame_error = framer.feed(
+            klv, (pts90 < 0 || origin_90k < 0) ? kNoPts : (pts90 - origin_90k) * 100'000 / 9,
+            on_packet);
+      }
     }
     pending_pes_bytes -= it->second.size();
     if (klv_pid >= 0 && pid == static_cast<std::uint16_t>(klv_pid))

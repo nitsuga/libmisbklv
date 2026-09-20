@@ -28,12 +28,26 @@ namespace misbklv {
 // across PES boundaries, so a packet larger than one PES (above the 16-bit
 // PES_packet_length ceiling) or split by a muxer is extracted whole. RP 217
 // (0x15) metadata AU cells are supported in the non-fragmented form (the common
-// case).
+// case); a fragmented cell on the selected PID fails with Unsupported (packets
+// already delivered stay delivered). A foreign (unregistered) UL is not a
+// framing error here; it surfaces later as UnknownTag from Message::parse.
+//
+// Single KLV PID: the first PID whose PES payload starts with a UL is selected
+// by content; any other KLV PID in the stream is ignored (ADR 0039).
+//
+// Offline only: this extractor reads both stream_type 0x06 and 0x15, but the
+// live gstreamer path (tsdemux) does not surface 0x15 (ADR 0039).
 //
 // Each packet carries `pts_ns` — nanoseconds from the start of the source,
 // measured from the earliest PTS anywhere in `ts` (ADR 0021), or `kNoPts` if
 // its PES was untimed. `ts` must therefore be the whole stream: extracting from
 // a chunk re-anchors the timeline to that chunk.
+//
+// PTS wrap limit: PTS is 33 bits and wraps about every 26.5 h. A capture that
+// crosses the wrap gets timestamps about 26.5 h off, because the origin is the
+// minimum PTS. Workaround: use KLV Item 2 (Precision Time Stamp), or split the
+// file before extracting. The live path's behavior across the wrap is not
+// specified.
 Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
                                       const PacketHandler& on_packet);
 

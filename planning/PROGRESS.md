@@ -8,9 +8,9 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-No PR in flight. One decision is open: #80 (foreign UL, second KLV PID, live
-0x15, fragmented RP217, and how the framer resyncs after an over-cap rejection).
-The remaining open work is #81 (Generate-mode SEI: `pic_timing`, stuffing
+A PR in review records the #80 decisions
+([ADR 0039](../context/decisions/0039-extraction-scope-and-error-policy.md));
+#80 is no longer an open decision. The remaining open work is #81 (Generate-mode SEI: `pic_timing`, stuffing
 invariant, timestamp-cap eviction direction) and #50 (benchmark, parked).
 
 <!-- Keep this section about where the WORK is. A sentence that would still be

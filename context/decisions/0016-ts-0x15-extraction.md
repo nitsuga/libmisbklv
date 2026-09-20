@@ -62,6 +62,9 @@ for live/network sources.
 - **Non-fragmented AU cells** assumed (each PES = one complete AU cell = one KLV
   packet — holds for all samples; `cell_fragmentation_indication = 11`). Cell
   fragmentation across PES is a follow-on if a stream needs it.
+  *Amended 2026-09-20 (issue #80):* a fragmented cell on the selected PID now
+  fails with `Unsupported` rather than mis-framing; see
+  [`0039`](./0039-extraction-scope-and-error-policy.md).
 - **Content-based PID detection** (first PES starting with a UL). Robust for the
   single-KLV-PID case; PSI parsing can be added if multi-KLV-PID selection is ever
   needed.
