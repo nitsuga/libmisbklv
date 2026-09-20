@@ -160,7 +160,8 @@ int main(int argc, char** argv) {
     std::vector<std::byte> good = bytes;
     auto adopted = Message::adopt(std::move(good));
     auto alat = adopted ? adopted->get<double>(13) : std::nullopt;
-    check(adopted && alat && std::fabs(*alat - 12.5) < 0.001, "adopt success reads correctly");
+    check(adopted && alat && std::fabs(*alat - 12.5) < 0.001 && good.empty(),
+          "adopt success reads correctly and consumes the vector");
 
     std::vector<std::byte> garbage(32, B(0xA5));
     const auto garbage_copy = garbage;

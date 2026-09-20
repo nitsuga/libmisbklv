@@ -141,14 +141,14 @@ class GstInserter : public Inserter {
     // With video passthrough both branches must share the source timeline. The
     // synthetic ~30fps KLV-only counter is therefore a caller error here.
     if (video_ && pts_ns == kNoPts) return Result<std::monostate>::err(Error::Unsupported);
-    // Generate mode records the ST 0601 Item 2 sensor timestamp against this
-    // KLV PTS; the video pad probe consumes that mapping later.
-    if (video_ && video_->generate_sei && pts_ns != kNoPts)
-      record_sensor_timestamp(*video_, pkt, pts_ns);
-
     GstBuffer* buf = gst_buffer_new_allocate(nullptr, pkt.size(), nullptr);
     if (!buf) return Result<std::monostate>::err(Error::Backend);
     gst_buffer_fill(buf, 0, pkt.data(), pkt.size());
+    // Generate mode records the ST 0601 Item 2 sensor timestamp against this
+    // KLV PTS; the video pad probe consumes that mapping later. Recorded after
+    // allocation succeeds but before the push, so the mapping exists first.
+    if (video_ && video_->generate_sei && pts_ns != kNoPts)
+      record_sensor_timestamp(*video_, pkt, pts_ns);
     // KLV-only output with kNoPts retains the historic ~30fps pacing counter.
     GST_BUFFER_PTS(buf) = (pts_ns == kNoPts) ? pts_ : static_cast<GstClockTime>(pts_ns);
     GST_BUFFER_DURATION(buf) = kFrameDur;

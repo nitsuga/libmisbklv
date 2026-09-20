@@ -20,16 +20,16 @@ Result<Message> Message::parse(std::span<const std::byte> bytes) {
 }
 
 Result<Message> Message::adopt(std::vector<std::byte>&& bytes) {
-  // Parse the caller's buffer in place and move it only on success, so a failed
-  // adopt leaves the caller's vector untouched. Moving a std::vector keeps its
-  // heap block, so the spans parsed here stay valid inside m.bytes_.
+  // Parse in place and take the buffer only on success, so a failed adopt leaves
+  // the caller's vector untouched. swap() (unlike move-assign) guarantees the
+  // parsed spans stay valid and refer to m.bytes_, and leaves `bytes` empty.
   auto pkt = parse_packet(bytes);
   if (!pkt) return Result<Message>::err(pkt.error());
   const Registry* reg = registry_by_key(pkt->ul_key);
   if (!reg) return Result<Message>::err(Error::UnknownTag);
   Message m;
-  m.bytes_ = std::move(bytes);
-  m.pkt_ = std::move(*pkt);  // spans into m.bytes_ (same heap block as before the move)
+  m.bytes_.swap(bytes);
+  m.pkt_ = std::move(*pkt);  // spans into m.bytes_ (same heap block as before the swap)
   m.reg_ = reg;
   return Result<Message>::ok(std::move(m));
 }
