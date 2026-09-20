@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include <gst/app/app.h>
 #include <gst/gst.h>
 #define GST_USE_UNSTABLE_API
 #include <gst/codecparsers/gsth264parser.h>
@@ -170,5 +171,13 @@ Result<std::monostate> prepare_video_branch(GstElement* pipeline, GstPad* reserv
                                             Sei0604 sei_0604, std::unique_ptr<VideoCtx>& video);
 
 void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt, std::int64_t pts_ns);
+
+// Test-only seam: the function GstInserter uses to push into its appsrc,
+// defaulting to gst_app_src_push_buffer. Tests swap it to inject a refusal and
+// must restore the default. gst_app_src_push_buffer takes ownership of `buf`
+// even on failure, so a replacement that does not forward must gst_buffer_unref
+// it. Not installed, not public API.
+using AppSrcPushFn = GstFlowReturn (*)(GstAppSrc*, GstBuffer*);
+AppSrcPushFn& appsrc_push_hook();
 
 }  // namespace misbklv::detail

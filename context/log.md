@@ -8,7 +8,9 @@
   `extract()` with `RangeError` in the GStreamer backend and `MockBackend`
   (so `KlvStream` too), rather than a generic `ResourceLimit` on every frame.
   `Message::get` string/byte views are documented as borrowed from the Message.
-  The `GstInserter` test seam stays open.
+  A test-only `appsrc_push_hook()` now lets `push_refusal_test` cover the
+  refusal-before-first-`finish()` path (latch, fail-fast, discard); the
+  allocation-failure path stays untested by decision.
   Author: claude/sonnet-5.
 
 * **Edit-path checksum policy** (issue #82): kept the current behavior and

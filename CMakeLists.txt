@@ -242,6 +242,12 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
   target_include_directories(generate_path_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/gst)
   add_test(NAME generate_path COMMAND generate_path_test)
 
+  # Appsrc refusal before the first finish() (issue #83), via the push hook.
+  add_executable(push_refusal_test test/push_refusal_test.cpp)
+  target_link_libraries(push_refusal_test PRIVATE misbklv-gst)
+  target_include_directories(push_refusal_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/gst)
+  add_test(NAME push_refusal COMMAND push_refusal_test ${_basic} "${CMAKE_CURRENT_BINARY_DIR}/push_refusal.ts")
+
   # SEI-probe teardown use-after-free guard (issue #57): destroys the Inserter
   # mid-stream so a probe is in flight at the VideoCtx free. Run under valgrind
   # when present (deterministic UAF detection); bare otherwise (crash guard).

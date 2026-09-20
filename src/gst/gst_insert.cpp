@@ -19,6 +19,12 @@
 #include <gst/app/app.h>
 
 namespace misbklv::detail {
+
+AppSrcPushFn& appsrc_push_hook() {
+  static AppSrcPushFn fn = &gst_app_src_push_buffer;
+  return fn;
+}
+
 namespace {
 
 // A stall guard, not a performance budget: finish may need to remux the rest of
@@ -232,8 +238,9 @@ class GstInserter : public Inserter {
  private:
   // A non-OK push means the appsrc is flushing or at EOS: terminal for the
   // session. Latch it so later push() fails fast and finish() discards output.
+  // Goes through appsrc_push_hook(), which only tests replace.
   Result<std::monostate> push_to_appsrc(GstBuffer* buf) {
-    if (gst_app_src_push_buffer(GST_APP_SRC(appsrc_), buf) == GST_FLOW_OK)
+    if (appsrc_push_hook()(GST_APP_SRC(appsrc_), buf) == GST_FLOW_OK)
       return Result<std::monostate>::ok({});
     terminal_error_ = Error::Backend;
     return Result<std::monostate>::err(*terminal_error_);
