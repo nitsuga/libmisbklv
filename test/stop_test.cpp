@@ -80,6 +80,23 @@ class FailingBackend : public MediaBackend {
   Error error_;
 };
 
+// Ignores ExtractOptions: emits its packets and succeeds.
+class CapIgnoringBackend : public MediaBackend {
+ public:
+  explicit CapIgnoringBackend(ber::Bytes packet) : packet_(std::move(packet)) {}
+  Result<std::monostate> extract(std::string_view, const PacketHandler& on_packet,
+                                 std::stop_token = {}, ExtractOptions = {}) override {
+    on_packet(KlvPacket{packet_, kNoPts});
+    return Result<std::monostate>::ok({});
+  }
+  Result<std::unique_ptr<Inserter>> open_insert(const InsertConfig&) override {
+    return Result<std::unique_ptr<Inserter>>::err(Error::Unsupported);
+  }
+
+ private:
+  ber::Bytes packet_;
+};
+
 class UnsupportedInsertBackend : public MediaBackend {
  public:
   Result<std::monostate> extract(std::string_view, const PacketHandler&, std::stop_token = {},
@@ -202,6 +219,22 @@ int main(int argc, char** argv) {
     }
     check(messages == 0 && stream.error() == Error::RangeError,
           "KlvStream surfaces RangeError for a cap below the floor");
+  }
+
+  // KlvStream enforces the floor itself, even for a backend that ignores it.
+  for (const std::size_t cap : {kMinKlvPacketBytes - 1, std::size_t{1} << 20}) {
+    KlvStream stream(std::make_unique<CapIgnoringBackend>(pkt), "ignorecap",
+                     ExtractOptions{.max_packet_bytes = cap});
+    int messages = 0;
+    for (Message& m : stream) {
+      (void)m;
+      ++messages;
+    }
+    const bool bad = cap < kMinKlvPacketBytes;
+    check(bad ? (messages == 0 && stream.error() == Error::RangeError)
+              : (messages == 1 && !stream.error()),
+          bad ? "KlvStream rejects a sub-floor cap for a cap-ignoring backend"
+              : "KlvStream passes a valid cap to a cap-ignoring backend");
   }
 
   // The default GStreamer facade reports an unreadable source as Backend rather

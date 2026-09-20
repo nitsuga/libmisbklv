@@ -248,8 +248,8 @@ auto bytes  = msg->encode();                 // Result<Bytes>; original packet e
   Wrong type or absent tag → `nullopt`.
   The `std::string_view` and `std::span<const std::byte>` results borrow from the
   Message's own storage (its source bytes, or the staged edit for a `set()` tag)
-  and are valid only while the Message is alive and unmodified; destroying,
-  moving from, or `set()`-ing it invalidates them.
+  and are valid only while the Message is alive and unmodified; destroying or
+  `set()`-ing it invalidates them, and a move is not guaranteed to preserve them.
 - **`set(tag, Value)`** stages a typed edit (re-encoded at the first occurrence's
   on-wire width). Unknown tag → error.
 - **`has(tag)`** reflects both items in the parsed source and staged additions.

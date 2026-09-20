@@ -51,6 +51,10 @@ across the entire frame: the 16-byte SMPTE UL, BER length, and declared value.
     payload after an over-cap rejection, so the reinterpretation risk above is
     open again; how the framer should resync after `ResourceLimit` is part of the
     pending #80 decision.
+  - *Amended 2026-09-20 (issue #83):* a cap below the 17-byte minimum frame
+    (`kMinKlvPacketBytes`) can never admit a frame, so it is rejected with
+    `RangeError` at `extract()` entry, and by `KlvStream` itself for any
+    backend, instead of failing every frame with `ResourceLimit`.
 - Cancellation succeeds without treating retained incomplete input as an
   extraction error.
 - The gst-free whole-buffer parser remains outside this default: offline parsing

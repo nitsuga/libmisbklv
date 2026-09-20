@@ -208,6 +208,8 @@ class MediaBackend {
   // `stop` cancels a live extract early (cooperative, polled from another thread —
   // e.g. a KlvStream consumer that breaks); a default token is never signaled, so
   // extract runs to the natural end (ADR 0019).
+  // Every backend must reject `options.max_packet_bytes < kMinKlvPacketBytes`
+  // with `Error::RangeError` before doing any work (KlvStream also enforces it).
   virtual Result<std::monostate> extract(std::string_view source, const PacketHandler& on_packet,
                                          std::stop_token stop = {},
                                          ExtractOptions options = {}) = 0;

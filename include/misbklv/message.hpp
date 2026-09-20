@@ -58,7 +58,8 @@ class Message {
   // returned by get<std::string_view> and get<std::span<const std::byte>>
   // borrow from the Message's own storage (its source bytes, or the staged
   // edit for a set() tag) and are valid only while the Message is alive and
-  // unmodified: destroying, moving from, or set()-ing it invalidates them.
+  // unmodified: destroying or set()-ing it invalidates them, and a move is not
+  // guaranteed to preserve them.
   template <class T> std::optional<T> get(std::uint16_t tag) const {
     const ItemDescriptor* d = reg_->find(tag);
     if (!d) return std::nullopt;

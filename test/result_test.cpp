@@ -12,6 +12,9 @@
 #include <unistd.h>
 
 #include <csignal>
+#if defined(__linux__)
+#include <sys/prctl.h>
+#endif
 #define MISBKLV_TEST_DEATH 1
 #endif
 
@@ -30,7 +33,11 @@ static void check(bool ok, const char* what) {
 template <class F> static bool aborts(F fn) {
   std::fflush(nullptr);
   const pid_t pid = fork();
+  if (pid < 0) return false;
   if (pid == 0) {
+#if defined(__linux__)
+    prctl(PR_SET_DUMPABLE, 0);  // the abort is deliberate: no core dump
+#endif
     std::freopen("/dev/null", "w", stderr);  // keep the assert message out of the log
     fn();
     _exit(0);
@@ -58,6 +65,18 @@ int main() {
           (void)n;
         }),
         "error Result: const operator* aborts");
+  check(aborts([] {
+          auto e = Result<std::string>::err(Error::Backend);
+          volatile auto n = (*e).size();
+          (void)n;
+        }),
+        "error Result: non-const operator* aborts");
+  check(aborts([] {
+          const auto e = Result<std::string>::err(Error::Backend);
+          volatile auto n = e->size();
+          (void)n;
+        }),
+        "error Result: const operator-> aborts");
 #endif
   return failures ? 1 : 0;
 }
