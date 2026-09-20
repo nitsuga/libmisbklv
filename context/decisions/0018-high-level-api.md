@@ -102,6 +102,16 @@ continues to build packets from staged items. `KlvStream` now accepts
 check; `KlvSink` preserves an opening failure for the caller. See
 [`0027`](./0027-high-level-streaming-errors.md).
 
+*Amended 2026-09-20 (issue #82):* an edited `Message`'s `encode()` rebuilds the
+packet and recomputes a valid Item 1 checksum even when the source packet's
+checksum was already invalid; an unedited `encode()` re-emits the source bytes,
+so a corrupt checksum stays corrupt. Callers who care about integrity check
+`Message::checksum_valid()` (source packet as parsed, edits ignored) before
+editing or emitting. Editing a parsed packet deliberately stays faithful even to
+non-conformant captures; refusing would break that stance and existing callers
+and need a new public `Error` value. Rejected: refuse (fail closed), and an
+opt-in strict flag (extra API surface, deferred).
+
 # Assumptions / open questions
 
 - **`get<T>` type must match the descriptor's `ValueKind`** (e.g. `get<double>`

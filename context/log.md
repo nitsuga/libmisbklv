@@ -1,5 +1,13 @@
 # Knowledge Bundle Log
 
+## 2026-09-20
+
+* **Edit-path checksum policy** (issue #82): kept the current behavior and
+  documented it. An edited `Message::encode()` recomputes a valid checksum even
+  over an invalid source checksum; callers check `checksum_valid()` first. See
+  the amendment in [`0018`](./decisions/0018-high-level-api.md).
+  Author: claude/sonnet-5.
+
 ## 2026-09-19
 
 * **Hardened insert/adopt** (issue #79, F1/F3/F4): `Message::adopt` now parses
