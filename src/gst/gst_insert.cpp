@@ -137,27 +137,34 @@ class GstInserter : public Inserter {
   }
 
   Result<std::monostate> push(std::span<const std::byte> pkt, std::int64_t pts_ns) override {
+    // After finish() the output is committed: refuse without touching the appsrc
+    // or latching a new error (a later finish() returns its cached result).
+    if (finished_) return Result<std::monostate>::err(Error::Backend);
+    if (terminal_error_) return Result<std::monostate>::err(*terminal_error_);
     if (pts_ns < kNoPts) return Result<std::monostate>::err(Error::RangeError);
     // With video passthrough both branches must share the source timeline. The
     // synthetic ~30fps KLV-only counter is therefore a caller error here.
     if (video_ && pts_ns == kNoPts) return Result<std::monostate>::err(Error::Unsupported);
+    GstBuffer* buf = gst_buffer_new_allocate(nullptr, pkt.size(), nullptr);
+    if (!buf) return Result<std::monostate>::err(Error::Backend);
+    gst_buffer_fill(buf, 0, pkt.data(), pkt.size());
     // Generate mode records the ST 0601 Item 2 sensor timestamp against this
-    // KLV PTS; the video pad probe consumes that mapping later.
+    // KLV PTS; the video pad probe consumes that mapping later. Recorded after
+    // allocation succeeds but before the push, so the mapping exists first.
     if (video_ && video_->generate_sei && pts_ns != kNoPts)
       record_sensor_timestamp(*video_, pkt, pts_ns);
-
-    GstBuffer* buf = gst_buffer_new_allocate(nullptr, pkt.size(), nullptr);
-    gst_buffer_fill(buf, 0, pkt.data(), pkt.size());
     // KLV-only output with kNoPts retains the historic ~30fps pacing counter.
     GST_BUFFER_PTS(buf) = (pts_ns == kNoPts) ? pts_ : static_cast<GstClockTime>(pts_ns);
     GST_BUFFER_DURATION(buf) = kFrameDur;
     pts_ += kFrameDur;
-    const GstFlowReturn ret = gst_app_src_push_buffer(GST_APP_SRC(appsrc_), buf);
-    return ret == GST_FLOW_OK ? Result<std::monostate>::ok({})
-                              : Result<std::monostate>::err(Error::Backend);
+    return push_to_appsrc(buf);
   }
 
   Result<std::monostate> push(std::vector<std::byte>&& pkt, std::int64_t pts_ns) override {
+    // After finish() the output is committed: refuse without touching the appsrc
+    // or latching a new error (a later finish() returns its cached result).
+    if (finished_) return Result<std::monostate>::err(Error::Backend);
+    if (terminal_error_) return Result<std::monostate>::err(*terminal_error_);
     if (pts_ns < kNoPts) return Result<std::monostate>::err(Error::RangeError);
     if (video_ && pts_ns == kNoPts) return Result<std::monostate>::err(Error::Unsupported);
     if (video_ && video_->generate_sei && pts_ns != kNoPts)
@@ -175,9 +182,7 @@ class GstInserter : public Inserter {
     GST_BUFFER_PTS(buf) = (pts_ns == kNoPts) ? pts_ : static_cast<GstClockTime>(pts_ns);
     GST_BUFFER_DURATION(buf) = kFrameDur;
     pts_ += kFrameDur;
-    const GstFlowReturn ret = gst_app_src_push_buffer(GST_APP_SRC(appsrc_), buf);
-    return ret == GST_FLOW_OK ? Result<std::monostate>::ok({})
-                              : Result<std::monostate>::err(Error::Backend);
+    return push_to_appsrc(buf);
   }
 
   // Pops ERROR only. A pipeline EOS cannot reach the bus before finish() sends
@@ -215,7 +220,26 @@ class GstInserter : public Inserter {
   // the muxer/sink to drain both the video and KLV pads. In particular, do not
   // unlink or release the mux request pad while PLAYING: mpegtsmux can still be
   // traversing its request-pad list on a streaming thread (issue #39).
+  //
+  // Idempotent: the first call's result is cached and returned by every later
+  // call without touching the (already NULL) pipeline.
   Result<std::monostate> finish(std::stop_token stop) override {
+    if (finished_) return *finished_;
+    finished_ = do_finish(std::move(stop));
+    return *finished_;
+  }
+
+ private:
+  // A non-OK push means the appsrc is flushing or at EOS: terminal for the
+  // session. Latch it so later push() fails fast and finish() discards output.
+  Result<std::monostate> push_to_appsrc(GstBuffer* buf) {
+    if (gst_app_src_push_buffer(GST_APP_SRC(appsrc_), buf) == GST_FLOW_OK)
+      return Result<std::monostate>::ok({});
+    terminal_error_ = Error::Backend;
+    return Result<std::monostate>::err(*terminal_error_);
+  }
+
+  Result<std::monostate> do_finish(std::stop_token stop) {
     if (terminal_error_) {
       quiesce_to_null();
       discard_output();
@@ -320,7 +344,6 @@ class GstInserter : public Inserter {
     return Result<std::monostate>::err(Error::Backend);
   }
 
- private:
   // Sever every probe holding VideoCtx, then take the pipeline to NULL before
   // freeing it. remove_probes() blocks until any in-flight callback returns;
   // this closes the issue #57 SEI-probe use-after-free and also owns the live
@@ -363,6 +386,7 @@ class GstInserter : public Inserter {
   GstClockTime pts_ = 0;
   std::string removable_sink_;
   std::optional<Error> terminal_error_;
+  std::optional<Result<std::monostate>> finished_;  // finish() latch
 };
 
 }  // namespace

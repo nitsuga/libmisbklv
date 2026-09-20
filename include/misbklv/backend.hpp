@@ -147,7 +147,14 @@ class Inserter {
   // (the same timeline extraction reports on — KlvPacket::pts_ns). `kNoPts`
   // synthesizes a ~30 fps counter on a KLV-only pipeline, and is rejected when
   // the config has a `video_source` (ADR 0020). Values below `kNoPts` are invalid
-  // and return RangeError.
+  // and return RangeError. A Backend error caused by the appsrc refusing the
+  // buffer (flushing or EOS) is terminal: later push() calls return the same
+  // error, and finish() discards partial output and reports it. In Generate
+  // mode the probe may already have used that packet's timestamp, so do not
+  // retry the same packet. push() after finish() returns Backend without
+  // touching the sink or the finished result. Not terminal, and state is left untouched: a
+  // Backend error from a failed buffer allocation (nothing was queued), and
+  // the RangeError/Unsupported validation errors.
   virtual Result<std::monostate> push(std::span<const std::byte> klv_packet,
                                       std::int64_t pts_ns) = 0;
   // Ownership-transferring overload for zero-copy emit: by default forwards to
@@ -164,7 +171,8 @@ class Inserter {
   // see ADR 0032. A default token is never signaled, so finish() runs to the
   // natural EOS, unchanged for every existing caller. On cancellation any
   // partial sink file is discarded (ADR 0022) and finish() returns ok, matching
-  // extract()'s cooperative-stop convention (ADR 0019).
+  // extract()'s cooperative-stop convention (ADR 0019). The GStreamer backend
+  // latches: a repeated finish() returns the first call's result immediately.
   virtual Result<std::monostate> finish(std::stop_token stop = {}) = 0;
   // Nonblocking terminal-state observation for asynchronous insert sources.
   // ok() means no terminal failure has been observed; an error means the

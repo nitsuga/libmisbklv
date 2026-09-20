@@ -70,6 +70,11 @@ backend failed? `Result<std::monostate>` says exactly that and nothing more. The
 GStreamer implementation pops `GST_MESSAGE_ERROR` alone, which also keeps
 `poll()` from consuming the EOS that `finish()`'s drain waits for.
 
+*Amended 2026-09-20 (issue #79, PR #87):* a KLV push the appsrc refuses
+(flushing or EOS) is also a terminal backend failure. It latches the same error,
+so `poll()` reports it, later `push()` calls return it without touching the
+appsrc, and `finish()` discards the output.
+
 # Alternatives considered
 
 - **Expose the GStreamer pipeline to parrot-to-klv** — rejected; it would make

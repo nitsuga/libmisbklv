@@ -4,6 +4,7 @@
 // KLV (0x06+KLVA) losslessly, so no klvpmtrewrite is needed.
 // argv: <input.klv> <temp.ts>
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <fstream>
 #include <span>
@@ -134,6 +135,31 @@ int main(int argc, char** argv) {
     return 2;
   }
   std::printf("inserted %zu packets -> %s\n", npush, argv[2]);
+
+  // finish() is idempotent: a second call returns promptly with the same result.
+  {
+    const auto t0 = std::chrono::steady_clock::now();
+    const auto again = (*ins)->finish();
+    const auto took = std::chrono::steady_clock::now() - t0;
+    if (!again || took > std::chrono::seconds(5)) {
+      std::fprintf(stderr, "second finish() not idempotent (ok=%d)\n", static_cast<int>(!!again));
+      return 1;
+    }
+  }
+
+  // push() after finish() is refused without touching the appsrc, and does not
+  // disturb the cached finish() result or the committed output.
+  {
+    const auto first = (*ins)->push(buf.first(insert_packet_size), kNoPts);
+    const auto second = (*ins)->push(buf.first(insert_packet_size), kNoPts);
+    const auto again = (*ins)->finish();
+    const auto polled = (*ins)->poll();  // must not report a newly latched error
+    if (first || second || first.error() != Error::Backend || second.error() != Error::Backend ||
+        !again || !polled) {
+      std::fprintf(stderr, "push after finish() not refused, or finish() result disturbed\n");
+      return 1;
+    }
+  }
 
   // --- re-extract and compare ----------------------------------------------
   std::vector<std::byte> out;
