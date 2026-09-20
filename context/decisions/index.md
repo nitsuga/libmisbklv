@@ -52,3 +52,4 @@ diverge — e.g. fork 7 → ADR 0004; one fork can span several ADRs — fork 4 
 | 33 | [0036 — A live source that is absent right now is SourceUnavailable, not Unsupported](./0036-source-unavailable-error.md) | accepted |
 | —  | [0037 — Share a two-slot capacity gate across self-hosted CI](./0037-shared-ci-capacity-gate.md) | accepted |
 | 34 | [0038 — Live video liveness uses a last-delivery timestamp](./0038-live-video-delivery-timestamp.md) | accepted |
+| 35 | [0039 — Extraction scope and error policy (issue #80)](./0039-extraction-scope-and-error-policy.md) | accepted |

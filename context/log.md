@@ -2,6 +2,11 @@
 
 ## 2026-09-20
 
+* **Extraction policy** (issue #80,
+  [`0039`](./decisions/0039-extraction-scope-and-error-policy.md)):
+  `extract_ts_klv` cell handling and `ponytail:` comments for the PTS wrap and
+  fragments landed. Author: claude/sonnet-5.
+
 * **Result deref, extract-cap floor, view lifetime** (issue #83, F8/F9/F10):
   `Result<T>::operator*`/`->` assert success (const `->` added). An
   `ExtractOptions::max_packet_bytes` below `kMinKlvPacketBytes` (17) now fails

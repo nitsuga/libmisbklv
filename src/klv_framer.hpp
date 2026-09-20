@@ -57,6 +57,12 @@ class KlvFramer {
       if (!frame) {
         // Keep the first error, but consume the bad UL's first byte so the UL
         // search resyncs instead of re-parsing the same bytes on every feed.
+        // ponytail: after an over-cap (ResourceLimit) rejection this one-byte
+        // skip can scan inside the rejected payload and emit a bogus packet if
+        // `06 0E 2B 34` appears there (issue #80, ADR 0039). Extraction stops at
+        // the first error, so callers only see it as that error. Upgrade path,
+        // only if a deployment hits it: skip by the declared length, and/or
+        // offer non-terminal extraction as an opt-in.
         if (!error) error = frame.error();
         pos += 1;
         continue;

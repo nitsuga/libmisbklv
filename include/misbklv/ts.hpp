@@ -26,14 +26,34 @@ namespace misbklv {
 // delivered. Garbage between packets is tolerated — framing resyncs on the next
 // SMPTE UL prefix and skips anything before it. KLV packets are reassembled
 // across PES boundaries, so a packet larger than one PES (above the 16-bit
-// PES_packet_length ceiling) or split by a muxer is extracted whole. RP 217
-// (0x15) metadata AU cells are supported in the non-fragmented form (the common
-// case).
+// PES_packet_length ceiling) or split by a muxer is extracted whole, for 0x06
+// and 0x15 alike. RP 217 (0x15) metadata AU cells are extracted whether or not
+// fragmented: each cell's bytes are concatenated through the framer and every
+// cell in a PES is extracted, not only the first. Fragment service id, sequence
+// number and first/middle/last indication are NOT validated, so a lost or
+// reordered fragment is not reliably detected: once a first fragment has
+// supplied the UL and BER length, the next cells' bytes fill the declared length
+// and a corrupt packet can be emitted without a framing error. On the selected
+// PID a cell whose declared length overruns the PES, or 1-4 trailing bytes too
+// short for a cell header, fails with BadLength. A foreign (unregistered) UL is
+// not a framing error here; it surfaces later as UnknownTag from Message::parse.
+//
+// Single KLV PID: the first PID with a PES in which any cell starts with a UL is
+// selected by content; any other KLV PID in the stream is ignored (ADR 0039).
+//
+// Offline only: this extractor reads both stream_type 0x06 and 0x15, but the
+// live gstreamer path (tsdemux) does not surface 0x15 (ADR 0039).
 //
 // Each packet carries `pts_ns` — nanoseconds from the start of the source,
 // measured from the earliest PTS anywhere in `ts` (ADR 0021), or `kNoPts` if
 // its PES was untimed. `ts` must therefore be the whole stream: extracting from
 // a chunk re-anchors the timeline to that chunk.
+//
+// PTS wrap limit: PTS is 33 bits and wraps about every 26.5 h. A capture that
+// crosses the wrap gets timestamps about 26.5 h off, because the origin is the
+// minimum PTS. Workaround: use KLV Item 2 (Precision Time Stamp), or split the
+// file before extracting. The live path's behavior across the wrap is not
+// specified.
 Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
                                       const PacketHandler& on_packet);
 
