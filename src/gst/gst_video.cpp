@@ -905,10 +905,9 @@ VideoCtx::~VideoCtx() {
   if (h264_parser) gst_h264_nal_parser_free(h264_parser);
 }
 
-SensorTimestampUndo record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt,
-                                            std::int64_t pts_ns) {
+void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt, std::int64_t pts_ns) {
   auto pkt_result = parse_packet(pkt);
-  if (!pkt_result) return {};
+  if (!pkt_result) return;
   const Packet& parsed = *pkt_result;
   std::span<const std::byte> raw;
   bool found = false;
@@ -919,15 +918,15 @@ SensorTimestampUndo record_sensor_timestamp(VideoCtx& video, std::span<const std
       break;
     }
   }
-  if (!found) return {};
+  if (!found) return;
   const Registry* reg = registry_by_key(parsed.ul_key);
-  if (!reg) return {};
+  if (!reg) return;
   const ItemDescriptor* desc = reg->find(2);
-  if (!desc) return {};
+  if (!desc) return;
   auto decoded = codec::decode(*desc, raw);
-  if (!decoded) return {};
+  if (!decoded) return;
   const std::uint64_t* p = std::get_if<std::uint64_t>(&*decoded);
-  if (!p) return {};
+  if (!p) return;
   const std::uint64_t sensor_timestamp_us = *p;
   const auto pts = static_cast<std::uint64_t>(pts_ns);
   std::lock_guard<std::mutex> lock(video.timestamp_mu);
@@ -949,18 +948,11 @@ SensorTimestampUndo record_sensor_timestamp(VideoCtx& video, std::span<const std
         (static_cast<std::int64_t>(pts) - static_cast<std::int64_t>(video.prev_push_pts_ns)) /
             1000);
   }
-  SensorTimestampUndo undo;
-  undo.recorded = true;
-  undo.pts = pts;
-  undo.had_prev_push = video.have_prev_push;
-  undo.prev_push_pts_ns = video.prev_push_pts_ns;
-  undo.prev_push_ts_us = video.prev_push_ts_us;
   video.have_prev_push = true;
   video.prev_push_pts_ns = pts;
   video.prev_push_ts_us = sensor_timestamp_us;
   if (video.pts_to_sensor_timestamp.find(pts) == video.pts_to_sensor_timestamp.end() &&
       video.pts_to_sensor_timestamp.size() >= kMaxSensorTimestamps) {
-    undo.evicted = *video.pts_to_sensor_timestamp.begin();
     video.pts_to_sensor_timestamp.erase(video.pts_to_sensor_timestamp.begin());
     ++video.dropped_sensor_timestamps;
     const auto now = std::chrono::steady_clock::now();
@@ -972,32 +964,7 @@ SensorTimestampUndo record_sensor_timestamp(VideoCtx& video, std::span<const std
       video.last_sensor_timestamp_drop_warning = now;
     }
   }
-  if (auto it = video.pts_to_sensor_timestamp.find(pts); it != video.pts_to_sensor_timestamp.end())
-    undo.prev = it->second;
   video.pts_to_sensor_timestamp[pts] = entry;
-  return undo;
-}
-
-void rollback_sensor_timestamp(VideoCtx& video, const SensorTimestampUndo& undo) {
-  if (!undo.recorded) return;
-  std::lock_guard<std::mutex> lock(video.timestamp_mu);
-  // Assumes KLV pushes are serialized by the caller (Inserter::push contract,
-  // backend.hpp), so nothing else touched this state since the record.
-  // Reverse order of record_sensor_timestamp: Time Status derivation state,
-  // the entry evicted at the cap and its drop count, then this record's entry.
-  // last_sensor_timestamp_drop_warning is left alone: an emitted warning cannot
-  // be un-logged, and restoring the old time could repeat it.
-  video.have_prev_push = undo.had_prev_push;
-  video.prev_push_pts_ns = undo.prev_push_pts_ns;
-  video.prev_push_ts_us = undo.prev_push_ts_us;
-  if (undo.evicted) {
-    video.pts_to_sensor_timestamp.insert(*undo.evicted);
-    --video.dropped_sensor_timestamps;
-  }
-  if (undo.prev)
-    video.pts_to_sensor_timestamp[undo.pts] = *undo.prev;
-  else
-    video.pts_to_sensor_timestamp.erase(undo.pts);
 }
 
 VideoSource parse_video_source(const std::string& raw) {

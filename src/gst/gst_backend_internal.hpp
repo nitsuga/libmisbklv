@@ -169,26 +169,6 @@ Result<std::monostate> prepare_video_branch(GstElement* pipeline, GstPad* reserv
                                             GstElement* mux, const VideoSource& src,
                                             Sei0604 sei_0604, std::unique_ptr<VideoCtx>& video);
 
-// What one record_sensor_timestamp call changed, so a failed push can undo it.
-struct SensorTimestampUndo {
-  bool recorded = false;
-  std::uint64_t pts = 0;
-  std::optional<SensorTime> prev;  // value overwritten for a duplicate pts
-  bool had_prev_push = false;      // Time Status derivation state before the record
-  std::uint64_t prev_push_pts_ns = 0;
-  std::uint64_t prev_push_ts_us = 0;
-  // Entry evicted by the hard cap (its drop was counted); re-inserted on undo.
-  std::optional<std::pair<std::uint64_t, SensorTime>> evicted;
-};
-
-// Records the ST 0601 Item 2 sensor timestamp for `pts_ns`. `recorded` is false
-// when the packet carries no usable timestamp (nothing to undo).
-SensorTimestampUndo record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt,
-                                            std::int64_t pts_ns);
-
-// Undoes one record: restores the Time Status state, any entry evicted at the
-// cap (and the drop count), then the overwritten duplicate or erases the entry.
-// The rate-limited drop warning time is not restored (already logged).
-void rollback_sensor_timestamp(VideoCtx& video, const SensorTimestampUndo& undo);
+void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt, std::int64_t pts_ns);
 
 }  // namespace misbklv::detail
