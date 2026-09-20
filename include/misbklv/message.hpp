@@ -121,7 +121,7 @@ class Message {
 
   Message(Message&&) = default;
   Message& operator=(Message&&) = default;
-  Message(const Message&) = delete;  // spans borrow bytes_; move preserves it
+  Message(const Message&) = delete;  // spans borrow bytes_; std::vector move keeps them valid
   Message& operator=(const Message&) = delete;
 
  private:
