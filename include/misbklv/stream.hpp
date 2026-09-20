@@ -120,7 +120,10 @@ class KlvSink {
   explicit KlvSink(InsertConfig cfg);
   KlvSink(std::unique_ptr<MediaBackend> backend, InsertConfig cfg);
 
-  Result<std::monostate> emit(const Message& m);  // m.encode() -> push
+  // m.encode() -> push. After a terminal backend failure (see poll()) emit()
+  // keeps returning that error; on the GStreamer backend emit() after close()
+  // returns Backend.
+  Result<std::monostate> emit(const Message& m);
   // drain + finish. `stop` cancels the post-EOS drain early — a realtime file
   // replay otherwise drains its video at wall-clock speed and ignores a Ctrl-C
   // that lands after the KLV is emitted (ADR 0032). Default token never signals.
