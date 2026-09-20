@@ -146,23 +146,35 @@ class GstInserter : public Inserter {
     gst_buffer_fill(buf, 0, pkt.data(), pkt.size());
     // Generate mode records the ST 0601 Item 2 sensor timestamp against this
     // KLV PTS; the video pad probe consumes that mapping later. Recorded after
-    // allocation succeeds but before the push, so the mapping exists first.
+    // allocation succeeds but before the push, so the mapping exists first;
+    // push_klv_buffer rolls it back if the push is refused.
+    SensorTimestampUndo undo;
     if (video_ && video_->generate_sei && pts_ns != kNoPts)
-      record_sensor_timestamp(*video_, pkt, pts_ns);
+      undo = record_sensor_timestamp(*video_, pkt, pts_ns);
     // KLV-only output with kNoPts retains the historic ~30fps pacing counter.
     GST_BUFFER_PTS(buf) = (pts_ns == kNoPts) ? pts_ : static_cast<GstClockTime>(pts_ns);
     GST_BUFFER_DURATION(buf) = kFrameDur;
     pts_ += kFrameDur;
+    return push_klv_buffer(buf, undo);
+  }
+
+  // Pushes `buf` (ownership passes to the appsrc). A non-OK flow (flushing/EOS)
+  // drops the buffer, so the timestamp recorded for it is rolled back: the
+  // video probe must not inject ST 0604 for KLV that was never queued.
+  Result<std::monostate> push_klv_buffer(GstBuffer* buf, const SensorTimestampUndo& undo) {
     const GstFlowReturn ret = gst_app_src_push_buffer(GST_APP_SRC(appsrc_), buf);
-    return ret == GST_FLOW_OK ? Result<std::monostate>::ok({})
-                              : Result<std::monostate>::err(Error::Backend);
+    if (ret == GST_FLOW_OK) return Result<std::monostate>::ok({});
+    if (video_) rollback_sensor_timestamp(*video_, undo);
+    return Result<std::monostate>::err(Error::Backend);
   }
 
   Result<std::monostate> push(std::vector<std::byte>&& pkt, std::int64_t pts_ns) override {
     if (pts_ns < kNoPts) return Result<std::monostate>::err(Error::RangeError);
     if (video_ && pts_ns == kNoPts) return Result<std::monostate>::err(Error::Unsupported);
+    SensorTimestampUndo undo;
     if (video_ && video_->generate_sei && pts_ns != kNoPts)
-      record_sensor_timestamp(*video_, std::span<const std::byte>(pkt.data(), pkt.size()), pts_ns);
+      undo = record_sensor_timestamp(*video_, std::span<const std::byte>(pkt.data(), pkt.size()),
+                                     pts_ns);
     GstBuffer* buf = nullptr;
     if (pkt.empty()) {
       buf = gst_buffer_new();
@@ -176,9 +188,7 @@ class GstInserter : public Inserter {
     GST_BUFFER_PTS(buf) = (pts_ns == kNoPts) ? pts_ : static_cast<GstClockTime>(pts_ns);
     GST_BUFFER_DURATION(buf) = kFrameDur;
     pts_ += kFrameDur;
-    const GstFlowReturn ret = gst_app_src_push_buffer(GST_APP_SRC(appsrc_), buf);
-    return ret == GST_FLOW_OK ? Result<std::monostate>::ok({})
-                              : Result<std::monostate>::err(Error::Backend);
+    return push_klv_buffer(buf, undo);
   }
 
   // Pops ERROR only. A pipeline EOS cannot reach the bus before finish() sends

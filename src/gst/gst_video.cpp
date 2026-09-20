@@ -905,9 +905,10 @@ VideoCtx::~VideoCtx() {
   if (h264_parser) gst_h264_nal_parser_free(h264_parser);
 }
 
-void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt, std::int64_t pts_ns) {
+SensorTimestampUndo record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt,
+                                            std::int64_t pts_ns) {
   auto pkt_result = parse_packet(pkt);
-  if (!pkt_result) return;
+  if (!pkt_result) return {};
   const Packet& parsed = *pkt_result;
   std::span<const std::byte> raw;
   bool found = false;
@@ -918,15 +919,15 @@ void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt, st
       break;
     }
   }
-  if (!found) return;
+  if (!found) return {};
   const Registry* reg = registry_by_key(parsed.ul_key);
-  if (!reg) return;
+  if (!reg) return {};
   const ItemDescriptor* desc = reg->find(2);
-  if (!desc) return;
+  if (!desc) return {};
   auto decoded = codec::decode(*desc, raw);
-  if (!decoded) return;
+  if (!decoded) return {};
   const std::uint64_t* p = std::get_if<std::uint64_t>(&*decoded);
-  if (!p) return;
+  if (!p) return {};
   const std::uint64_t sensor_timestamp_us = *p;
   const auto pts = static_cast<std::uint64_t>(pts_ns);
   std::lock_guard<std::mutex> lock(video.timestamp_mu);
@@ -964,7 +965,24 @@ void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt, st
       video.last_sensor_timestamp_drop_warning = now;
     }
   }
+  SensorTimestampUndo undo;
+  undo.recorded = true;
+  undo.pts = pts;
+  if (auto it = video.pts_to_sensor_timestamp.find(pts); it != video.pts_to_sensor_timestamp.end())
+    undo.prev = it->second;
   video.pts_to_sensor_timestamp[pts] = entry;
+  return undo;
+}
+
+void rollback_sensor_timestamp(VideoCtx& video, const SensorTimestampUndo& undo) {
+  if (!undo.recorded) return;
+  std::lock_guard<std::mutex> lock(video.timestamp_mu);
+  // Restores a duplicate-pts overwrite. An entry evicted at the cap is not
+  // resurrected, and prev_push_* is left as is (the next status is a hint).
+  if (undo.prev)
+    video.pts_to_sensor_timestamp[undo.pts] = *undo.prev;
+  else
+    video.pts_to_sensor_timestamp.erase(undo.pts);
 }
 
 VideoSource parse_video_source(const std::string& raw) {

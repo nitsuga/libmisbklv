@@ -169,6 +169,20 @@ Result<std::monostate> prepare_video_branch(GstElement* pipeline, GstPad* reserv
                                             GstElement* mux, const VideoSource& src,
                                             Sei0604 sei_0604, std::unique_ptr<VideoCtx>& video);
 
-void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt, std::int64_t pts_ns);
+// What one record_sensor_timestamp call changed, so a failed push can undo it.
+struct SensorTimestampUndo {
+  bool recorded = false;
+  std::uint64_t pts = 0;
+  std::optional<SensorTime> prev;  // value overwritten for a duplicate pts
+};
+
+// Records the ST 0601 Item 2 sensor timestamp for `pts_ns`. `recorded` is false
+// when the packet carries no usable timestamp (nothing to undo).
+SensorTimestampUndo record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt,
+                                            std::int64_t pts_ns);
+
+// Undoes one record: restores the overwritten duplicate, else erases the entry.
+// Entries evicted at the cap by that record are not resurrected.
+void rollback_sensor_timestamp(VideoCtx& video, const SensorTimestampUndo& undo);
 
 }  // namespace misbklv::detail

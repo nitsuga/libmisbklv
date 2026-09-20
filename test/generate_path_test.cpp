@@ -187,6 +187,24 @@ static void test_bounded_map_with_consumption() {
   }
 }
 
+static void test_rollback_sensor_timestamp() {
+  std::printf("== rollback: undo one record ==\n");
+  VideoCtx ctx;
+  auto a = make_packet(1'600'000'000'000'000ULL);
+  auto b = make_packet(1'600'000'000'033'333ULL);
+  const auto u1 = record_sensor_timestamp(ctx, a, 1000);
+  rollback_sensor_timestamp(ctx, u1);
+  check(ctx.pts_to_sensor_timestamp.empty(), "rollback erases a fresh entry");
+  record_sensor_timestamp(ctx, a, 1000);
+  const auto u2 = record_sensor_timestamp(ctx, b, 1000);  // duplicate pts
+  rollback_sensor_timestamp(ctx, u2);
+  check(ctx.pts_to_sensor_timestamp.size() == 1 &&
+            ctx.pts_to_sensor_timestamp.at(1000).timestamp_us == 1'600'000'000'000'000ULL,
+        "rollback restores an overwritten duplicate");
+  rollback_sensor_timestamp(ctx, SensorTimestampUndo{});
+  check(ctx.pts_to_sensor_timestamp.size() == 1, "rollback of nothing recorded is a no-op");
+}
+
 static void test_codec_latch_initial() {
   std::printf("== codec latch: initial Unknown ==\n");
   VideoCtx ctx;
@@ -452,6 +470,7 @@ static void test_lagging_pipeline_one_encoder(const char* enc) {
 
 int main() {
   test_bounded_map_with_consumption();
+  test_rollback_sensor_timestamp();
   test_lagging_map_regression();
   test_codec_latch_initial();
   test_lagging_pipeline_hermetic();
