@@ -33,6 +33,9 @@ inline constexpr std::uint8_t kTimeStatusLockUnknown = 0b1000'0000;
 inline constexpr std::uint8_t kTimeStatusDiscontinuity = 0b0100'0000;
 inline constexpr std::uint8_t kTimeStatusReverse = 0b0010'0000;
 inline constexpr std::uint8_t kTimeStatusBase = kTimeStatusLockUnknown | kTimeStatusReserved;
+// The SEI is written without an escaping pass: a zero status byte followed by a
+// small timestamp would form 00 00 0x (ADR 0023 amendment 2026-09-21).
+static_assert(kTimeStatusBase != 0, "ST 0604 Time Status byte must be nonzero");
 inline constexpr std::int64_t kTimeLinearToleranceUs = 50'000;
 
 bool caps_are_video(GstCaps* caps) {
@@ -130,6 +133,8 @@ const char* mux_caps_for_media_type(const std::string& type) {
   return nullptr;
 }
 
+}  // namespace
+
 std::vector<std::byte> generate_0604_sei_payload(std::uint64_t timestamp_microsec,
                                                  std::uint8_t time_status) {
   // ST 0604.6 §7: User Unregistered type 5, UUID "MISPmicrosectime", status,
@@ -166,6 +171,8 @@ std::vector<std::byte> build_0604_sei_nal(const SensorTime& t) {
   return nal;
 }
 
+namespace {
+
 std::uint8_t sensor_time_status(std::int64_t delta_ts_us, std::int64_t delta_pts_us) {
   if (delta_ts_us < 0) return kTimeStatusBase | kTimeStatusDiscontinuity | kTimeStatusReverse;
   if (std::llabs(delta_ts_us - delta_pts_us) > kTimeLinearToleranceUs)
@@ -183,6 +190,10 @@ bool sei_message_is_replaced(const GstH264SEIMessage& msg) {
   // Version-dependent parsing matters here: before 1.22 user-data-unregistered
   // reaches codecparsers as raw type 5, while newer versions expose a typed
   // payload. Missing either case silently leaves the source SEI beside ours.
+  // Intentional (#81): Generate mode selects source pic_timing for replacement
+  // (ADR 0023 decision 5, prevents parser warnings). Removal is whole-NAL only
+  // (sei_nal_is_replaced), so a mixed NAL keeps it. Only consulted under
+  // Sei0604::Generate (ADR 0024), so passthrough stays byte-identical.
   if (msg.payloadType == GST_H264_SEI_PIC_TIMING) return true;
   static const char kId[] = "MISPmicrosectime";
   constexpr guint kIdLen = 16;
@@ -951,6 +962,13 @@ void record_sensor_timestamp(VideoCtx& video, std::span<const std::byte> pkt, st
   video.have_prev_push = true;
   video.prev_push_pts_ns = pts;
   video.prev_push_ts_us = sensor_timestamp_us;
+  // Drop-oldest was chosen in #75 (rationale: ADR 0023 amendment 2026-09-21,
+  // newest KLV serves frames after a stall). Known tradeoff: if video stalls while KLV
+  // keeps arriving and then resumes at the low-PTS end, the evicted low-PTS
+  // frames get no ST 0604 SEI (match_at fails) while the retained high window
+  // goes unused. Evict-newest would keep contiguity from the stall point but
+  // discards the freshest KLV.
+  // ponytail: revisit if stall-resume is a real use case.
   if (video.pts_to_sensor_timestamp.find(pts) == video.pts_to_sensor_timestamp.end() &&
       video.pts_to_sensor_timestamp.size() >= kMaxSensorTimestamps) {
     video.pts_to_sensor_timestamp.erase(video.pts_to_sensor_timestamp.begin());

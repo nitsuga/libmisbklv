@@ -45,6 +45,12 @@ struct SensorTime {
   std::uint8_t status = 0;
 };
 
+// Test seam: ST 0604 Precision Time Stamp SEI builders (defined in
+// gst_video.cpp). Not installed, not public API.
+std::vector<std::byte> generate_0604_sei_payload(std::uint64_t timestamp_microsec,
+                                                 std::uint8_t time_status);
+std::vector<std::byte> build_0604_sei_nal(const SensorTime& t);
+
 enum class VideoSourceKind { None, File, Rtsp, Pipeline, Unsupported };
 
 struct VideoSource {

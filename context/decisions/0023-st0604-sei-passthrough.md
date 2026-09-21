@@ -267,6 +267,30 @@ Later implementation work amended the initial shape recorded by this decision:
 - The initial validation only checked output size and manual SEI decoding. The
   current test decodes every generated SEI and checks it against the KLV input.
 
+# Amendment — 2026-09-21
+
+Issue #81 reviewed two Generate-mode behaviors and confirmed both as intended:
+
+- **Source `pic_timing` stripping**: Generate mode selects the source Picture
+  Timing SEI for replacement per decision 5 above (prevents parser warnings),
+  and only under `Sei0604::Generate` per
+  [`0024`](./0024-sei-generation-opt-in.md); passthrough leaves it untouched.
+  Removal is whole-NAL: a mixed SEI NAL with a non-replaceable message is
+  preserved, `pic_timing` included (ADR 0024).
+- **Timestamp-map eviction direction**: the hard cap evicts the oldest entry.
+  #75 chose drop-oldest but recorded no reason; the rationale here is this
+  amendment's judgment: newest KLV is what the frames arriving after a stall
+  need. Known tradeoff: if video resumes at the low-PTS end (a source whose
+  timeline picks up where it stopped), the evicted low-PTS frames get no ST 0604
+  SEI while the retained high window goes unused. Evicting the newest would
+  keep contiguity from the stall point but discard the freshest KLV. Whether
+  live sources resume in the newest window was not verified. Revisit if
+  stall-resume becomes a real use case.
+- **Stuffing invariant**: the payload is written into the access unit with no
+  escaping pass; it stays free of `00 00 0{0..3}` only because the `0xFF`
+  separators bound zero runs and the Time Status byte is never zero. A test and
+  a `static_assert` on `kTimeStatusBase` guard this.
+
 # Citations
 
 [1] [`st0604`](../st0604.md) — ST 0604.6 standard reference (§7 Precision Time

@@ -1,5 +1,16 @@
 # Knowledge Bundle Log
 
+## 2026-09-21
+
+* **Generate-mode SEI review** (issue #81, F4/F5/F7): no behavior change.
+  `pic_timing` stripping confirmed and drop-oldest timestamp eviction kept as
+  intended; rationale recorded as an amendment to
+  [`0023`](./decisions/0023-st0604-sei-passthrough.md) and in code comments.
+  `generate_0604_sei_payload`/`build_0604_sei_nal` moved into
+  `misbklv::detail` (declared in `gst_backend_internal.hpp`, a test seam) so
+  `generate_path_test` can assert the 0xFF-separator stuffing invariant.
+  Author: claude/sonnet-5.
+
 ## 2026-09-20
 
 * **Extraction policy** (issue #80,
