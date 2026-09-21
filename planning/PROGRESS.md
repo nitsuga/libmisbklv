@@ -8,11 +8,7 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-The #80 decisions are recorded in
-[ADR 0039](../context/decisions/0039-extraction-scope-and-error-policy.md);
-#80 is no longer an open decision. #81 (Generate-mode SEI review) is
-implemented and awaiting review/merge. The remaining open work is #50
-(benchmark, parked).
+No active work. #50 (benchmark) is parked.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
