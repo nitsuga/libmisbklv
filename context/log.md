@@ -2,6 +2,8 @@
 
 ## 2026-09-21
 
+* **PROGRESS refresh**: `planning/PROGRESS.md` "Now" no longer calls #81
+  awaiting merge; #50 is the only open issue. Author: claude/sonnet-5.
 * **Generate-mode SEI review** (issue #81, F4/F5/F7): no behavior change.
   `pic_timing` stripping confirmed and drop-oldest timestamp eviction kept as
   intended; rationale recorded as an amendment to
