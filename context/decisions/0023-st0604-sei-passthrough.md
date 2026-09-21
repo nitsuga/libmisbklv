@@ -271,10 +271,12 @@ Later implementation work amended the initial shape recorded by this decision:
 
 Issue #81 reviewed two Generate-mode behaviors and confirmed both as intended:
 
-- **Source `pic_timing` stripping**: Generate mode strips the source Picture
-  Timing SEI per decision 5 above (prevents parser warnings), and only under
-  `Sei0604::Generate` per [`0024`](./0024-sei-generation-opt-in.md);
-  passthrough leaves it untouched.
+- **Source `pic_timing` stripping**: Generate mode selects the source Picture
+  Timing SEI for replacement per decision 5 above (prevents parser warnings),
+  and only under `Sei0604::Generate` per
+  [`0024`](./0024-sei-generation-opt-in.md); passthrough leaves it untouched.
+  Removal is whole-NAL: a mixed SEI NAL with a non-replaceable message is
+  preserved, `pic_timing` included (ADR 0024).
 - **Timestamp-map eviction direction**: the hard cap evicts the oldest entry.
   #75 chose drop-oldest but recorded no reason; the rationale here is this
   amendment's judgment: newest KLV is what the frames arriving after a stall

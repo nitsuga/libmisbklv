@@ -190,9 +190,10 @@ bool sei_message_is_replaced(const GstH264SEIMessage& msg) {
   // Version-dependent parsing matters here: before 1.22 user-data-unregistered
   // reaches codecparsers as raw type 5, while newer versions expose a typed
   // payload. Missing either case silently leaves the source SEI beside ours.
-  // Intentional (#81): Generate mode strips the source pic_timing (ADR 0023
-  // decision 5, prevents parser warnings). This function is only consulted
-  // under Sei0604::Generate (ADR 0024), so passthrough stays byte-identical.
+  // Intentional (#81): Generate mode selects source pic_timing for replacement
+  // (ADR 0023 decision 5, prevents parser warnings). Removal is whole-NAL only
+  // (sei_nal_is_replaced), so a mixed NAL keeps it. Only consulted under
+  // Sei0604::Generate (ADR 0024), so passthrough stays byte-identical.
   if (msg.payloadType == GST_H264_SEI_PIC_TIMING) return true;
   static const char kId[] = "MISPmicrosectime";
   constexpr guint kIdLen = 16;
