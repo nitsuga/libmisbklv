@@ -450,10 +450,48 @@ static void test_lagging_pipeline_one_encoder(const char* enc) {
   std::filesystem::remove(out);
 }
 
+// ST 0604 stuffing invariant: the 0xFF separators keep the 8 timestamp bytes
+// from ever forming an emulation-prevention trigger (00 00 0{0..3}) in the NAL.
+static void test_0604_stuffing_invariant() {
+  constexpr std::uint8_t kBase = 0x9F;  // Lock Unknown | reserved
+  const std::uint64_t stamps[] = {
+      0x0000'0000'0000'0000ULL, 0x00FF'00FF'00FF'00FFULL, 0xFF00'FF00'FF00'FF00ULL,
+      0x0000'0000'0000'0001ULL, 0x0100'0000'0000'0000ULL, 0x0001'0000'0000'0000ULL,
+      0x0000'0100'0000'0000ULL, 0x0000'0000'0100'0000ULL, 0x0000'0000'0000'0100ULL,
+      0x0001'5F90'0000'0000ULL, 0xFFFF'FFFF'FFFF'FFFFULL};
+  const std::uint8_t statuses[] = {kBase, static_cast<std::uint8_t>(kBase | 0x40),
+                                   static_cast<std::uint8_t>(kBase | 0x40 | 0x20)};
+  for (auto ts : stamps) {
+    for (auto st : statuses) {
+      const auto p = generate_0604_sei_payload(ts, st);
+      check(p.size() == 30, "0604 payload is 30 bytes");
+      if (p.size() != 30) continue;
+      const auto b = [&p](std::size_t i) { return static_cast<unsigned>(p[i]); };
+      check(b(0) == 5 && b(1) == 28, "0604 payload type 5, size 28");
+      check(b(18) == st, "0604 status byte in place");
+      check(b(21) == 0xFF && b(24) == 0xFF && b(27) == 0xFF, "0604 0xFF separators at 21/24/27");
+      const std::size_t idx[8] = {19, 20, 22, 23, 25, 26, 28, 29};
+      std::uint64_t got = 0;
+      for (auto i : idx) got = (got << 8) | b(i);
+      check(got == ts, "0604 timestamp bytes reassemble to input");
+
+      const auto nal = build_0604_sei_nal(SensorTime{ts, st});
+      bool ok = nal.size() == 4 + 30 + 1 && static_cast<unsigned>(nal.back()) == 0x80;
+      // Scan from the NAL header (after the 00 00 01 start code) through the trailer.
+      for (std::size_t i = 3; i + 2 < nal.size(); ++i)
+        if (!static_cast<unsigned>(nal[i]) && !static_cast<unsigned>(nal[i + 1]) &&
+            static_cast<unsigned>(nal[i + 2]) <= 3)
+          ok = false;
+      check(ok, "0604 NAL has no 00 00 0{0..3} sequence after start code");
+    }
+  }
+}
+
 int main() {
   test_bounded_map_with_consumption();
   test_lagging_map_regression();
   test_codec_latch_initial();
+  test_0604_stuffing_invariant();
   test_lagging_pipeline_hermetic();
   std::printf("\nGENERATE_PATH: %s\n", failures == 0 ? "PASS" : "FAIL");
   return failures == 0 ? 0 : 1;
