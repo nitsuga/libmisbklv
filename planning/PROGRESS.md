@@ -45,3 +45,7 @@ No active work. #50 (benchmark) is parked.
   hand-constructed, not vendor data).
 - Need a real VMTI stream (M3/M5/M6 use hand-authored fixtures; the removed
   external corpus was all 0601 and had no tag 74).
+- The other embedded Local Sets and the DLP/FLP/VLP packs are still registered
+  as opaque `bytes` (ST 0102, tag 48, is now typed — fork 36,
+  [ADR 0040](../context/decisions/0040-st0102-nested-registry.md)). Typing them
+  is a candidate fork in [ROADMAP](./ROADMAP.md).

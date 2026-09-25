@@ -19,8 +19,8 @@ flags  = ["mandatory"]
 [[item]]                       # §6.7 Table 2 — uint8 enum:
 # ISO-3166 Two Letter (0x01), ISO-3166 Three Letter (0x02),
 # FIPS 10-4 Two Letter (0x03), FIPS 10-4 Four Letter (0x04),
-# ISO-3166 Numeric (0x05), STANAG 1059 Two Letter (0x06),
-# STANAG 1059 Three Letter (0x07), Omitted Value (0x08), Omitted Value (0x09),
+# ISO-3166 Numeric (0x05), 1059 Two Letter (0x06),
+# 1059 Three Letter (0x07), Omitted Value (0x08), Omitted Value (0x09),
 # FIPS 10-4 Mixed (0x0A), ISO 3166 Mixed (0x0B), STANAG 1059 Mixed (0x0C),
 # GENC Two Letter (0x0D), GENC Three Letter (0x0E), GENC Numeric (0x0F),
 # GENC Mixed (0x10)

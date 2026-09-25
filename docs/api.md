@@ -271,9 +271,10 @@ auto bytes  = msg->encode();                 // Result<Bytes>; original packet e
   recomputes a valid checksum even over an invalid source checksum, so call
   `checksum_valid()` before editing if integrity matters.
 - **Named tags** — `tag` may be a plain number or a generated per-registry enum:
-  `tags::Uas0601::SensorLatitude`, `tags::Vmti0903::…`, `tags::Vtarget0903::…`
-  (generated from the registry, so the value equals the ST tag number). Names and
-  numbers are interchangeable; use a number for any tag not in the registry.
+  `tags::Uas0601::SensorLatitude`, `tags::Vmti0903::…`, `tags::Vtarget0903::…`,
+  `tags::Security0102::…` (generated from the registry, so the value equals
+  the ST tag number). Names and numbers are interchangeable; use a number for
+  any tag not in the registry.
 
 The registry (ST 0601 vs standalone ST 0903 VMTI) is chosen automatically from
 the packet's 16-byte UL key.
