@@ -67,10 +67,7 @@ Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 `decision_status: proposed`) · `DECIDED` / `DEFERRED` (has an ADR — see the
 register).
 
-- Fork 36 — ST 0102 Security Metadata LS as a typed nested registry: `PROPOSED`,
-  [ADR 0040](../context/decisions/0040-st0102-nested-registry.md).
-
-See the decided register
+**No open forks remain.** See the decided register
 ([`../context/decisions/index.md`](../context/decisions/index.md)) for
 already-resolved forks.
 

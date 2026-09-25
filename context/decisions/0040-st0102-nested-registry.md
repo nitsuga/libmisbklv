@@ -1,7 +1,7 @@
 ---
 type: Decision
 title: ST 0102 Security Metadata LS as a typed nested registry
-decision_status: proposed
+decision_status: accepted
 tags: [decision, registry, 0102, security, nested-ls, phase-3]
 generated:
   by: claude/sonnet-5
