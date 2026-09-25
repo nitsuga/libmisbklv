@@ -75,6 +75,14 @@ resolved fork → ADR mapping.
 registry/data breadth:
 - ST 0102 Security LS as a typed nested registry (seen as tag 48 in `falls`;
   currently opaque passthrough).
+- ST 1601/1602 geo-registration as a typed nested registry (currently opaque
+  passthrough, same shape as ST 0102 above). Motivated by wide-area/geo-rectified
+  sensor feeds (Gorgon Stare / ARGUS-IS class payloads) surfaced in a UAS
+  platform coverage survey — see #95.
+- ST 1206 SAR decode — not implemented at all today, unlike the other embedded
+  sets above which at least round-trip as opaque bytes. Needed for SAR-pod
+  Predator/Reaper and Global Hawk; the largest of the forks #95 opened, since
+  it's a new imagery-adjacent modality rather than a registry extension.
 - 0903 Array type (§9.1.2) — a descriptor-schema extension.
 - RTP payloading for the live path — deferred by
   [ADR 0019](../context/decisions/0019-extract-cancellation.md).
