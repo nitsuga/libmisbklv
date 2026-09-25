@@ -75,6 +75,13 @@ resolved fork → ADR mapping.
 registry/data breadth:
 - ST 0102 Security LS as a typed nested registry (seen as tag 48 in `falls`;
   currently opaque passthrough).
+- ST 1601 Geo-Registration LS and ST 1602 Composite Imaging LS as typed nested
+  registries (currently opaque passthrough, same shape as ST 0102 above). See
+  [#95](https://github.com/nitsuga/libmisbklv/issues/95).
+- ST 1206 SAR MI LS as a typed nested registry — also currently opaque
+  passthrough like the sets above, but a larger lift: a new imagery-adjacent
+  modality, not a small nested set. See
+  [#95](https://github.com/nitsuga/libmisbklv/issues/95).
 - 0903 Array type (§9.1.2) — a descriptor-schema extension.
 - RTP payloading for the live path — deferred by
   [ADR 0019](../context/decisions/0019-extract-cancellation.md).
