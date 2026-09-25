@@ -8,8 +8,8 @@
   Author: claude/sonnet-5.
 * **Fork 36 proposed** (issue #95,
   [`0040`](./decisions/0040-st0102-nested-registry.md)): ST 0102 Security
-  Metadata LS typed nested registry, following the `VTARGET_0903` pattern.
-  Author: claude/sonnet-5.
+  Metadata LS typed nested registry, following tag 74's existing
+  `nested_ls` → `vmti_0903` pattern. Author: claude/sonnet-5.
 
 ## 2026-09-21
 

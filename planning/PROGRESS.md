@@ -8,9 +8,7 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-Fork 36 ([ADR 0040](../context/decisions/0040-st0102-nested-registry.md), ST
-0102 as a typed nested registry) is proposed, awaiting review/acceptance.
-Otherwise no active work; #50 (benchmark) is parked.
+No active work. #50 (benchmark) is parked.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
@@ -22,6 +20,8 @@ Otherwise no active work; #50 (benchmark) is parked.
   needs them. (0601 is complete.)
 - **Remaining maintenance issue**: #50 benchmarks Generate-SEI end to end through
   `mpegtsmux` after the merged core benchmark closed its other speculative work.
+- **Review fork 36** ([ADR 0040](../context/decisions/0040-st0102-nested-registry.md),
+  ST 0102 as a typed nested registry) — proposed, awaiting acceptance.
 - Candidate *forks* that need a decision first live in [ROADMAP](./ROADMAP.md)'s
   backlog — not enumerated here.
 

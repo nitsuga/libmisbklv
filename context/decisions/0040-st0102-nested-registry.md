@@ -17,58 +17,68 @@ sources:
 
 Fork 36, opened from the UAS-platform coverage survey ([#95](https://github.com/nitsuga/libmisbklv/issues/95)). Tag 48 of the ST 0601 registry (`registry/uas0601.toml`) carries the ST 0102 Security Metadata Local Set today as `kind = "bytes"` — opaque passthrough, round-tripped faithfully but never decoded. `planning/PROGRESS.md` already named typing it "a candidate fork in ROADMAP"; `planning/ROADMAP.md` listed it as a candidate future fork alongside ST 1601/1602/1206, added in the same survey.
 
-The codebase already has one precedent for a typed nested registry: ST 0903's `vTargetSeries` (tag 101) routes into `VTARGET_0903` via `kind = "pack"` + `child = "vtarget_0903"` (ADR 0010's `NestedLS`/`Pack` `ValueKind` variants, wired by the codegen in `tools/gen_registry.py`). ST 0102's Local Set is a single nested set, not a series of repeated packs, so it uses the sibling variant, `kind = "nested_ls"`, which the schema and codegen already support but no registry has exercised yet.
+The codebase already has a direct precedent for exactly this shape: ST 0601 tag 74 (`registry/uas0601.toml`) is `kind = "nested_ls"`, `child = "vmti_0903"` — a single nested Local Set, tested by `test/nested_roundtrip_test.cpp`. (ST 0903's own `vTargetSeries`, tag 101, is the sibling `pack` variant — a *series* of repeated child packs, which ST 0102 does not need.) This ADR follows tag 74's pattern exactly: same `ValueKind::NestedLS`, same one-item-one-child shape.
 
-ST 0102.12 §6.7 / Table 2 defines the Local Set's 16-byte UL key (`06 0E 2B 34 02 03 01 01 0E 01 03 03 02 00 00 00`, CRC 40980) and 18 items (tags 1–14, 22–24; tags 15–21 are not defined). A Universal Set also exists (§6.6) but is out of scope here — nothing in this codebase decodes UDS-encoded metadata, and tag 48 only ever carries the Local Set form.
+ST 0102.12 §6.7 / Table 2 defines the Local Set's 16-byte UL key (`06 0E 2B 34 02 03 01 01 0E 01 03 03 02 00 00 00`, CRC 40980) and 18 items (tags 1–14, 22–24; tags 15–21 are undefined in this revision — likely where the deprecated linking elements, Appendix A, used to sit in earlier versions). A Universal Set also exists (§6.6) but is out of scope: ST 0601.14-31 (`references/ST0601.19.txt`) confirms tag 48 always carries the LS form, never the UDS form.
+
+**What "typed" means here, precisely.** `.child` is resolved only through `registry_for()` (`src/registries.cpp`) when a caller chooses to descend — the library never auto-descends into a nested set on decode. `Message::get(48)` still returns the raw bytes; a caller who wants Security LS fields explicitly builds a child `Message`/parses via `registry_for(RegistryId::Security0102)` and the item descriptors, the same way `test/nested_roundtrip_test.cpp` does for VMTI today. This ADR makes that path exist for ST 0102 tag 48; it does not change what `Message::get(48)` returns.
 
 # Decision
 
-**Add a new nested registry `SECURITY_0102`, wired the same way `VTARGET_0903` is, and change ST 0601 tag 48 from `bytes` to `nested_ls` pointing at it.** Concretely (for the follow-up implementation PR, not this one — this ADR decides the design, per the survey's own "decisions before implementation" ordering):
+**Add a new nested registry `SECURITY_0102`, wired the same way tag 74 → `VMTI_0903` is, and change ST 0601 tag 48 from `bytes` to `nested_ls` pointing at it.** Concretely, for the follow-up implementation PR (this ADR decides the design; issue #95 explicitly orders decisions before implementation):
 
-- `registry/security0102.toml`: `registry = "SECURITY_0102"`, `tag_encoding = "ber_oid"`, `ul_key = "060e2b34020301010e01030302000000"`.
+- `registry/security0102.toml`: `registry = "SECURITY_0102"`, `tag_encoding = "ber_oid"`, **no `ul_key`** — see Alternatives; this registry is nested-only, the same as `vtarget0903.toml`'s "no standalone UL key."
 - `registry/uas0601.toml` tag 48: `kind = "nested_ls"`, `child = "security_0102"`.
 - `tools/gen_registry.py`: add `"security_0102": "Security0102"` to the `CHILD` dict.
 - `include/misbklv/types.hpp`: add `Security0102` to `enum class RegistryId`.
+- `src/registries.cpp`: add a `case RegistryId::Security0102:` arm to `registry_for()` — omitting this leaves `.child` resolving to `nullptr`, silently breaking descent.
+- `CMakeLists.txt`'s `regenerate-registry` target and `.github/workflows/ci.yml`'s drift-check loop (`for r in uas0601 vmti0903 vtarget0903`): both enumerate registry files by name and need `security0102` added, or the new TOML never regenerates and CI's generated-output drift check never covers it.
 
 Per-item typing, from ST 0102.12 Table 2:
 
 | Tags | Kind | Length | Notes |
 |---|---|---|---|
 | 1 (Security Classification), 2 (country-coding method), 12 (object-country-coding method) | `uint`, 1 byte | fixed | Each is a byte enumeration (e.g. tag 1: UNCLASSIFIED=0x01 … TOP SECRET=0x05). No `ValueKind` here is a typed enum — ST 0601's own enumerated bytes aren't either — so the allowed-value table becomes a TOML comment, not a decode-time check. |
-| 3 (Classifying Country), 4 (SCI/SHI), 5 (Caveats), 6 (Releasing Instructions), 7 (Classified By), 8 (Derived From), 9 (Classification Reason), 11 (Classification/Marking System), 14 (Classification Comments) | `utf8` | variable | Free-form or code-word text; ISO/IEC 646 is ASCII-compatible with UTF-8. |
-| 10 (Declassification Date) | `utf8` | fixed, 8 | `YYYYMMDD` — a fixed-width string, not a numeric date type (no `ValueKind` in this schema decodes dates). |
-| 13 (Object Country Codes) | `bytes` (**stays opaque**) | variable | RFC 2781 UTF-16 — see Alternatives; the schema has no UTF-16 `ValueKind` and one field isn't enough to justify adding one. |
-| 22 (Version) | `uint`, 2 bytes | fixed | Standard's own version number, e.g. `0x000A` for ST 0102.10. |
-| 23, 24 (coding-method version dates) | `utf8` | fixed, 10 | `YYYY-MM-DD`. |
+| 3 (Classifying Country), 4 (SCI/SHI), 5 (Caveats), 6 (Releasing Instructions), 7 (Classified By), 8 (Derived From), 9 (Classification Reason), 11 (Classification/Marking System), 14 (Classification Comments) | `utf8` | variable | Free-form or code-word text. |
+| 10 (Declassification Date) | `utf8` | variable | `YYYYMMDD`, always 8 bytes per the standard — but no `utf8` item elsewhere in this codebase carries a `length`, and neither the codec nor the codegen enforces one on `Utf8` (`FIXED_KINDS` in `tools/gen_registry.py` excludes it). Record "8 bytes, YYYYMMDD" as a TOML comment, the same treatment as the tag 1/2/12 enum tables, rather than a `length` field that would silently do nothing. |
+| 13 (Object Country Codes) | `bytes` (**stays opaque**) | variable | RFC 2781 UTF-16 (big-endian absent a BOM) — see Alternatives; the schema has no UTF-16 `ValueKind` and one field isn't enough to justify adding one. |
+| 22 (Version) | `uint`, 2 bytes | fixed | Standard's own version number, e.g. `0x000A` for ST 0102.10. Absent, ST 0102 §6.4/-57 says version 3 is assumed — worth a comment, not enforcement. |
+| 23, 24 (coding-method version dates) | `utf8` | variable | `YYYY-MM-DD`, always 10 bytes — same "comment, not `length`" treatment as tag 10. |
 
-Tags 1, 2, 3, 12, 13, 22 are "Required" per Table 2's own column and get `flags = ["mandatory"]`, enforced the same way ST 0601's mandatory items already are (`LocalSetBuilder::finish`, ADR 0011) — `enforce_mandatory` is a per-build parameter on any `Registry`, so building a Security LS through the same builder path checks *its own* mandatory items independently of the parent ST 0601 build. Tags 4–9, 11, 14, 23, 24 are "Context" or "Optional" and stay unflagged.
+**Mandatory flags: documentary only, not enforced, for this fork.** Table 2 marks tags 1, 2, 3, 12, 13, 22 "Required." Marking them `flags = ["mandatory"]` in the TOML looks like the natural move, but the only enforcement path in this codebase, `LocalSetBuilder::finalize(ul_key, enforce_mandatory)`, always appends a fresh checksum as **tag 1** (`kChecksumTag = 1`, `src/builder.cpp`) — which collides with ST 0102's own tag 1, Security Classification. `finalize` is for top-level (checksummed) Local Sets; nesting uses `serialize_items()` instead (`test/nested_roundtrip_test.cpp`'s `rebuild_items`), which does no mandatory check at all and shouldn't grow a checksum-shaped one. So: **do not add `mandatory` flags to `security0102.toml` in the implementation PR.** Record the Required/Context/Optional column as a comment per item instead. A real encode-side check for nested registries (a `serialize_items(enforce_mandatory)` overload, or a standalone `check_mandatory()`) is a separate, smaller fork if a caller ever needs to *author* (not just decode) a compliant Security LS — nothing here blocks adding it later.
 
 # Alternatives considered
 
-- **Type tag 13 by adding a `Utf16` `ValueKind`.** Rejected for now: it touches the shared descriptor schema, the codegen's `KIND` dict, and every consumer that switches on `ValueKind` (codec decode/encode, any future pretty-printer) — a cross-cutting change to serve one field in one registry. If a second UTF-16 field turns up elsewhere, that's the point to add it; until then tag 13 stays `bytes`, which is strictly better than today (17 of 18 fields typed vs. 0) and loses nothing that isn't already lost.
-- **Decode tag 13 by transcoding UTF-16 → UTF-8 in the codegen/codec, keeping `kind = "utf8"` for it.** Rejected: `Utf8` elsewhere in this schema means "the bytes are already UTF-8," not "decode-and-convert." Special-casing one item's *encoding rule* rather than its *type* would be a silent exception future maintainers would have to rediscover from the generated code, not the TOML.
-- **A dedicated `enum` `ValueKind` for tags 1/2/12's byte enumerations.** Rejected: no existing registry has one despite ST 0601 having its own enumerated-byte items, so this would be a new pattern introduced for ST 0102 alone. `uint` plus a documentation comment matches the house style and costs nothing to add later if a real need appears (e.g. a pretty-printer wanting names).
-- **Keep the whole LS opaque and only unwrap it at the application layer.** Rejected: that's the status quo the fork exists to change, and it's the reason ST 0102 fields (classification, releasability) don't currently show up in this library's own decode path at all.
+- **Type tag 13 by adding a `Utf16` `ValueKind`.** Rejected for now: it touches the shared descriptor schema, the codegen's `KIND` dict, and every consumer that switches on `ValueKind` — a cross-cutting change to serve one field in one registry.
+- **A free-standing `decode_utf16be(span) -> std::string` helper next to the registry, keeping `kind = "bytes"`.** This is the cheapest real option and genuinely worth doing — it needs no schema, codegen, or `ValueKind` change, just a small library function callers can reach for. Not included in *this* ADR's scope (which is the registry/typing shape), but noted here so the follow-up implementation PR can add it as a small addition rather than reinventing the question.
+- **Decode tag 13 by transcoding UTF-16 → UTF-8 in the codegen/codec, keeping `kind = "utf8"` for it.** Rejected: `Utf8` elsewhere in this schema means "the bytes are already UTF-8," not "decode-and-convert," and UTF-16 bytes routinely contain embedded NULs that would misbehave under UTF-8-oriented handling.
+- **A dedicated `enum` `ValueKind` for tags 1/2/12's byte enumerations.** Rejected: no existing registry has one despite ST 0601 having its own enumerated-byte items, so this would be a new pattern introduced for ST 0102 alone. `uint` plus a documentation comment matches the house style.
+- **Enforcing "Required" via `mandatory` flags on `finalize`.** Rejected — see Decision; it collides with the checksum tag and doesn't apply to the nested path this registry actually uses.
+- **Give `security0102.toml` a `ul_key`, matching a top-level registry.** Rejected: `Message::create` accepts any registry with a non-empty `ul_key` (`src/message.cpp`), which would make a standalone ST 0102 `Message` constructible — but `Message::set(1, …)` treats tag 1 as the checksum (`message.cpp`), so Security Classification could never be set, and `encode()` would then fail or emit a bogus checksum. Standalone parsing would also need a `kRegistries` entry (`src/registries.cpp`) this ADR doesn't propose. Leaving `ul_key` out, like `vtarget0903.toml`, keeps this nested-only and avoids a half-working standalone path.
+- **Keep the whole LS opaque and only unwrap it at the application layer.** Rejected: that's the status quo the fork exists to change.
 
 # Consequences
 
-- Tag 48 decodes are no longer opaque: 17 of 18 ST 0102 Local Set items become typed access, matching the ST 0601/ST 0903 pattern.
-- Tag 13 (Object Country Codes) remains a `bytes` passthrough — round-trips correctly, but callers wanting object-country codes must still decode the UTF-16 payload themselves. Worth a one-line mention in `planning/PROGRESS.md` "Known gaps" once implemented, so it isn't mistaken for an oversight.
-- A `LocalSetBuilder(security_0102_registry)` that omits tag 1, 2, 3, 12, 13, or 22 fails with `Error::MissingMandatory`, the same behavior ST 0601 mandatory items already have. Any code hand-assembling a Security LS payload (rather than treating it as opaque bytes) now needs to supply those six.
-- No change to how ST 0601 itself is built or decoded except that tag 48's bytes are now interpreted rather than opaquely stored — existing callers that only round-trip messages (never inspecting tag 48's contents) see no behavior change.
+- Item descriptors for tag 48's contents become available for caller-driven descent (the same pattern `test/nested_roundtrip_test.cpp` already exercises for VMTI) — `Message::get(48)` itself is unchanged and still returns raw bytes; the library does not auto-decode nested sets.
+- Tag 13 (Object Country Codes) remains a `bytes` passthrough — round-trips correctly, but callers wanting object-country codes must decode the UTF-16 payload themselves (a small helper is a natural, separate follow-up; see Alternatives).
+- No enforcement of ST 0102's "Required" items is added in this fork — encode-side mandatory-checking for nested registries doesn't exist as a mechanism yet, and this ADR deliberately doesn't invent one just for this registry.
+- No change to how ST 0601 itself is built or decoded except that tag 48's descriptors are now resolvable — existing callers that only round-trip messages (never inspecting tag 48's contents) see no behavior change.
+- CI's generated-output drift check and the `regenerate-registry` build target must both learn about `security0102.toml`, or the new file silently never regenerates.
 
 # Assumptions / open questions
 
-- **The Universal Set form (ST 0102 §6.6) is out of scope.** Nothing in this library encodes/decodes UDS Local Sets today, and tag 48 only ever carries the LS form in an ST 0601 stream. Revisit only if a future standard's nesting needs the UDS form.
-- **Whether a real vendor stream's Security LS ever omits a "Required" item** (marking it "mandatory" would then reject valid real-world input on encode, though decode is unaffected — mandatory enforcement is a `LocalSetBuilder`/encode-side check per ADR 0011, not a decode-side rejection) is unconfirmed; ST 0102's own compliance language ("required security... information shall be contained") is what this ADR leans on. If real captures show otherwise, downgrading a flag is a one-line follow-up, not a re-fork.
-- **Byte-enumeration values (tags 1, 2, 12) are recorded as TOML comments, not validated.** A value outside the standard's table decodes as whatever raw `uint` it is; nothing here rejects an unrecognized classification byte. That mirrors how ST 0601's own enumerated items already behave.
+- **The Universal Set form (ST 0102 §6.6) is out of scope**, per ST 0601.14-31 confirming tag 48 always carries the LS form.
+- **Whether "Required" should ever become an enforced encode-side check is an open question, not a decision.** The standard's own text cuts both ways: §6.4 explicitly allows partial sets ("not all metadata elements... may be required"), -57 says an absent Version (tag 22) implies version 3, and tag 12 was optional before version 6 — none of that reads as "always present." If a future caller needs to *author* compliant Security LS data (not just decode), the enforcement mechanism and exactly which tags it covers is its own smaller fork.
+- **Tags 15–21 are undefined in ST 0102.12.** A stream built against an older revision could carry data on those tags; this registry doesn't reserve or reject them, matching how other registries in this codebase treat unregistered tags.
+- **Byte-enumeration values (tags 1, 2, 12) are recorded as TOML comments, not validated.** A value outside the standard's table decodes as whatever raw `uint` it is; nothing here rejects an unrecognized classification byte, mirroring ST 0601's own enumerated items.
+- **Whether real encoders ever write tag 13 as plain ASCII (which would decode fine as `utf8` despite the standard specifying UTF-16) is unconfirmed** — worth checking against real captures or another implementation (e.g. jmisb) before or alongside the implementation PR, not assumed here.
 
 # Citations
 
 [1] [ADR 0010](./0010-registry-descriptor-schema.md) — the `NestedLS`/`Pack` `ValueKind` variants and childRegistry routing this reuses.
 [2] [ADR 0012](./0012-registry-codegen.md) — the TOML source format and codegen this extends with a new registry file.
-[3] [ADR 0011](./0011-encode-model.md) — the mandatory-item enforcement model (`LocalSetBuilder::finish`) tags 1/2/3/12/13/22 opt into.
-[4] `registry/vtarget0903.toml` / `registry/vmti0903.toml` — the one existing nested-registry precedent, `vTargetSeries` (tag 101), used as the concrete pattern to follow.
-[5] ST 0102.12 §6.7, Table 2 — the Local Set item table this ADR's per-item typing decisions are read from.[^st0102]
+[3] `registry/uas0601.toml` tag 74 (`kind = "nested_ls"`, `child = "vmti_0903"`) — the direct precedent for this fork's shape, exercised by `test/nested_roundtrip_test.cpp`.
+[4] ST 0102.12 §6.7, Table 2 — the Local Set item table this ADR's per-item typing decisions are read from.[^st0102]
+[5] ST 0601.19 §14-31 — confirms tag 48 always carries the Local Set (not Universal Set) form.
 
-[^st0102]: ST 0102.12 §6.7 / Table 2 — Security Metadata Local Set Elements: tag numbers, data types, and Required/Optional/Context column for every item.
+[^st0102]: ST 0102.12 §6.7 / Table 2 — Security Metadata Local Set Elements: tag numbers, data types, and Required/Context/Optional column for every item.
