@@ -1,0 +1,729 @@
+                                                                           MISB ST 1602.2
+ STANDARD
+
+ Composite Imaging Local Set                                                 02 March 2023
+
+
+1 Scope
+This standard defines a KLV metadata Local Set (LS) which enables a unique assignment of
+image-attribute metadata to several images composited into one image frame.
+The standard supports image compositing such as: tiling of views from different sensors,
+blending of images, a stacked series of images, and picture-in-picture.
+The standard applies to rectangular geometric images only; that is, rectangles-on-rectangles.
+The standard assumes reuse of the Segment Local Set (see MISB ST 1607 [1]) within an
+instantiating metadata set.
+The standard does not support dynamic overlays under direction of a client receiver.
+
+2 References
+
+[1] MISB ST 1607.1 Constructs to Amend/Segment KLV Metadata, Mar 2023.
+[2] MISB ST 0601.19 UAS Datalink Local Set, Mar 2023.
+[3] MISB ST 0107.5 KLV Metadata in Motion Imagery, Oct 2021.
+[4] SMPTE ST 336:2017 Data Encoding Protocol Using Key-Length-Value.
+[5] MISB ST 0807.26 MISB KLV Metadata Registry, Jun 2022.
+[6] MISB ST 0603.5 MISP Time System and Timestamps, Oct 2017.
+[7] MISB ST 1204.3 Motion Imagery Identification System (MIIS) Core Identifier, Feb 2020.
+[8] MISB ST 0902.8 Motion Imagery Sensor Minimum Metadata Set, Nov 2018.
+[9] MISB MISP-2023.2 Motion Imagery Standards Profile, Mar 2023.
+[10] MISB ST 1202.3 Generalized Transformation Parameters, Mar 2023.
+
+3 Acronyms and Definitions
+ KLV        Key-Length-Value
+ LS         Local Set
+ MISB       Motion Imagery Standards Board
+ MISP       Motion Imagery Standards Profile
+
+
+02 March 2023                     Motion Imagery Standards Board                                1
+                             ST 1602.2 Composite Imaging Local Set
+
+ MSID  Metadata Substream Identifier
+ PIP   Picture-in-Picture
+       Society of Motion Picture & Television
+ SMPTE
+       Engineers
+ ST    Standard
+
+4 Revision History
+  Revision         Date                             Summary of Changes
+  ST 1602.2     03/02/2023 •      Added Section 8.2 Use of ST 1607 and the Metadata
+                                  Substream Identifier (MSID)
+                              •   Changed Document Version Item to uint
+                              •   Removed Keys from tables consistent with current practice
+                              •   Updated Examples in the Appendices
+                              •   Updated references
+
+
+5 Introduction
+Image composition, as used in this document, is an arrangement of one or more images –
+possibly but not necessarily – derived from one or more sensors, combined into one image of
+Motion Imagery. Examples include tiling of views from different sensors, blending of images, a
+stacked series of images, and picture-in-picture.
+Whereas a single sensor source typically produces a Motion Imagery sequence, the metadata to
+describe an image composed of more than one image (called sub-images) is more complex in
+structure. Each sub-image within the composite requires description of its unique attributes, such
+as its position with the composited image, the pixel density, the source for the sub-image, etc.
+This necessitates a distribution of metadata among the full composite and the various sub-
+images, in addition to each sub-image specific attribute metadata (i.e., position, pixel density,
+etc.).
+The Composite Imaging Local Set provides this second category of image-specific attribute
+metadata. In typical use cases, the Composite Imaging LS will be embedded within the Segment
+LS described by MISB ST 1607 [1], which affords multiple instances of the Composite Imaging
+LS within one instantiating metadata set (e.g., MISB ST 0601 [2]). Refer to the appendix for
+example use cases.
+
+6 Background
+This section provides terminology and an orientation for proper application of the metadata items
+within the Composite Imaging Local Set.
+Composite Image: an image composed of several images derived from one or more sources of
+images within Motion Imagery.
+Source Image: an image as produced by a Motion Imagery source, such as a sensor or camera.
+
+
+02 March 2023                     Motion Imagery Standards Board                                 2
+                              ST 1602.2 Composite Imaging Local Set
+
+Source Image AOI: Area of Interest, which represents a rectangular area with a Source Image
+used in defining a Sub-Image.
+Sub-Image: an image derived from a Source Image. A Sub-Image may represent a processed
+version of its Source Image (i.e., same pixel density but different image characteristics), or an
+area of interest extracted from a Source Image, also potentially processed.
+The pixel density of a Composite Image is independent of Source Images represented. Consider
+the Composite Image a canvas for mapping Source Images. Figure 1 illustrates a generalized
+representation of the mapping process.
+
+
+            Source
+                                 Process 1            Sub-Image 1
+           Image 1
+
+            Source                                                              Composite
+                                 Process 2            Sub-Image 2
+           Image 2                                                                Image
+                                     …
+              …
+
+
+
+
+                                                            …
+                                                                                 Sub-Images
+           Source
+                                 Process N            Sub-Image N
+          Image N
+
+         Pixel Density        Source Image AOI        Sub-Image
+                                • Pixel Density         • Pixel Density
+                                • Position              • Position
+                                                        • Active Image Area
+                                                        • Transparency
+                                                        • Z-Order
+
+         Figure 1: General mapping of multiple Source Images to Composite Image
+
+Each Source Image in Figure 1 can undergo some process, such as color space conversion, bit-
+depth remapping, pixel density scaling, etc. prior to its placement within the Composite Image.
+Several parameters, discussed in later sections, complete the mapping of a Source Image to the
+Composite Image. These include: A Source Image pixel’s density specified as its number of
+rows and columns; an optional specification of the Source Image AOI rectangular region within
+the Source Image; and the Sub-Image produced using the Source Image AOI. A Sub-Image has a
+pixel density (i.e., rows, columns), its position within the Composite Image (i.e., position with
+respect to the upper left corner of the Composite Image), and optionally, an active area
+representing image content within the Sub-Image. A Sub-Image is qualified by its degree of
+transparency and its z-axis ordering.
+Some items within the Composite Imaging LS are mandatory; others depend on whether they are
+relevant to describing the mapping of a Source Image to the Composite Image.
+
+
+
+
+02 March 2023                      Motion Imagery Standards Board                                   3
+                            ST 1602.2 Composite Imaging Local Set
+
+
+7 Composite Imaging Local Set
+The Composite Imaging LS is a KLV LS construct whose items provide information specific to
+an image, such as position, pixel density, transparency, and Z-order. All KLV metadata needs to
+conform to MISB ST 0107 [3] and SMPTE 336 [4] encoding rules.
+
+7.1 Conventions
+                                         Requirement(s)
+ST 1602-01    All KLV metadata shall be expressed in accordance with MISB ST 0107.
+ST 1602-02    Formatting of Composite Imaging metadata shall be compliant with SMPTE ST 336
+              encoding rules for Universal Labels and Local Sets.
+
+
+7.2 Composite Imaging LS
+The Composite Imaging LS 16-Byte Universal Label registered in MISB ST 0807 [5] is:
+                 06.0E.2B.34.02.0B.01.01.0E.01.03.03.02.00.00.00 (CRC 666)
+Table 1 summarizes the Composite Imaging LS with the following column definitions:
+   ▪   Tag indicates the Tag to use when specifying the item in the Composite Imaging LS
+   ▪   Name is the name of the dictionary item
+   ▪   Key is the KLV registry Universal Label associated with the item
+   ▪   Units specifies the units of an item’s value
+   ▪   Type specifies the data type(binary format) when encoding the value into binary; the
+       Types uint and int allow the application to define the number of bytes needed for a values
+       representation with the length indicated by the “Length” of the KLV triplet
+   ▪   Rules indicates if the item is Mandatory or Optional; the Local Set must include items
+       listed as Mandatory, while those listed as Optional are at the implementer’s discretion
+                           Table 1: Composite Imaging Local Set
+
+       Tag                Name               Units      Type              Rules
+        1     Precision Time Stamp             µs      uint64           OPTIONAL
+        2     Document Version                N/A       uint           MANDATORY
+        3     Source Image Rows              pixels     uint            OPTIONAL
+        4     Source Image Columns           pixels     uint            OPTIONAL
+        5     Source Image AOI Rows          pixels     uint            OPTIONAL
+        6     Source Image AOI Columns       pixels     uint            OPTIONAL
+        7     Source Image AOI Position X    pixels      int            OPTIONAL
+        8     Source Image AOI Position Y    pixels      int            OPTIONAL
+        9     Sub-Image Rows                 pixels     uint           MANDATORY
+       10     Sub-Image Columns              pixels     uint           MANDATORY
+       11     Sub-Image Position X           pixels      int           MANDATORY
+       12     Sub-Image Position Y           pixels      int           MANDATORY
+
+
+02 March 2023                    Motion Imagery Standards Board                                 4
+                            ST 1602.2 Composite Imaging Local Set
+
+       13     Active Sub-Image Rows          pixels    uint             OPTIONAL
+       14     Active Sub-Image Columns       pixels    uint             OPTIONAL
+       15     Active Sub-Image Offset X      pixels     int             OPTIONAL
+       16     Active Sub-Image Offset Y      pixels     int             OPTIONAL
+       17     Transparency                    N/A      uint8            OPTIONAL
+       18     Z-Order                         N/A      uint8           MANDATORY
+
+
+7.3 Item Details
+
+7.3.1 Precision Time Stamp
+The Precision Time Stamp is the time of the composited image. The MISP mandates this item
+within a Motion Imagery stream. If the composited image’s Precision Time Stamp is the same as
+the parent’s Precision Time Stamp, it is optional in the Composite Imaging Local Set. Otherwise,
+provide the Precision Time Stamp in the Composite Imaging LS (e.g., in cases where a Source
+Image, or subsequent process, has a different timestamp than the parent timestamp). The use case
+will determine if additional timestamps are important to the application.
+MISB ST 0603 [6] defines the Precision Time Stamp.
+
+7.3.2 Document Version
+The Document Version (Item 2) identifies the version of ST 1602 used in the implementation.
+
+                                         Requirement
+ST 1602-03     A Composite Imaging Local Set shall contain the Document Version (Item 2)
+               metadata item.
+
+
+7.3.3 Source Image
+The Source Image is the image directly produced by the sensor imager. The Source Image Rows
+and Source Image Columns follow from the number of samples in the vertical and horizontal
+dimensions, respectively.
+
+7.3.3.1 Source Image Rows
+Source Image Rows (Item 3) is the number of image samples in the vertical direction (i.e., image
+height) of the source image for the described sub-image. See Figure 2.
+
+
+
+
+02 March 2023                    Motion Imagery Standards Board                                5
+                             ST 1602.2 Composite Imaging Local Set
+
+
+
+
+                    Source
+                    Image
+                     Rows
+
+
+
+
+                                          Source Image Columns
+
+              Figure 2: Source Image pixel density specified as Rows, Columns
+
+7.3.3.2 Source Image Columns
+Source Image Columns (Item 4) is the number of image samples in the horizontal direction (i.e.,
+image width) of the source image for the described sub-image. See Figure 2.
+
+7.3.4 Source Image AOI
+The Source Image AOI is a rectangular area-of-interest extracted from the Source Image. The
+following parameters describe the number of samples vertically (Source Image AOI Rows), the
+number of samples horizontally (Source Image AOI Columns). The Source Image AOI X
+Position and Source Image AOI Y Position parameters describe the offset position of the AOI
+relative to the Source Image AOI position of (0,0).
+
+7.3.4.1 Source Image AOI Rows
+Source Image AOI Rows (Item 5) is the number of image samples in the vertical direction (i.e.,
+image height) of the Source Image AOI. The Source Image AOI is the image used to create a
+Sub-Image of the Source Image. See Figure 3. In cases where the entire Source Image maps
+directly to its Sub-Image (i.e., Source Image AOI identical to the Source Image), this parameter
+is not necessary to specify.
+
+7.3.4.2 Source Image AOI Columns
+Source Image AOI Columns (Item 6) is the number of image samples in the horizontal direction
+(i.e., image width) of the Source Image AOI. The Source Image AOI is the image used to create
+a Sub-Image of the Source Image. See Figure 3. In cases where the entire Source Image maps
+directly to its Sub-Image (i.e., Source Image AOI identical to the Source Image), this parameter
+is not necessary to specify.
+
+
+
+
+02 March 2023                     Motion Imagery Standards Board                                   6
+                              ST 1602.2 Composite Imaging Local Set
+
+7.3.4.3 Source Image AOI X Position
+Source Image AOI X Position (Item 7) is the x-coordinate in pixels defining the upper left corner
+of the rectangular area of interest in the Source Image referenced to the upper left (0, 0) corner of
+the Source Image. The Source Image AOI is the image used to create a Sub-Image of the Source
+Image. See Figure 3. In cases where the entire Source Image maps directly to its Sub-Image (i.e.,
+Source Image AOI identical to the Source Image), this parameter is not necessary to specify.
+                                   (0, 0)
+
+                                               Source Image
+                                               AOI Columns
+    Source Image AOI X Position,
+    Source Image AOI Y Position                                                          Source
+                                                                                         Image
+                                                                                          Rows
+                                                                        Source Image
+                                                                        AOI Rows
+
+
+
+
+                                                  Source Image Columns
+
+              Figure 3: Source Image AOI position referenced to Source Image
+
+7.3.4.4 Source Image AOI Y Position
+Source Image AOI Y Position (Item 8) is the y-coordinate in pixels defining the upper left corner
+of the rectangular area of interest in the Source Image referenced to the upper left (0, 0) corner of
+the Source Image. The Source Image AOI is the image used to create a Sub-Image of the Source
+Image. See Figure 3. In cases where the entire Source Image maps directly to its Sub-Image (i.e.,
+Source Image AOI identical to the Source Image), this parameter is not necessary to specify.
+
+7.3.5 Sub-Image
+A Sub-Image may represent a processed version of its Source Image (i.e., same pixel density but
+different image characteristics), or an area of interest extracted from a Source Image, also
+possibly processed. The Sub-Image Columns and Sub-Image Rows parameters specify the
+dimensions of the Sub-Image. The position of the Sub-Image is with respect to the (0,0) location
+of composite image created; the Sub-Image Position X and Sub-Image Position Y parameters
+specify this offset.
+In the event a Sub-Image does not contain all active pixels, the Active Sub-Image Rows and
+Active Sub-Image Columns parameters enable specifying the rectangular region containing only
+active image samples. The parameters Active Sub-Image Offset X and Active Sub-Image Offset
+Y provide position information of where the active image lies with respect the Sub-Image.
+
+
+
+
+02 March 2023                      Motion Imagery Standards Board                                  7
+                               ST 1602.2 Composite Imaging Local Set
+
+7.3.5.1 Sub-Image Rows
+Sub-Image Rows (Item 9) is the number of image samples in the vertical direction (i.e., image
+height) of the sub-image derived from its Source Image AOI. See Figure 4.
+                                        Requirement
+ ST 1602.1-05 A Composite Imaging Local Set shall contain the Sub-Image Rows (Item 9)
+              metadata item.
+
+
+
+
+                                                                                          Sub-Image
+ Source                                                                                     Rows
+ Image          Source Image AOI
+  Rows
+
+
+                                                                      Sub-Image
+                                                                       Columns
+
+                    Source Image Columns
+
+
+                    Figure 4: Source Image AOI used to create Sub-Image
+
+7.3.5.2 Sub-Image Columns
+Sub-Image Columns (Item 10) is the number of image samples in the horizontal direction (i.e.,
+image width) of the sub-image derived from its source image. See Figure 4.
+
+                                        Requirement
+ ST 1602.1-06 A Composite Imaging Local Set shall contain the Sub-Image Columns (Item 10)
+              metadata item.
+
+
+7.3.5.3 Sub-Image Position X
+Sub-Image Position X (Item 11) is the x-coordinate of the upper left corner of a Sub-Image
+referenced to the upper left corner, i.e., coordinates (0, 0) of the Composite Image. See Figure 5.
+
+
+
+
+02 March 2023                       Motion Imagery Standards Board                                8
+                               ST 1602.2 Composite Imaging Local Set
+
+
+                      (0, 0)
+
+                                  (Sub-Image Position X, Sub-Image Position Y)
+
+
+
+
+                                                               Sub-Image
+                                                                 Rows
+
+
+
+
+                                       Sub-Image
+                                        Columns
+
+
+
+
+                                            Composited Image Frame
+
+                     Figure 5: Relation of Sub-Image to Composite Image
+
+                                        Requirement
+ ST 1602.1-07 A Composite Imaging Local Set shall contain the Sub-Image Position X (Item 11)
+              metadata item.
+
+
+7.3.5.4 Sub-Image Position Y
+Sub-Image Position Y (Item 12) is the y-coordinate of the upper left corner of a Sub-Image
+referenced to the upper left corner, i.e., coordinates (0, 0) of the Composite Image. See Figure 5.
+                                        Requirement
+ ST 1602.1-08 A Composite Imaging Local Set shall contain the Sub-Image Position Y (Item 12)
+              metadata item.
+
+
+7.3.5.5 Active Sub-Image Rows
+Active Sub-Image Rows (Item 13) is the number of samples in the vertical direction representing
+Source Image content; that is, containing the portion of the Source Image of interest. See Figure
+6.
+
+7.3.5.6 Active Sub-Image Columns
+Active Sub-Image Columns (Item 14) is the number of samples in the horizontal direction
+representing Source Image content; that is, containing the portion of the Source Image of
+interest. See Figure 6.
+
+
+
+
+02 March 2023                      Motion Imagery Standards Board                                 9
+                                         ST 1602.2 Composite Imaging Local Set
+
+
+
+                                                             Active Sub-Image
+                                                                  Columns
+
+
+
+                                               Active                                        Sub-Image
+                                             Sub-Image                                         Rows
+                                               Rows
+
+
+
+                                                                Sub-Image
+                                                                 Columns
+
+                                  Composited Image Frame
+
+                                            Figure 6: Active Sub-Image Area
+
+7.3.5.7 Active Sub-Image Offset X
+Active Sub-Image Offset X (Item 15) provides the x-coordinate of the upper left corner of the
+active image within the Sub-Image referenced to Sub-Image Position X. See Figure 7, where x-
+coordinate = Sub-Image Position X + Active Sub-Image Position X. Valid range: values greater
+than zero (0).
+     (0, 0)
+
+          (Sub-Image Position X, Sub-Image Position Y)
+
+                                       Active Sub-Image
+                                            Offset X
+
+
+                                                           x-coordinate = Sub-Image Position X + Active Sub-Image Offset X
+                                                           y-coordinate = Sub-Image Position Y + Active Sub-Image Offset Y
+              Active Sub-Image
+                   Offset Y
+
+
+
+
+                             Figure 7: Relation of Active Sub-Image to Sub-Image
+
+Knowledge of the Sub-Image Rows/Columns, Sub-Image Position X/Y, Active Image
+Rows/Columns, and Active Sub-Image Offset X/Y allows identifying non-image areas, such as
+black borders when an image is letter boxed.
+
+
+
+
+02 March 2023                                    Motion Imagery Standards Board                                              10
+                            ST 1602.2 Composite Imaging Local Set
+
+7.3.5.8 Active Sub-Image Offset Y
+Active Sub-Image Offset Y (Item 16) provides the y-coordinate of the upper left corner of the
+active image within the Sub-Image described by the Local Set referenced to Sub-Image Position
+Y. See Figure 7, where y-coordinate = Sub-Image Position Y + Active Sub-Image Position Y.
+Valid range: values greater than zero (0).
+Use the Sub-Image Rows/Columns, Sub-Image Position X/Y, Active Sub-Image Rows/Columns,
+and Active Sub-Image Offset X/Y to describe non-image areas, such as black borders when an
+image is letter boxed.
+
+7.3.6 Transparency
+The Transparency (Item 17) parameter provides 256 levels of image transparency. Consider two
+images A and B superimposed on top of one another as shown in Figure 8; denote image A as
+the background image and image B as the foreground image.
+                                                       Image B = 178 (70%) Transparency
+
+
+
+
+                           Image A
+
+
+
+
+                                                       Image B = 76 (29%) Transparency
+
+
+
+
+                           Image B
+
+
+
+
+                                                        Image B = 0 (0%) Transparency
+
+
+
+
+          Figure 8: Images A and B superimposed using Transparency parameter
+
+A transparency value of zero (0) for Image B represents fully opaqueness, where image A is not
+visible and image B is fully visible. As the transparency value increases to 76 (29%) to 178
+(70%), Image A becomes more visible. A transparency value of 255 represents full transparency,
+where image B is not visible and image A is fully visible. Values between zero and 255 represent
+
+
+02 March 2023                        Motion Imagery Standards Board                          11
+                             ST 1602.2 Composite Imaging Local Set
+
+levels of transparency for blending two images together. The default value for transparency is
+zero (0) when not included in the Local Set.
+
+7.3.7 Z-Order
+Z-Order (Item 18) defines the order of images (or stack) along the Z-axis (the axis perpendicular
+to the horizontal (left/right) axis, and the vertical (up/down) axis. A reserved value of zero (0)
+defines the bottom-most image in the stack. Different images cannot have the same z-order.
+                                       Requirement(s)
+ST 1602-04 Each Sub-Image within a Composite Image shall have a unique non-zero Z-Order
+             value.
+ST 1602.1-09 A Composite Imaging Local Set shall contain the Z-Order (Item 18) metadata item.
+
+
+8 Usage of ST 1607
+
+8.1 MIIS Core Identifier
+Where there are multiple sensors within a Motion Imagery stream, the metadata within a
+segment is related to its parent through the MISB ST 1204 [7] MIIS Core Identifier. Thus,
+adding a Core Identifier is mandatory for use of more than one sensor per stream.
+                                           Requirement
+ST 1602.1-10 Where more than one sensor’s metadata is included within a Motion Imagery
+             stream, its MIIS Core Identifier in accordance with MISB ST 1204 shall be present
+             within every child segment.
+
+
+8.2 Metadata Substream Identifier (MSID)
+A Metadata Substream Identifier (MSID) is a unique identifier within a Segment LS. This allows
+for multiple instances of Segment LSs within a metadata stream in support of sub-streams of
+sub-streams and Report-on-change. See the Motion Imagery Handbook for an in-depth
+discussion of sub-stream construction and the utility of the MSID. MISB ST 0601 defines
+requirements for the use of the MSID.
+An instantiating metadata set defines a MSID metadata item and its requirements for its use.
+Every Segment LS implemented within that instantiating metadata set then includes that MSID
+as a metadata item.
+
+
+
+
+02 March 2023                     Motion Imagery Standards Board                                 12
+                             ST 1602.2 Composite Imaging Local Set
+
+
+9 Appendix A – Example: Four source images composited into one
+  image - Informative
+In this example, four independent sensors forming four Source Images are composited into one
+Composite Image as shown in Figure 9.
+                                      Composited Image Frame
+
+
+
+
+                Source 1                                                  Source 2
+
+
+
+
+                Source 3                                                  Source 4
+
+
+
+
+            Figure 9: Four Source Images composited into one Composite Image
+
+The MISB ST 0902 [8] metadata items are mandatory within Motion Imagery. In an image
+composed of four images, some items are common across the four images, whereas some items
+are specific to each image themselves. For example, the need for metadata to describe the
+geometry of each image, such as location of each image within the composite, the pixel density
+of each image, etc. The Composite Imaging LS provides this information.
+The Segment LS (Item 100) in MISB ST 0601 enables reuse of those metadata items from the
+ST 0601 LS unique to a specific image. Because there are four source images, there are four
+instances of Item 100. Each Segment LS must contain a MSID (see Req -11). ST 0601 defines a
+MSID (Item 143), which becomes one item in the Value of each Segment LS. Other items from
+ST 0601 likewise become items in the Segment LS Value portion as shown in Figure 10.
+Note the reuse of ST 0601 Item 13/Lat, Item 14/Lon, and Item 15/Alt within Item 100 as they
+describe the specific attributes of each sensor. Each sensor has its own Motion Imagery Core
+Identifier Item 94/MIIS also inserted within the value of Item 100 as well. Finally, the
+Composite Imaging LS (Item 99) contains specific attributes for each source image.
+This standard allows reuse of many ST 0601 items within a Segment LS. Exceptions include
+some items of the Security Local Set Tag 48 (see MISB ST 1607 for these exceptions). While
+there is no requirement that any ST 0601 items be present; the MISP [9] mandates a Motion
+Imagery stream contain all ST 0902 items. It is likely that some common ST 0902 items (i.e.,
+mission, security, etc.) will be present at the ST 0601 parent level, and others, which vary per
+sensor source, will be present at the Segment LS Item 100 child level.
+Note in this example the need for five Motion Imagery Core Identifiers (MIIS): one defining the
+composite image (i.e., MIIS-C) and one for each of the four sub-images (i.e., MIIS 1, MIIS 2,
+etc.).
+
+
+
+02 March 2023                      Motion Imagery Standards Board                                  13
+                            ST 1602.2 Composite Imaging Local Set
+
+See MISB ST 1607 for additional details on the use of the Segment LS construct.
+
+
+
+
+          Figure 10: Use of Tag 100 – Embedding a Composite Imaging Local Set
+
+
+
+
+02 March 2023                    Motion Imagery Standards Board                   14
+                             ST 1602.2 Composite Imaging Local Set
+
+
+10 Appendix B – Example: Two source images composited into one
+   blended image - Informative
+In this example, two independent sensors forming two Source Images blend into one Composite
+Image as shown in Figure 11.
+
+
+
+
+                            Figure 11: Two Source Images blended
+
+The MISB ST 0902 metadata items are mandatory within Motion Imagery. In an image
+composed of two images, some items are common across the two images, whereas some items
+are specific to each image themselves. For instance, assuming both images have similar
+dimensions and location in the composite, specific metadata describes the transparency of each
+image. Transparency (Tag 17) in the Composite Imaging LS provides this information, which is
+present for each image.
+Each image in this example reuses four MISB ST 0601 tags. The Segment LS (Tag 100) in
+MISB ST 0601 enables the reuse of tags defined in a Local Set. Because there are two source
+images, each have a Tag 100. Within the Value of Tag 100, a Composite Imaging LS Tag 99
+follows the four ST 0601 items specific to each source image as shown in Figure 12.
+Note the reuse of ST 0601 metadata Tag13/Lat, Tag 14/Lon, and Tag 15/Alt within Tag 100 as
+these items describe the specific attributes of each sensor. Each sensor will have its own Motion
+Imagery Core Identifier (MIIS/Tag 94) carried within Tag 100 as well. Finally, the Tag 99
+Composite Imaging LS includes the specific attributes of each source image.
+Some “common” MISB ST 0601 tags (i.e., mission, security, etc.) will be present at the parent
+level, and others, which vary per sensor source, will be present at the Tag 100 child level.
+Note in this example the need for three Motion Imagery Core Identifiers (MIIS): one defining the
+composite image (i.e., MIIS-C) and one for each of the four sub-images (i.e., MIIS 1, MIIS 2).
+See MISB ST 1607 for additional details on the use of the Segment LS construct.
+
+
+
+
+02 March 2023                     Motion Imagery Standards Board                                15
+                ST 1602.2 Composite Imaging Local Set
+
+
+
+
+                Figure 12: Two Source Images blended
+
+
+
+
+02 March 2023        Motion Imagery Standards Board     16
+                             ST 1602.2 Composite Imaging Local Set
+
+
+11 Appendix C – Example: One source image with picture-in-picture
+   composited into one image - Informative
+In this example, one sensor provides the information for two image views: the main sensor
+Source Image and a picture-in-picture (PIP) zoomed view of an area-of-interest of the Source
+Image as shown in Figure 13.
+
+
+                                                                         Source Image AOI
+
+
+
+      Zoomed
+        AOI
+
+
+
+
+       Figure 13: One Source Image with PIP composited into one Composite Image
+
+In this case, since both images emanate from the same source, all MISB ST 0902 metadata items
+are common to both. A Composite Imaging LS describes the position/dimensions of the AOI
+extracted, and the position/dimensions of the zoomed Sub-Image.
+It is likely that the Source Image AOI may change during the Motion Imagery sequence, the
+zoom factor varied, or the zoom turned off. The temporal capability of this feature requires using
+the Segment LS (Tag 100) from MISB ST 0601. As changes as those mentioned occur, the
+information described by Tag 100 will change as well; that is, the Composite Imaging LS
+contained within the value of Tag 100 will have differing metadata values.
+MISB ST 1202 [10] describes image transformations such as zoom. Once the zoomed image is
+available and ready for compositing with the source image, the Composite Imaging LS provides
+the information for position/dimensions of both the Source Image AOI and the zoomed Sub-
+Image result as shown in Figure 14.
+In this example because the Source Image AOI and its derivative zoomed Sub-Image both
+emanate from the same source image, there is need for only one Motion Imagery Core Identifier
+(MIIS) in the metadata stream.
+MISB ST 1607 and the Motion Imagery Handbook provide additional details on the use of the
+Segment LS construct.
+
+
+
+
+02 March 2023                     Motion Imagery Standards Board                                17
+                        ST 1602.2 Composite Imaging Local Set
+
+
+
+
+           Figure 14: One Source Image with PIP zoomed Sub-Image overlay
+
+
+
+
+02 March 2023                Motion Imagery Standards Board                18
+

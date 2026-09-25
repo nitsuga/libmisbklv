@@ -4,17 +4,21 @@ External inputs this library is built on: the MISB standards it implements,
 deposited as the publisher's PDF plus a faithful `.txt` extract for grep/Read.
 They are the ground truth that [`context/`](../context/) synthesizes.
 
-Currently — six MISB standards, all authored by the Motion Imagery Standards
+Currently — ten MISB standards, all authored by the Motion Imagery Standards
 Board (MISB), a body of the U.S. National Geospatial-Intelligence Agency:
 
 | File | Standard | Published | Added |
 |---|---|---|---|
+| `ST0102.12` | Security Metadata Universal and Local Sets for Motion Imagery Data | 22 June 2017 | 2026-09-25 |
 | `ST0107.5` | KLV Metadata in Motion Imagery | 21 October 2021 | 2026-07-17 |
 | `ST0601.19` | UAS Datalink Local Set | 02 March 2023 | 2026-07-17 |
 | `ST0603.5` | MISP Time System and Timestamps | 5 October 2017 | 2026-07-27 |
 | `ST0604.6` | Timestamps for Class 1/Class 2 Motion Imagery | 5 October 2017 | 2026-07-17 |
 | `ST0903.6` | Video Moving Target Indicator Metadata | 21 October 2021 | 2026-07-17 |
 | `ST1201.5` | Floating Point to Integer Mapping | 24 June 2021 | 2026-07-17 |
+| `ST1206.1` | SAR Motion Imagery Metadata | 22 June 2017 | 2026-09-25 |
+| `ST1601.2` | Geo-Registration Local Set | 02 March 2023 | 2026-09-25 |
+| `ST1602.2` | Composite Imaging Local Set | 02 March 2023 | 2026-09-25 |
 
 Each is present twice: `NAME.pdf`, the publisher's document, tracked in
 [git-lfs](https://git-lfs.com/) per `.gitattributes`; and `NAME.txt`, a text

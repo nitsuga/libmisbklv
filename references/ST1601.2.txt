@@ -1,0 +1,474 @@
+                                                                            MISB ST 1601.2
+ STANDARD
+
+ Geo-Registration Local Set                                                   02 March 2023
+
+
+1 Scope
+This standard defines metadata to support the identification of a geo-registration algorithm and
+various outputs from a geo-registration process. The intent is to use this standard in conjunction
+with the KLV construct Amend Local Set as defined in MISB ST 1607. Only include the Geo-
+Registration Local Set (LS) within an existing Local Set that contains items describing a sensor
+model.
+
+2 References
+
+[1]  MISB ST 0601.19 UAS Datalink Local Set, Mar 2023.
+[2]  MISB ST 0902.8 Motion Imagery Sensor Minimum Metadata Set, Nov 2018.
+[3]  MISB ST 1607.1 Constructs to Amend/Segment KLV Metadata, Mar 2023.
+[4]  MISB MISP-2023.2: Motion Imagery Handbook, Mar 2023.
+[5]  MISB ST 0107.5 KLV Metadata in Motion Imagery, Oct 2021.
+[6]  SMPTE ST 336:2017 Data Encoding Protocol Using Key-Length-Value.
+[7]  MISB ST 0807.26 MISB KLV Metadata Registry, Jun 2022.
+[8]  MISB ST 1303.2 Multi-Dimensional Array Pack, Jun 2020.
+[9]  ISO/IEC 9834-8:2014 Information technology - Procedures for the Operation of Object
+     Identifier Registration Authorities - Part 8: Generation of Universally Unique Identifiers
+     (UUIDs) and their use in Object Identifiers.
+[10] IETF RFC 4122 A Universally Unique IDentifier (UUID) URN Namespace, Jul 2005.
+[11] NGA.RP.0001_1.0.0 NGA Recommended Practice for Universally Unique Identifiers, Jan
+     2013.
+
+3 Revision History
+
+  Revision        Date                               Summary of Changes
+ ST 1601.2      03/02/2023       •   Added Section 7 on using the Amend LS and the Metadata
+                                     Substream Identifier (MSID)
+                                 •   Revised Figure 3 to include the MSID
+
+
+02 March 2023                                                                                        1
+                              ST 1601.2 Geo-Registration Local Set
+
+
+                                 •   Removed Universal Labels (Keys) for consistency with
+                                     current MISB guidance
+                                 •   Added acronyms and updated references
+
+
+4 Acronyms and Definitions
+ KLV               Key Length Value
+ LS                Local Set
+ IETF              Internet Engineering Task Force
+ IEC               International Electrotechnical Commission
+ ISO               International Organization for Standardization
+ MDARRAY           Multi-Dimensional Array
+ MISB              Motion Imagery Standards Board
+ MISP              Motion Imagery Standards Profile
+ MSID              Metadata Substream Identifier
+ NGA               National Geospatial-Intelligence Agency
+ RFC               Request for Comments
+ RP                Recommended Practice
+ SDCC-FLP          Standard Deviation and Correlation Coefficient Floating Length Pack
+ SMPTE             Society of Motion Picture & Television Engineers
+ ST                Standard
+
+5 Introduction
+Geo-registration, generically defined and as used in this document, is the process of revising
+sensor model metadata through a mathematical process. For example, a First Image may be geo-
+registered to a “known good” Second Image, and the mathematical process “transfers” the
+accuracy of the Second Image to the First Image by adjusting the sensor model metadata of the
+First Image. In another use case, typical in mosaic generation, two images “float” and
+adjustments to both sensor model’s metadata produce best alignment.
+The basic metadata parameters needed for a sensor model are contained in an existing Local Set
+(e.g., MISB ST 0601 [1]) and profiled in MISB ST 0902 [2]. The KLV construct of the Amend
+Local Set, defined in MISB ST 1607 [3], enables revisions to the basic sensor model parameter
+values for subsequent geo-registration processes. The Motion Imagery Handbook [4] provides
+additional information on amending data of a parent metadata set.
+The Geo-Registration Local Set provides the additional metadata necessary to identify geo-
+registration algorithms and additional geo-registration process output data not contained in the
+original LS.
+
+
+
+
+02 March 2023                     Motion Imagery Standards Board                                   2
+                              ST 1601.2 Geo-Registration Local Set
+
+
+6 Geo-Registration Local Set
+The Geo-Registration Local Set is a KLV Local Set whose items provide information specific to
+a geo-registration algorithm, such as name and version, and additional geo-registration output,
+such as correspondence points. All KLV metadata needs to conform to MISB ST 0107 [5] and
+SMPTE 336 [6] encoding rules.
+
+6.1 Conventions
+                                         Requirement(s)
+ST 1601-01    All metadata shall be expressed in accordance with MISB ST 0107.
+ST 1601-02    Formatting of Geo-Registration metadata shall be compliant with SMPTE ST 336
+              encoding rules for Universal Labels and Local Sets.
+
+
+6.2 Geo-Registration Local Set
+The Geo-Registration Local Set 16-Byte Universal Label registered in MISB ST 0807 [7] is:
+                06.0E.2B.34.02.0B.01.01.0E.01.03.03.01.00.00.00 (CRC 39238)
+Table 1 summarizes the Geo-Registration LS with columns defined as:
+   ▪   Tag ID indicates the Tag to use when specifying the item in the Geo-Registration LS
+   ▪   Name is the name of the item
+   ▪   Units specifies the units of an item’s value; a value of N/A means Not Applicable
+   ▪   Type specifies the data type (binary format) when encoding the value into binary. The
+       type uint is a generalization to allow the application to define the number of bytes needed
+       for an items value representation.
+   ▪   Rules indicate if the item is Mandatory or Optional. The LS must include items listed as
+       Mandatory, while those listed as Optional are at the implementer’s discretion.
+
+
+
+
+02 March 2023                    Motion Imagery Standards Board                                   3
+                                     ST 1601.2 Geo-Registration Local Set
+
+                                  Table 1: Geo-Registration Local Set Items
+
+     Tag ID                           Name                               Units      Type1      Rules
+       1      Document Version                                            N/A        uint    Mandatory
+       2      Algorithm Name                                              N/A        utf8    Mandatory
+       3      Algorithm Version                                           N/A        utf8    Mandatory
+       4      Correspondence Points – Row / Column                       pixels    MDARRAY    Optional
+       5      Correspondence Points – Latitude / Longitude                 °       MDARRAY    Optional
+       6      Second Image Name                                           N/A        utf8     Optional
+       7      Algorithm Configuration Identifier                          N/A       UUID      Optional
+       8      Correspondence Points – Elevation                            m       MDARRAY    Optional
+       9      Correspondence Points – Row / Column Standard             variable   MDARRAY    Optional
+              Deviation & Correlation Coefficients
+      10      Correspondence Points – Latitude / Longitude /            variable   MDARRAY    Optional
+              Elevation Standard Deviation & Correlation Coefficients
+1
+ Note on Lengths: Length computation occurs when the complete size of values is known at “run-time”.
+(E.g., The number of characters in the string determines the length of a utf8 string; likewise, the number
+of elements in the array determines the size of an MDARRAY. See the Motion Imagery Handbook for
+more information on data types and lengths.)
+Items 4, 5, 8, 9 and 10 all contain information about a common list of tie points; therefore, the
+MDARRAYs for these items must have the same number of tie point elements.
+                                                   Requirement
+ST 1601.1-03 Where Geo-Registration Local Set Items 4, 5, 8, 9, or 10 are included in the Local Set,
+             all the included items shall use the same number of tie points in their arrays.
+
+
+6.3 Geo-Registration Local Set Items
+
+6.3.1         Item 1: Document Version
+The Document Version item identifies the version of MISB ST 1601 used in the implementation.
+                                                   Requirement
+    ST 1601-04     A Geo-Registration Local Set shall include the Document Version metadata Item 1.
+
+
+6.3.2         Item 2: Algorithm Name
+The Algorithm Name item uniquely identifies the algorithm used to geo-register the imagery
+data to produce revised sensor model parameter values.
+
+
+
+
+02 March 2023                            Motion Imagery Standards Board                                  4
+                                   ST 1601.2 Geo-Registration Local Set
+
+
+                                                Requirement
+ ST 1601-05    A Geo-Registration Local Set shall include the Algorithm Name metadata Item 2.
+
+
+6.3.3    Item 3: Algorithm Version
+The Algorithm Version item is an alphanumeric that uniquely identifies the specific version of
+the Algorithm Name used to geo-register the imagery data.
+                                                Requirement
+ ST 1601-06    A Geo-Registration Local Set shall include the Algorithm Version metadata Item 3.
+
+
+6.3.4    Item 4: Correspondence Points – Row/Column
+A geo-registration algorithm uses the Correspondence Points – Row/Column MDARRAY item
+to define an extensible list of tie points represented in pixel space for two Images, or a single
+Image and a set of geographic points defined in Item 5 (Latitude/Longitude) and Item 8 (Height
+above Elevation).
+Figure 1 illustrates the first case of having correspondence or tie points between two Images:
+Image 1 and Image 2. The circles in Image 1 correspond to the triangles in Image 2. The
+MDARRAY stores each tie point’s row and column.
+                               Image 1                                   Image 2
+                                                                           Rows        3
+                    Rows
+
+
+
+
+                               3
+                                                                                       2
+                                   2                          Columns      0       1
+                           1
+                0
+
+
+
+
+            Figure 1: Illustration of Correspondence Points between two Images
+
+Table 2 shows the list of tie points for Figure 1, which becomes the MDARRAY.
+                               Table 2: Example Tie Points for Figure 1
+
+                                                           Tie Points
+                                                      0        1     2         3
+                                          Row        133      128   97      69
+                               Image 1
+                                          Column     31       91    122    129
+                                          Row        89       82    52      27
+                               Image 2
+                                          Column     125      176   204    210
+
+
+MISB ST 1303 [8] defines the MDARRAY KLV Pack construct.
+
+
+02 March 2023                          Motion Imagery Standards Board                               5
+                                           ST 1601.2 Geo-Registration Local Set
+
+The parameters for this Multi-Dimensional Array are: MDARRAY(NoteA, 2, 4, NoteB) where:
+   •       NoteA:
+                      ST 1601 overrides the Data Type defined in MISB ST 0807 for the Row (CRC
+                      44071) and Column (CRC 62839) items (shown below) from BER-OID to UINT
+                      to enable padding, as needed, to meet the MDARRAY requirement that all
+                      elements must be the same size.
+                      Array(0, tp) = 06.0E.2B.34.01.01.01.01.0E.01.01.03.3F.01.00.00 (CRC 44071)a
+                      Array(1, tp) = 06.0E.2B.34.01.01.01.01.0E.01.01.03.3F.02.00.00 (CRC 62839)b
+                      Array(2, tp) = 06.0E.2B.34.01.01.01.01.0E.01.01.03.3F.01.00.00 (CRC 44071)c
+                      Array(3, tp) = 06.0E.2B.34.01.01.01.01.0E.01.01.03.3F.02.00.00 (CRC 62839)d
+                      tp = denotes a specific tie point
+                      a
+                          This KLV key represents the row value of the tie point for the First Image.
+                      b
+                          This KLV key represents the column value of the tie point for the First Image.
+                      c
+                          This KLV key represents the row value of the tie point for the Second Image.
+                      d
+                          This KLV key represents the column value of the tie point for the Second Image.
+
+   •       NoteB: This value is dependent upon the number of tie points produced between two
+           Images.
+This specifies a two-dimensional Array with dimensions of four (4) by that given by NoteB.
+When specifying tie points in pixel space to geographic points, use only one Image and specify
+the tie points in Item 5 for the latitude/longitude and Item 8 for the height above ellipsoid. Figure
+2 illustrates a single Image with correspondences to geographic tie points.
+
+
+                                                              Geo Point      Latitude Longitude             HAE
+                                                                   0         32.98416       48.08388        1500
+           Rows
+
+
+
+
+                           3
+
+                               2                                   1         32.98417       48.08389        1501
+                  1
+       0                                                           2         32.98418       48.08390        1500
+                                                                   3         32.98419       48.08390        1499
+
+
+ Figure 2: Illustration of Correspondence Points between an Image and geographic points
+
+Table 3 shows the list of tie points for Figure 2, which becomes three MDARRAYs. Item 4
+specifies the Row/Column. Item 5 specifies the Latitude/Longitude. Item 8 specifies the Height
+Above Ellipsoid.
+
+
+
+
+02 March 2023                                  Motion Imagery Standards Board                                      6
+                                    ST 1601.2 Geo-Registration Local Set
+
+                                Table 3: Example Tie Points for Figure 1
+
+                                                                    Tie Points
+                                                 0              1                 2      3
+                            Row                 133            128               97     69
+               Item 4
+                            Column              31             91             122       129
+                            Latitude        32.98416       32.98417        32.98418   32.98419
+               Item 5
+                            Longitude       48.08388       48.08389        48.08390   48.08391
+               Item 8       HAE                1500           1501           1500      1499
+
+
+6.3.5    Item 5: Correspondence Points – Latitude / Longitude
+A geo-registration algorithm uses the Correspondence Points – Latitude/Longitude MDARRAY
+item to define an extensible list of tie points represented in geographic space for two images.
+MISB ST 1303 [8] defines the MDARRAY KLV Pack construct.
+The parameters for this Multi-Dimensional Array are: MDARRAY(NoteA, 2, 2, NoteB) where:
+   •    NoteA: Array(0, tp) = 06.0E.2B.34.01.01.01.01.0E.01.01.03.28.00.00.00 (CRC 53661)a
+               Array(1, tp) = 06.0E.2B.34.01.01.01.01.0E.01.01.03.29.00.00.00 (CRC 42793)b
+               tp = denotes a specific tie point
+               a
+                   This KLV key represents the latitude value of the tie point.
+               b
+                   This KLV key represents the longitude value of the tie point.
+
+   •    NoteB: This value is dependent upon the number of tie points produced between the two
+        images.
+This specifies a two-dimensional Array with dimensions of two (2) by that given by NoteB.
+
+6.3.6    Item 6: Second Image Name
+The Second Image Name item uniquely identifies the second Image used in the geo-registration
+process.
+
+6.3.7    Item 7: Algorithm Configuration Identifier
+The Algorithm Configuration Identifier item is a generic identification system based on a
+Universal Unique Identifier (UUID) to differentiate configurations or set of parameters for a
+specific Algorithm Name and Algorithm Version. It is up to the algorithm vendor to identify the
+set of variable configuration parameters and values for each algorithm to form the basis of the
+UUID.
+Multiple techniques to generate a UUID are available as discussed in ISO 9834 [9] and RFC
+4122 [10]. NGA Recommended Practice [11] discusses allowed UUID versions.
+This Standard recommends constructing UUIDs from unique configuration information through
+UUID Version 4 leveraging random numbers or UUID Version 5 leveraging Secure Hash
+
+
+02 March 2023                            Motion Imagery Standards Board                           7
+                                      ST 1601.2 Geo-Registration Local Set
+
+Algorithm (SHA) coding process. For example, combine minimization thresholds, minimum
+number of tie points, correlation settings, etc., and use either truly random numbers or the SHA
+hash function to generate the UUID.
+
+6.3.8    Item 8: Correspondence Points – Elevation
+A geo-registration algorithm uses the Correspondence Points – Elevation MDARRAY item to
+define an extensible list of elevation values for geographic space tie points for two Images.
+MISB ST 1303 defines the MDARRAY KLV Pack construct.
+The parameters for this Multi-Dimensional Array are: MDARRAY(NoteA, 1, NoteB) where:
+   •    NoteA: Array(0, tp) = 06.0E.2B.34.01.01.01.01.0E.01.01.03.2A.00.00.00 (CRC 15605)a
+                 tp = denotes a specific tie point
+                 a
+                     This KLV key represents the elevation value of the tie point.
+
+   •    NoteB: This value is dependent upon the number of tie points produced between two
+        Images.
+This specifies a one-dimensional Array with a dimension of one (1) by that given by NoteB.
+
+6.3.9    Item 9: Correspondence Points – Row / Column Standard Deviation
+         & Correlation Coefficients
+A geo-registration algorithm uses the Correspondence Points – Row/Column Standard Deviation
+& Correlation Coefficients MDARRAY item to define an extensible list of standard deviations
+and correlations coefficients for tie points represented in pixel space for two Images. MISB ST
+1303 defines the MDARRAY KLV Pack construct.
+The value of Item 9 is a two-dimensional Array with dimensions of six (6) by the number of tie
+points (tp) defined in the value of Item 4, i.e., one sigma value for each value in Item 4’s array
+and one rho value for each row/value pair.
+The parameters for the Multi-Dimensional Array are: MDARRAY(NoteA, 2, 6, NoteB, EBytes see
+NoteC) where:
+   •    NoteA:
+        Array(0, tp) = Sigma value for Item 4’s Array(0, tp), the First Image Row for tie point tp.
+                       Value is a floating point using IMAPB(0, 100, EBytes)
+        Array(1, tp) = Sigma value for Item 4’s Array(1, tp), the First Image Column for tie point
+                       tp. Value is a floating point using IMAPB(0, 100, EBytes)
+        Array(2, tp) = Rho value for the cross correlation between the First Image row and
+                       column values for tie point tp. Value is a floating point using IMAPB(-1,
+                       1, EBytes)
+        Array(3, tp) = Sigma value for Item 4’s Array(2, tp), the Second Image Row for tie point
+                       tp. Value is a floating point using IMAPB(0, 100, EBytes)
+
+
+
+
+02 March 2023                             Motion Imagery Standards Board                             8
+                               ST 1601.2 Geo-Registration Local Set
+
+       Array(4, tp) = Sigma value for Item 4’s Array(3, tp), the Second Image Column for tie
+                      point tp. Value is a floating point using IMAPB(0, 100, EBytes)
+       Array(5, tp) = Rho value for the cross correlation between the Second Image row and
+                      column values for tie point tp. Value is a floating point using IMAPB(-1,
+                      1, EBytes)
+   tp = denotes a specific tie point
+   •   NoteB: This value is dependent upon the number of tie points produced between two
+       Images.
+   •   NoteC: Compute the EBytes value at runtime based on the given precision of the sigma and
+       rho values. The EBytes value is the maximum length across all IMAP’ed sigma and row
+       values. For example, if a sigma values requires 3 bytes and the rho requires only 2 bytes
+       then the rho values have their IMAP values computed with 3 bytes.
+
+6.3.10 Item 10: Correspondence Points – Latitude / Longitude / Elevation
+       Standard Deviation & Correlation Coefficients
+A geo-registration algorithm uses the Correspondence Points – Latitude / Longitude / Elevation
+Standard Deviation & Correlation Coefficients MDARRAY item to define an extensible list of
+standard deviations & correlations coefficients for tie points represented in geographic space for
+two images. MISB ST 1303 defines the MDARRAY KLV Pack construct.
+The Value of Item 10 is a two-dimensional Array with dimensions of up to six (6) by the number
+of tie points (tp) defined in Item 5’s value, i.e., one sigma value for each value in Item 5’s array
+and optionally Item 8’s array, along with one rho value for each latitude/longitude pair in Item
+5’s array and rho values for the correlations between latitude/elevation and longitude/elevation.
+The parameters for the Multi-Dimensional Array are: MDARRAY(NoteA, 2, NoteB, NoteC,
+NoteD) where:
+   •   NoteA:
+       Array(0, tp) = Sigma value in meters for Item 5’s Array(0, tp), the latitude for tie point
+                      tp. Value is a floating point using IMAPB(0, 650, EBytes). Note: Although
+                      the latitude is in degrees, in this standard measure the sigma value in
+                      meters.
+       Array(1, tp) = Sigma value in meters for Item 5’s Array(1, tp), the longitude for tie point
+                      tp. Value is a floating point using IMAPB(0, 650, EBytes). Note: Although
+                      the longitude is in degrees, in this standard measure the sigma value in
+                      meters.
+       Array(2, tp) = Rho value for the latitude and longitude cross correlation for tie point tp.
+                      Value is a floating point using IMAPB(-1, 1, EBytes)
+       Array(3, tp) = Sigma value for Item 8’s Array(0, tp), the elevation for tie point tp. Value
+                      is a floating point using IMAPB(0, 1000, EBytes)
+       Array(4, tp) = Rho value for the latitude and elevation cross correlation for tie point tp.
+                      Value is a floating point using IMAPB(-1, 1, EBytes)
+
+
+02 March 2023                     Motion Imagery Standards Board                                     9
+                              ST 1601.2 Geo-Registration Local Set
+
+       Array(5, tp) = Rho value for the longitude and elevation cross correlation for tie point tp.
+                      Value is a floating point using IMAPB(-1, 1, EBytes)
+   tp = denotes a specific tie point
+   •   NoteB: This value is three (3) if providing only latitudes / longitudes and is six (6) if
+       providing latitudes / longitudes / elevations.
+   •   NoteC: This value is dependent upon the number of tie points produced between two
+       Images.
+   •   NoteD: Compute the EBytes value at runtime based on the given precision of the sigma and
+       rho values. The EBytes value is the maximum length across all IMAP’ed sigma and row
+       values. For example, if a sigma values requires 3 bytes and the rho requires only 2 bytes
+       then the rho values have their IMAP values computed with 3 bytes.
+
+7 Usage of ST 1607
+
+7.1 Metadata Substream Identifier (MSID)
+A Metadata Substream Identifier (MSID) is a unique identifier within an Amend LS. This allows
+for multiple instances of Amend LSs within a metadata stream in support of sub-streams of sub-
+streams and Report-on-change. See the Motion Imagery Handbook for an in-depth discussion of
+sub-stream construction and the utility of the MSID. MISB ST 0601 defines requirements for the
+use of the MSID.
+An instantiating metadata set defines a MSID metadata item and its requirements for its use.
+Every Amend LS implemented within that instantiating metadata set then includes that MSID as
+a metadata item.
+
+
+
+
+02 March 2023                     Motion Imagery Standards Board                                   10
+                              ST 1601.2 Geo-Registration Local Set
+
+
+Appendix A – Example: Geo-Registration incorporated into MISB ST
+             0601 – Informative
+In this example, a generic sensor model represented by 11 dynamic items from MISB ST 0601
+define the imaging ray. Figure 3 illustrates the concept of how to leverage ST 0601 Item 101:
+Amend Local Set.
+Item 101 reuses the ST 0601 Items 5, 90, 91, 13, 14, 75, 16, 17, 18, 19 & 20 with their values
+defined in the base ST 0601 LS. Item 101 also includes the MSID (Item 143) for unique
+identification of the Amend LS instance. The MSID together with the same ST 0601 11 items,
+with intended revised values, and with the addition of Item 102 (SDCC-FLP) reflect the results
+of a geo-registration process. Although the illustration only shows a sample of metadata items,
+the Amend Local Set Item 101 permits other ST 0601 items. A receiver is free to select items
+with their corresponding values from the base set or the “amended” substituted set.
+In this illustration, Item 98 Geo-Registration LS (indicated as GEOR LS) is the final element in
+Amend LS Item 101, which includes specific attributes of the geo-registration process. Using
+multiple Item 101 Amend LSs within the ST 0601 LS enables the inclusion of multiple results
+from different geo-registration algorithms.
+
+
+
+
+     Figure 3: Use of ST 0601 Item 101 - Amend LS embedding a Geo-Registration LS
+
+
+
+
+02 March 2023                    Motion Imagery Standards Board                                 11
+
