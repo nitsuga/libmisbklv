@@ -1,0 +1,1105 @@
+                                                                        MISB ST 1206.1
+ STANDARD
+
+ SAR Motion Imagery Metadata                                               22 June 2017
+
+
+1 Scope
+This standard defines the content and Local Set Key-Length-Value (KLV) representation of
+metadata necessary to exploit both sequential synthetic aperture radar (SAR) imagery and
+sequential SAR coherent change products as motion imagery. In addition, background
+information regarding typical SAR collections and terminology are provided for context.
+
+2 References
+
+[1] SMPTE RP 210v13:2012 Metadata Element Dictionary.
+[2] MISB ST 0807.19 MISB KLV Metadata Registry, Feb 2017.
+[3] MISB ST 0107.2 Bit and Byte Order for Metadata in Motion Imagery Files and Streams,
+     Feb 2014.
+[4] SMPTE ST 336:2007 Data Encoding Protocol Using Key-Length-Value.
+[5] NGA.SIG.0005_11.0.1.0 Spotlight Synthetic Apertue Radar (SAR) Sensor Model
+     Supporting Precise Geopositioning, Mar 2010.
+[6] MISB ST 0801.5 Photogrammetry Metadata Set for Digital Motion Imagery, Feb 2014.
+[7] W. G. Carrara, R. S. Goodman and R. M. Majewski, Spotlight Synthetic Aperture Radar
+     Signal Processing Algorithms, Norwood, MA: Artech House, Inc., 1995.
+[8] MISB ST 1303 Multi-Dimensional Array Pack, Feb 2014.
+[9] MISB ST 0603.4 MISP Time System and Timestamps, Feb 2016.
+[10] MISB ST 0903.4 Video Moving Target Indicator and Track Metadata, Oct 2014.
+[11] NATO STANAG 4607 Ed. 3 Ground Moving Target Indicator Format (GMTIF), Sep
+     2010.
+
+3 Acronyms
+ECEF           Earth-Centered Earth-Fixed
+GMTI           Ground Moving Target Indicator
+KLV            Key-Length-Value
+MDV            Minimum Detectable Velocity
+PRF            Pulse Repetition Frequency
+RCS            Radar Cross Section
+
+22 June 2017                    Motion Imagery Standards Board                             1
+                           ST 1206.1 SAR Motion Imagery Metadata
+
+SAR            Synthetic Aperture Radar
+SARMI          SAR Motion Imagery
+SRP            Scene Reference Point
+
+4 Revision History
+
+  Revision          Date                             Summary of Changes
+   1206.1       06/22/2017         Revised bibliography with new format for References
+                                   Revised all References numbering
+                                   Added definitions for table column designations
+                                   Revised Table 1 columns to reflect more descriptive
+                                    headings; revised entries accordingly
+                                   Deprecated requirement ST 1206-02 & incorporated text
+                                    into Section 6.1
+                                   Clarified timestamp nomenclature in Section 6.3.1
+                                   Added Section 8
+                                   Corrected citation reference in Section 6.2.16
+
+
+5 SAR as Motion Imagery Introduction
+SAR imagery / SAR coherent change products as motion imagery, herein referred to as SAR
+motion imagery (SARMI), is defined as a sequence of SAR imagery or SAR coherent change
+products that support the temporal exploitation of the data contain therein. Typically, the data
+displayed are observations of the same scene. This definition of motion imagery does not impose
+any limits or specification on the capture of the motion imagery data. For instance, the input to
+calculate SAR coherent change product data could be collected at intervals much longer than a
+second and be temporally disjointed but the resulting data is sequenced in a manner to highlight
+the temporal changes that occur in the data. The following sections discuss possible SARMI
+variations.
+
+5.1 SARMI Variations
+
+5.1.1 SAR Imagery as SARMI
+This CONOP involves the continuous capture of SAR phase histories using an arbitrary flight
+trajectory. SAR images are formed from overlapping sets of phase histories illustrated in Figure
+1. The sensor parameters, aperture overlap, flight geometry, and available hardware resources
+determine the frame rate of SAR images.
+
+
+
+
+22 June 2017                       Motion Imagery Standards Board                                  2
+                               ST 1206.1 SAR Motion Imagery Metadata
+
+
+
+
+                                                                                                 time
+            Frame #1        Frame #2
+                                                                 SAR motion imagery apertures
+
+
+
+
+    Figure 1: SAR imagery frames are generated from overlapping phase histories and
+               displayed as sequential frames creating SAR Motion Imagery.
+
+For persistent surveillance type collections, the scene center is typically fixed regardless of the
+sensor’s flight path. Latency for this CONOP is a function of the aperture size, which depends on
+factors such as the platform speed, geometry, wavelength, and cross-range resolution.
+
+5.1.1.1 SARMI with Ground Moving Target Indications
+The CONOP in 5.1.1 may be enhanced to include simultaneous Ground Moving Target Indicator
+(GMTI) detection and tracking of targets in GMTI subapertures formed from the same SAR
+phase histories illustrated in Figure 2. These detections and tracks may be displayed on the
+SARMI as overlays to increase the contextual information.
+
+
+
+                                                                                                time
+               Frame #1      Frame #2
+                                                                 SAR motion imagery apertures
+
+
+
+
+       Subap #1 Subap #2 Subap #3 Subap #4 Subap #5
+
+ Figure 2: SARMI with simultaneous GMTI generated from the same SAR phase history
+                                     data.
+
+5.1.2 SAR Coherent Change Product as SARMI
+A sequence of SAR coherent change products may be displayed as SARMI. A SAR coherent
+change product represents some type of change occurring between a frame generated at time t0
+and a subsequent frame generated at time t0+ but at a similar geometry. The frame at t0+ is
+registered to the frame at t0 prior to product generation.
+The time duration over which changes may occur is selectable and established by the time delta
+between frame t0 and frame t0+. This concept is depicted in Figure 3. Of note, successive
+coherent change product frames need not overlap temporally. For instance, the initial coherent
+
+
+22 June 2017                            Motion Imagery Standards Board                                  3
+                                 ST 1206.1 SAR Motion Imagery Metadata
+
+change product frame may represent changes over a one-day period while the subsequent change
+product frames displayed as SARMI may represent several years of change.
+
+                       Pass 1 phase histories
+
+
+                                                                                                   time
+
+
+                                                                   Pass 1 SAR motion imagery apertures
+
+                      Pass 1           Pass 1
+                    Frame #1         Frame #2
+
+
+                    SAR Change       SAR Change
+                      Product          Product
+                     Frame #1         Frame #2
+
+
+
+
+                     Pass N           Pass N                                                      time
+                    Frame #1         Frame #2
+                                                                   Pass N SAR motion imagery apertures
+
+
+
+
+                       Pass N phase histories
+
+  Figure 3: SAR coherent change product displayed as SARMI relies upon pairs of SAR
+              images captured at different times but at similar geometries.
+
+6 SARMI Metadata
+The intent of the SARMI metadata local set is to support the SARMI CONOPs described in 5.1.
+
+6.1 Conventions
+The SMPTE KLV representation of the SARMI individual metadata elements are defined in [1]
+and [2].
+The 16-byte Universal Label for SARMI Metadata Local Set is registered in MISB ST 0807 as:
+06.0E.2B.34.02.0B.01.01.0E.01.03.03.0D.00.00.00 (CRC 54900).
+
+
+                                                  Requirement(s)
+
+ST 1206-01 All KLV-encoded metadata shall be expressed in accordance with MISB ST 0107[3].
+ST 1206-03 Formatting of SARMI metadata shall be compliant with SMPTE 336[4] encoding
+               rules for Universal Labels and Local Sets.
+
+
+
+
+22 June 2017                             Motion Imagery Standards Board                                   4
+                                 ST 1206.1 SAR Motion Imagery Metadata
+
+
+6.1.1 Summary of SARMI Metadata Local Set Elements
+The SARMI Metadata Local Set is summarized in Table 1. The column designations are as
+follows:
+       Tag is the Local Set tag number for the element in the SARMI metadata set.
+       Element Name is the name of the element.
+       Key is the 16-byte Universal Label for the element.
+       Range & Units provides the range and unit of specification for the value.
+       Type indicates the data type of the element.
+
+                           Table 1: SARMI Metadata Local Set Elements
+
+  Tag            Element Name                          Key                Range & Units            Type
+   1    Grazing Angle                        06.0E.2B.34.01.01.01.01.     0 to 90 Degrees     IMAPB(0,90,2)
+                                             0E.01.01.03.3D.00.00.00
+                                             (CRC 30335)
+   2    Ground Plane Squint Angle            06.0E.2B.34.01.01.01.01.     +/- 90 Degrees      IMAPB(-90,90,2)
+                                             0E.01.01.03.3D.01.00.00
+                                             (CRC 16719)
+   3    Look Direction                       06.0E.2B.34.01.01.01.01.      Look Up Table           uint8
+                                             0E.01.01.03.3D.02.00.00
+                                             (CRC 6175)
+   4    Image Plane                          06.0E.2B.34.01.01.01.01.      Look Up Table           uint8
+                                             0E.01.01.03.3D.03.00.00
+                                             (CRC 12079)
+   5    Range Resolution                     06.0E.2B.34.01.01.01.01.   0 to 1000000 Meters   IMAPB(0,1e6,4)
+                                             0E.01.01.03.3D.04.00.00
+                                             (CRC 43711)
+   6    Cross-Range Resolution               06.0E.2B.34.01.01.01.01.   0 to 1000000 Meters   IMAPB(0,1e6,4)
+                                             0E.01.01.03.3D.05.00.00
+                                             (CRC 40335)
+   7    Range Image Plane Pixel Size         06.0E.2B.34.01.01.01.01.   0 to 1000000 Meters   IMAPB(0,1e6,4)
+                                             0E.01.01.03.3D.06.00.00
+                                             (CRC 50399)
+   8    Cross-Range Image Plane Pixel Size   06.0E.2B.34.01.01.01.01.   0 to 1000000 Meters   IMAPB(0,1e6,4)
+                                             0E.01.01.03.3D.07.00.00
+                                             (CRC 62447)
+   9    Image Rows                           06.0E.2B.34.01.01.01.01.    0 to 65535 Integer       uint16
+                                             0E.01.02.02.06.00.00.00
+                                             (CRC 08248)
+  10    Image Columns                        06.0E.2B.34.01.01.01.01.    0 to 65535 Integer       uint16
+                                             0E.01.02.02.07.00.00.00
+                                             (CRC 22156)
+  11    Range Direction Angle Relative to    06.0E.2B.34.01.01.01.01.    0 to 360 Degrees     IMAPB(0,360,2)
+        True North                           0E.01.01.03.3D.08.00.00
+                                             (CRC 57310)
+  12    True North Direction Relative to     06.0E.2B.34.01.01.01.01.    0 to 360 Degrees     IMAPB(0,360,2)
+        Top Image Edge                       0E.01.01.03.3D.09.00.00
+                                             (CRC 59630)
+
+
+
+22 June 2017                           Motion Imagery Standards Board                                      5
+                               ST 1206.1 SAR Motion Imagery Metadata
+
+  13   Range Layover Angle Relative to    06.0E.2B.34.01.01.01.01.    0 to 360 Degrees    IMAPB(0,360,2)
+       True North                         0E.01.01.03.3D.0A.00.00
+                                          (CRC 45502)
+  14   Ground Aperture Angular Extent     06.0E.2B.34.01.01.01.01.     0 to 90 Degrees     IMAPB(0,90,2)
+                                          0E.01.01.03.3D.0B.00.00
+                                          (CRC 34446)
+  15   Aperture Duration                  06.0E.2B.34.01.01.01.01.      Microseconds          uint32
+                                          0E.01.01.03.3D.0C.00.00
+                                          (CRC 798)
+  16   Ground Track Angle                 06.0E.2B.34.01.01.01.01.    0 to 360 Degrees    IMAPB(0,360,2)
+                                          0E.01.01.03.3D.0D.00.00
+                                          (CRC 13358)
+  17   Minimum Detectable Velocity        06.0E.2B.34.01.01.01.01.    0 to 100 Meters /   IMAPB(0,100,2)
+                                          0E.01.01.03.3D.0E.00.00          Second
+                                          (CRC 28030)
+  18   True Pulse Repetition Frequency    06.0E.2B.34.01.01.01.01.   0 to 1000000 Hertz   IMAPB(0,1e6,4)
+                                          0E.01.01.03.3D.0F.00.00
+                                          (CRC 23118)
+  19   Pulse Repetition Frequency Scale   06.0E.2B.34.01.01.01.01.      0 to 1 Integer     IMAPB(0,1,2)
+       Factor                             0E.01.01.03.3D.10.00.00
+                                          (CRC 13596)
+  20   Transmit RF Center Frequency       06.0E.2B.34.01.01.01.01.   0 to 1000000000000   IMAPB(0,1e12,4)
+                                          0E.01.01.03.3D.11.00.00            Hertz
+                                          (CRC 556)
+  21   Transmit RF Bandwidth              06.0E.2B.34.01.01.01.01.   0 to 100000000000    IMAPB(0,1e11,4)
+                                          0E.01.01.03.3D.12.00.00           Hertz
+                                          (CRC 23420)
+  22   Radar Cross Section Scale Factor   06.0E.2B.34.02.05.01.01.    m^2, m, 1, 1/m,      MDARRAY(...)
+       Polynomial                         0E.01.03.03.06.00.00.00          etc.
+                                          (CRC 39697)
+  23   Reference Frame Precision Time     06.0E.2B.34.01.01.01.01.      Microseconds          uint64
+       Stamp                              0E.01.01.03.3D.14.00.00
+                                          (CRC 59868)
+  24   Reference Frame Grazing Angle      06.0E.2B.34.01.01.01.01.     0 to 90 Degrees     IMAPB(0,90,2)
+                                          0E.01.01.03.3D.15.00.00
+                                          (CRC 57068)
+  25   Reference Frame Ground Plane       06.0E.2B.34.01.01.01.01.     +/- 90 Degrees     IMAPB(-90,90,2)
+       Squint Angle                       0E.01.01.03.3D.16.00.00
+                                          (CRC 34748)
+  26   Reference Frame Range Direction    06.0E.2B.34.01.01.01.01.    0 to 360 Degrees    IMAPB(0,360,2)
+       Angle Relative to True North       0E.01.01.03.3D.17.00.00
+                                          (CRC 45196)
+  27   Reference Frame Range Layover      06.0E.2B.34.01.01.01.01.    0 to 360 Degrees    IMAPB(0,360,2)
+       Angle Relative to True North       0E.01.01.03.3D.18.00.00
+                                          (CRC 40125)
+  28   Document Version                   06.0E.2B.34.01.01.01.01.     0 to 255 Integer        uint8
+                                          0E.01.02.05.05.00.00.00
+                                          (CRC 56368)
+
+
+
+
+22 June 2017                          Motion Imagery Standards Board                                   6
+                            ST 1206.1 SAR Motion Imagery Metadata
+
+
+6.2 Metadata Elements for SAR Imagery as SARMI
+
+6.2.1 Grazing Angle
+The grazing angle is needed to estimate the height of objects in the SAR imagery as SARMI
+based on the lengths of shadows. As depicted in Figure 4, the grazing angle is defined as the
+angle between the line-of-sight vector from the Scene Reference Point (SRP) to the sensor and
+the ground plane at the SRP. The SRP denotes the scene center for the SAR imagery frames.
+Technically, the grazing angle from the sensor to each pixel in a SAR image slightly differs.
+However, a good approximation is to assume the grazing angle to the SRP represents that of the
+entire image. The grazing angle is not the same as the sensor depression angle. For short slant
+ranges, the differences are negligible. However, for longer slant ranges, the difference can be
+pronounced. For the following derivations, assume the image coordinate system is WGS-84 and
+ground plane is the plane tangent to the ellipsoid at the SRP.
+Define the following:
+       Antenna Phase Center Position –                  𝑅𝑎 = (𝑋𝑆 , 𝑌𝑆 , 𝑍𝑆 )
+       SRP –                                            𝑅𝑆𝑅𝑃 = (𝑋𝑆𝑅𝑃 , 𝑌𝑆𝑅𝑃 , 𝑍𝑆𝑅𝑃 )
+       Line-of-Sight vector –                           𝑅𝐿𝑂𝑆 = 𝑅𝑎 − 𝑅𝑆𝑅𝑃 in the Earth-Centered,
+                                                        Earth-Fixed coordinate frame
+The transformation from Geodetic WGS-84 latitude and longitude to the ECEF coordinate frame
+is one-to-one. The Euclidean distance, |𝑅𝐿𝑂𝑆 |, between the sensor’s antenna phase center and
+SRP, is the slant range. Denote the ECEF pole vector as p defined as
+                                                     0
+                                              𝑝 = [0]
+                                                     1
+and the square of the second eccentricity of the reference ellipsoid as e2. Then the vector normal
+to the reference ellipsoid at the SRP is given in [5] by
+
+                            ⊥
+                           𝑅𝑆𝑅𝑃 = 𝑅𝑆𝑅𝑃 + (𝑝𝑝𝑇 )𝑅𝑆𝑅𝑃 𝑒 2                                 Equation 1
+
+and the corresponding unit vector is given by
+                                               ⊥
+                                              𝑅𝑆𝑅𝑃
+                                   𝑢𝑅𝑆𝑅𝑃
+                                     ⊥   =     ⊥ |
+                                                                                        Equation 2
+                                             |𝑅𝑆𝑅𝑃
+The grazing angle can thus be computed as
+                                              𝑍𝑅
+                                 𝜓 = sin−1 (        )                                   Equation 3
+                                            |𝑅𝐿𝑂𝑆 |
+Where | | denotes the l2 norm, 〈 〉 represents the inner product, and 𝑍𝑅 is proportional to the inner
+                                               ⊥
+product of the unit line-of-sight vector and 𝑅𝑆𝑅𝑃  as illustrated in Figure 4:
+
+
+
+
+22 June 2017                       Motion Imagery Standards Board                                    7
+                            ST 1206.1 SAR Motion Imagery Metadata
+
+                                   𝜋                  𝑅𝐿𝑂𝑆
+                 𝑍𝑅 = |𝑅𝐿𝑂𝑆 | 𝑐𝑜𝑠 ( − 𝜓) = |𝑅𝐿𝑂𝑆 | 〈        ,𝑢 ⊥ 〉                       Equation 4
+                                   2                 |𝑅𝐿𝑂𝑆 | 𝑅𝑆𝑅𝑃
+Thus, the grazing angle is given by
+                               𝑍𝑅                  𝑅𝐿𝑂𝑆
+                  𝜓 = 𝑠𝑖𝑛−1 (        ) = 𝑠𝑖𝑛−1 (〈        , 𝑢 ⊥ 〉)                        Equation 5
+                             |𝑅𝐿𝑂𝑆 |              |𝑅𝐿𝑂𝑆 | 𝑅𝑆𝑅𝑃
+With the grazing angle known, the height, h, of an object in a SAR frame may be computed by
+measuring the length, D, of its shadow in the direction of RF illumination:
+
+                                       ℎ = 𝐷 𝑡𝑎𝑛 𝜓                                       Equation 6
+
+Equation 6 assumes the shadow is projected on flat terrain. Significant terrain relief will likely
+skew the results.
+Because of quantization errors that arise from encoding geodetic positions, it is preferable to
+directly compute the grazing angle according to Equation 5 at the sensor. In the event the grazing
+angle is not directly computed at the sensor, it may be approximated by using the location of the
+sensor (latitude, longitude, and altitude above the ellipsoid) and the location of the SRP (latitude,
+longitude, and elevation above the ellipsoid).
+
+                     Ra            ψ
+                                            RLOS                ZR
+                                              ψ
+
+                                                     RSRP         tangent plane
+
+
+                                                         
+                                                        RSRP
+
+
+
+
+                                               earth
+
+                     Figure 4: Grazing angle for an elliptical Earth model.
+
+
+
+
+22 June 2017                       Motion Imagery Standards Board                                     8
+                              ST 1206.1 SAR Motion Imagery Metadata
+
+
+
+
+                                                               h
+
+                                                                             ψ
+                                                                        D
+
+      Figure 5: Estimation of height for a wall using shadow length and grazing angle.
+
+6.2.2 Ground Plane Squint Angle
+From a collection perspective the squint angle may be expressed as the Doppler cone angle
+between the ground track vector and the radar’s line-of-sight vector or as a ground squint angle,
+which is the corresponding angle projected onto the ground plane. Here, the ground plane is the
+geodetic plane orthogonal to the ellipsoid normal at the SRP, although it may also be defined as
+the geocentric plane. Most often, the squint angle is defined relative to the sensor velocity vector.
+However, it is technically defined as the ground-track angle to which the SAR imagery is
+formed. It can be interpreted as the average velocity vector along the synthetic aperture, or
+approximated from a single velocity measurement at some position in the aperture, typically the
+SRP, barring the availability of the ground-track angle. For the ground plane squint angle,
+forward of broadside is positive and aft of broadside is negative. Many image parameters, such
+as image orientation with respect to True North, rely on the ground plane squint angle so the
+computation is outlined below.
+Denote the unit vector to the tangential plane to the ellipsoid at the SRP as uR⊥SRP per Equation 2.
+It follows that the line-of-sight vector projected onto the tangential plane is
+                          𝑔
+                        𝑅𝐿𝑂𝑆 = 𝑅𝐿𝑂𝑆 − 〈𝑅𝐿𝑂𝑆 , 𝑢𝑅𝑆𝑅𝑃
+                                                ⊥ 〉𝑢 ⊥
+                                                    𝑅𝑆𝑅𝑃                                 Equation 7
+
+The velocity or ground-track vector projected onto the tangential plane is
+                               𝑔
+                              𝑉𝑎 = 𝑉𝑎 − 〈𝑉𝑎 , 𝑢𝑅𝑆𝑅𝑃
+                                                ⊥ 〉𝑢 ⊥
+                                                    𝑅𝑆𝑅𝑃                                 Equation 8
+
+The ground plane squint angle, 𝜙, is given by
+                                                    𝑔      𝑔
+                                       −1
+                                                  𝑅𝐿𝑂𝑆   𝑉𝑎
+                       𝜙 = 90 − |𝑐𝑜𝑠        (〈−     𝑔    , 𝑔 〉)|                         Equation 9
+                                                  |𝑅𝐿𝑂𝑆 | |𝑉𝑎 |
+
+
+
+
+22 June 2017                        Motion Imagery Standards Board                                    9
+                                ST 1206.1 SAR Motion Imagery Metadata
+
+The ground plane squint angle values fall in the interval [-90°, 90°]. The look direction specifies
+the direction the imagery is collected with respect to the velocity vector illustrated in Figure 6. If
+the ground plane squint angle is not computed at the sensor, it should be computed using the
+ground track angle.
+                     Squint Angle and Look Direction
+
+                                              89⁰ squint       89⁰ squint
+                        Left Look                                               Right Look
+                        Direction                                                Direction
+                                                       Ground Track
+
+
+
+
+                      Cross Track            f
+
+                       0⁰ squint                                                 0⁰ squint
+
+
+
+
+                                           -89⁰ squint            -89⁰ squint
+
+
+
+                    Figure 6: Illustration of squint angle and look direction.
+
+6.2.3 Look Direction
+Per Figure 6, the look direction indicates the side of the imaging platform from which the
+imagery is collected. As such, the sensor look direction with respect to the velocity vector is
+defined as 0 for Left Look Direction and 1 for Right Look Direction.
+                                                  Requirement
+ST 1206-04      The Look Direction metadata element and the Ground Plane Squint Angle metadata
+                element shall be present at all times.
+
+
+6.2.4 Image Plane
+SAR images are typically formed either on the slant plane – the plane containing the ground-
+track vector and the line-of-sight vector to the SRP, or onto the ground plane – the plane
+tangential to the ellipsoid at the SRP for the WGS-84 image coordinate system as illustrated by
+Figure 7. The selection of the imaging plane may impact the accuracy of distance measurements.
+SAR images formed in the slant plane experience a foreshortening in the range dimension,
+whereby objects projected onto the slant plane will appear shorter than when projected onto the
+
+
+
+22 June 2017                          Motion Imagery Standards Board                                10
+                             ST 1206.1 SAR Motion Imagery Metadata
+
+ground plane. As such, the plane in which the SARMI data is formed is defined as 0 for Slant
+Plane, 1 for Ground Plane, and 2 for Other (self-defined plane).
+Foreshortening is proportional to the inverse cosine of the grazing angle; therefore, steeper
+grazing angles increase range foreshortening. Thus, if a SARMI sensor traverses a circular orbit
+about a square building situated on flat terrain with sides of length N, and provides SAR frames
+in the slant plane, the building’s dimensions will vary according to the geometry of the sensor
+with respect to the scene. For instance, for a grazing angle of 60°, the range pixel size in the
+ground plane is twice the range pixel size in the slant plane. Hence, when the direction of the
+line-of-sight vector is orthogonal to the front of the building, the width will appear to be N wide
+but the depth will appear to be N/2.
+Foreshortening in the range dimension leads to inconsistent length measurements and is highly
+undesirable for geospatial analysis. Therefore, it is recommended for SARMI applications, that
+frames be projected onto the ground plane during image formation. For high-relief terrain where
+geo-location becomes crucial, it is desirable to orthorectify the slant plane SAR frames to a
+Digital Elevation Model (DEMs), if available.
+
+
+
+
+                    slant plane
+                      RSRP                                                    ρr
+                       ψ                  ground plane
+                                                                        ψ          SRP
+                                                                                   ground plane
+                                                                   ρr /cosψ
+
+
+ Figure 7: Range resolution and pixel size dimensions elongate by the inverse of the cosine
+                                   of the grazing angle.
+
+6.2.5 Range and Cross-Range Resolution
+Range resolution is a measurement of spatial resolution, where two targets in close proximity in
+range may be resolved from one another. Theoretical resolution is important as it is an indicator
+of the maximum image quality. Most literature sources define the range resolution in the slant
+plane. Range resolution in the slant plane is defined by the RF bandwidth of the waveform, B,
+and is independent of sensor range:
+                                             𝐾𝑟 𝑐
+                                      𝜌𝑟 =                                               Equation 10
+                                             2𝐵
+where c is the speed of light and Kr is the main lobe broadening factor. The range resolution in
+the ground plane may be computed by dividing Equation 10 by the cosine of the grazing angle or
+the range resolution may be directly specified in the ground plane.
+
+
+22 June 2017                       Motion Imagery Standards Board                                 11
+                            ST 1206.1 SAR Motion Imagery Metadata
+
+Cross-range resolution is a measurement of spatial resolution where two targets in close
+proximity in cross-range may be resolved from one another. The cross-range resolution is range
+dependent. For slant ranges, 𝑅𝑆 , much larger than the aperture length, L, it is approximated by
+                                     𝐾𝑎 𝑅𝑆 𝜆𝐶    𝐾𝑎 𝜆𝐶
+                             𝜌𝑎 ≈              ≈                                       Equation 11
+                                    2𝐿 𝑠𝑖𝑛 𝜙𝑑𝑐   2∆𝜃
+where 𝐾𝑎 is the main lobe broadening factor in the cross-range dimension, 𝜆𝐶 is the wavelength
+at the center RF frequency, 𝜙𝑑𝑐 is the Doppler cone squint angle, and Δ𝜃 is the angle swept by
+the synthetic aperture in the slant plane. The cross-range resolution is not affected by the choice
+of imaging plane. Although Equation 10 and Equation 11 define resolution in the down range
+and cross-range directions, these directions may not correspond to rows and columns in a
+SARMI frame. For example, the SAR frames may undergo rotation to fix their frame of
+reference, or the frames could be chipped at arbitrary rotation angles.
+Both range and cross-range resolution measurements include amplitude weighting. Also, even
+though both measurements allow 0 as a valid value, it should not be used as it is meaningless in
+practical applications.
+
+6.2.6 Range and Cross-Range Image Plane Pixel Size
+Knowledge of the pixel dimensions and the number of pixels traversed enables the measurement
+of the Euclidean distance between any two arbitrary points in a SAR image. Pixel dimensions are
+specified in the range and cross-range directions of an image plane. The pixel size is a relative
+quantity that reflects the amount of oversampling the image undergoes during image formation.
+As in the case of range resolution, the range image plane pixel size in the slant plane is shorter
+than the range image plane pixel size in the ground plane by a factor given by the inverse of the
+cosine of the grazing angle. The cross-range image plane pixel size reflects the size of a pixel in
+the SAR image in the cross-range dimension.
+The ratio of range / cross-range image plane pixel size to range / cross-range resolution sans
+amplitude weights is the oversampling ratio. Also, even though both measurements allow 0 as a
+valid value, it should not be used as it is meaningless in practical applications.
+
+6.2.7 Image Rows and Columns
+For SARMI, the number of image rows and columns combined with range and cross-range pixel
+sizes give the swath size of the image patch. Pixels are assumed to appear in row-major order.
+Image rows correspond to the height of the image and image columns correspond to the number
+of pixels in a row (see MISB ST 0801 [6]). Also, even though both measurements allow 0 as a
+valid value, it should not be used as it is meaningless in practical applications.
+
+6.2.8 Range Direction Angle Relative to True North
+When estimating the height of objects based on the lengths of their shadows, it is particularly
+important to measure the shadow in the direction of the sensor line-of-sight vector, which does
+not necessarily align with any of the image axes. Inferring the shadow direction by merely
+examining shadows in an image may be misleading, as complicated structures can create unusual
+shadows. Note that for typical SARMI applications, whereby the SAR frames are rotating due to
+
+22 June 2017                        Motion Imagery Standards Board                                12
+                            ST 1206.1 SAR Motion Imagery Metadata
+
+sensor motion, the shadow direction is usually fixed. On the other hand, if image post-processing
+were to fix the frame of orientation in the SARMI data for applications such as chipping, or
+extracting an arbitrarily oriented chip from a larger frame because of bandwidth constraints, the
+shadow angle would change from frame-to-frame and could rotate in a complete circle.
+The key to determining the shadow direction lies in knowing the down range direction as the
+image may undergo a rotation during image formation or feature extraction. For SARMI, define
+𝛾 as the angle of the down range direction with respect to True North as
+
+                                   𝛾 = 𝐺𝑇𝐴 + 𝜙                                        Equation 12
+
+for both left/right-looking cases, where GTA is the desired ground track angle or path of the radar
+with respect to True North as defined at the SRP and 𝜙 is the ground squint. This is illustrated in
+Figure 8. The ground track and ground squint angles are relative to True North at the SRP, which
+may differ significantly from True North at the sensor while operating near the Earth’s poles.
+The GTA also differs from the sensor heading, as the heading of airborne sensors may be
+affected by platform crabbing.
+As Equation 12 only depends on telemetry, to define the down range direction with respect to the
+image pixels, the direction of True North with respect to the image as described in 6.2.9 is also
+required.
+
+
+
+
+22 June 2017                      Motion Imagery Standards Board                                13
+                                    ST 1206.1 SAR Motion Imagery Metadata
+
+                  Range Direction
+
+                                      True North
+                                      at Sensor
+
+
+
+                                                               Range
+                                                              direction
+
+
+
+
+                  West at                                           East at
+                  Sensor                                            Sensor
+
+
+                                                                              True North at
+                                                                              Scene Center
+                Ground Track Angle
+                 (GTA) Relative to
+                   Scene Center                                     Squint
+                                                                    Angle
+
+                                       South at
+                                       Sensor
+
+
+
+
+                                                   West at Scene                                     East at Scene
+                                                      Center                                            Center
+
+
+
+
+                                                                                          Scene Center
+
+
+
+                                                                              South at Scene
+                                                                                 Centerr
+
+
+
+
+Figure 8: The down range direction relative to True North depends on the sensor’s Ground
+            Track Angle and Ground Plane Squint Angle relative to the SRP.
+
+6.2.9 True North Direction Relative to Top Image Edge
+The True North direction relative to top image edge angle may be computed by knowing the
+down range direction relative to True North based on sensor telemetry and the True North
+direction with respect to pixels in the image. True North direction with respect to pixels in the
+image is defined relative to the top edge of the image as measured in a counter-clockwise fashion
+assuming the origin (0,0) is the top-left corner of the image as depicted in Figure 9. Hence,
+regardless of the image orientation, the range direction with respect to True North may be
+computed from the ground track and ground squint angles. It is important that these quantities be
+defined at the SRP rather than at the sensor location as the difference between True North at the
+SRP and sensor location increases closer to the poles. The angle between True North and the
+image itself will always be the same value if the SAR motion imagery orientation is fixed or will
+vary from frame-to-frame if the orientation varies from frame-to-frame.
+
+
+
+
+22 June 2017                              Motion Imagery Standards Board                                             14
+                               ST 1206.1 SAR Motion Imagery Metadata
+
+
+                               True North Direction Relative to Image
+
+
+                              True North relative to
+                                 top image row
+                                                                    Top edge of image
+
+
+
+                                                          Origin (0,0)         N
+
+
+                                   True
+                                   North
+
+
+                                                        SAR image
+
+
+
+
+         Figure 9: Example of the True North direction relative to the top image edge.
+
+With the down range direction relative to True North at the SRP and direction of North relative
+to pixels in an image defined, the down range direction in an image may be computed with
+respect to its pixels through the relation as the direction of True North relative to the top image
+edge minus the range direction relative to True North. This is shown pictorially in Figure 10.
+
+                        Down Range Direction Relative to Image
+
+                                                 Down range direction
+                                                   relative to image
+
+
+                        True North direction
+                         relative to image
+                                                                          Top edge of image
+
+                      range direction relative
+                          to True North
+                                                                Origin (0,0)       N
+
+
+                                           True
+                                           North
+
+
+                                                              SAR image
+
+
+
+
+Figure 10: Down range direction in an image is determined by the direction of True North
+        relative to the image and the range direction with respect to True North.
+
+6.2.10         Range Layover Angle Relative to True North
+The range layover relative to True North is in the direction perpendicular to the sensor ground
+track angle at the aperture center as depicted in Figure 11. Hence, for a left-looking sensor, the
+layover angle is the ground track angle plus ninety degrees. Conversely, for a right-looking
+sensor, the range layover angle is the ground track angle minus ninety degrees.
+
+
+22 June 2017                            Motion Imagery Standards Board                               15
+                                ST 1206.1 SAR Motion Imagery Metadata
+
+
+                 Range Layover Direction
+
+
+
+
+                                                                Line-of-Sight
+
+
+
+
+                                             Ground Track
+                                                                                          Cross Track
+                                                                         y         f
+                                           Range Layover
+                                             Direction                          Scene Extent
+
+
+
+
+                                                            Tangent Plane at
+                                                             Scene Center
+
+
+
+
+                         Figure 11: Illustration of range layover direction.
+
+6.2.11         Ground Aperture Angular Extent
+The aperture angular extent, Δ𝜃, is the angle swept in cross-range as the sensor traverses the
+synthetic aperture used to generate a single SAR image. It may be defined in the slant plane, in
+which case it is the angle between the line-of-sight vector at the first pulse and the line-of-sight
+vector at the last pulse forming the aperture. The aperture angular extent may also be defined in
+the ground plane, Δ𝜃𝑔 , giving a sense of the physical geometry and angular distance flown to
+cover a single SAR image as depicted in Figure 12. Given the cross-range resolution, 𝜌𝑎 , the
+angular extent in the ground plane may be approximated from the angular extent in the slant
+plane obtained from the cross-range resolution in Equation 11 and projected onto the ground
+                                                       𝐾𝑎 𝜆𝐶
+                                       Δ𝜃𝑔 ≈                                                            Equation 13
+                                                     2𝜌𝑎 𝑐𝑜𝑠 𝜓
+
+
+
+
+22 June 2017                               Motion Imagery Standards Board                                        16
+                                  ST 1206.1 SAR Motion Imagery Metadata
+
+               Ground Aperture Angular Extent
+
+
+
+
+                                                                              Pulse 1
+
+
+                                   Pulse N
+                                                     ∆ϴg = Aperture Angular
+                                                      Extent (Ground Plane)
+
+
+
+
+                                                              Scene Center
+
+
+                                                          North
+
+
+
+
+                                                                    Earth
+
+
+
+
+             Figure 12: Aperture angular extent in the slant and ground planes.
+
+6.2.12          Aperture Duration
+The synthetic aperture duration is the length of the coherent processing period or the time
+interval the radar beam illuminates the scene as shown in Figure 12. This time is a function of
+both flight geometry and RF carrier frequency. The aperture duration is the dominant contributor
+to latency due to physically flying the aperture. It, however, accounts for neither the SAR image
+formation time, which is small for real-time SARMI, nor the data transmission time from the
+sensor to the end-user, which may be large when utilizing BLOS data links. The aperture
+duration may be computed from the slant range, swept aperture angle, sensor speed, and Doppler
+cone angle by
+                                                       |𝑅𝑆 |Δ𝜃
+                                             𝑇𝑎 =                                       Equation 14
+                                                    |𝑉𝑠 | 𝑠𝑖𝑛 𝜙𝑑𝑐
+
+
+6.2.13          Ground Track Angle
+The ground track angle is the heading over ground the sensor travels as illustrated in Figure 13. It
+is important to note that the ground track angle is assumed to be with respect to the SRP rather
+than the sensor location. While this differentiation may seem insignificant, the difference
+
+
+22 June 2017                                 Motion Imagery Standards Board                      17
+                                ST 1206.1 SAR Motion Imagery Metadata
+
+between the coordinate system at the SRP and the platform becomes pronounced near the poles.
+The ground track angle may either be the desired, ideal ground track angle or the actual ground
+track angle, depending on the sensor.
+     Ground Track Angle
+
+
+
+
+                                                      True North                      True North
+                                                       at Scene                        at Scene
+
+
+                                                      Ground Track Angle
+
+
+
+
+                                                                   y                               East at
+                                                                                                   Scene
+                                                                       Scene Center
+
+
+
+
+                   Figure 13: The ground track angle is relative to the scene center.
+
+6.2.14              Minimum Detectable Velocity
+SARMI is essentially a form of Ground Moving Target Indicators (GMTI) displayed on full-
+resolution Endo-clutter SAR frames rather than the classic ‘blips’ on a range-Doppler image. The
+GMTI radial velocity is the projection of the mover’s velocity vector upon the radar’s line-of-
+sight vector to the target. Hence, the radial velocity is not only a function of target velocity, but
+also scene geometry. The Minimum Detectable Velocity (MDV) is defined as the radial velocity
+when a target located at the antenna beam’s cross-range center line transcends from the Endo-
+clutter (visible SAR image) boundary into Exo-clutter (not visible) as illustrated in Figure 14.
+Technically, the MDV could change within a SAR image. However, for simplicity, assume the
+MDV is constant over the SAR coherent processing interval. Estimation of the MDV using
+aforementioned SARMI metadata requires additional a priori knowledge of sensor parameters.
+Hence, it is desirable to specify the MDV explicitly.
+
+
+
+
+22 June 2017                          Motion Imagery Standards Board                                         18
+                                    ST 1206.1 SAR Motion Imagery Metadata
+
+
+
+
+                    Source: A.W. Doerry, “Performance Limits for Exo-Clutter Ground Moving Target Indicator (GMTI) Radar,” Sandia
+                    National Laboratories Report, Albuquerque, NM, SAND2010-5844, Unlimited Release, pp.54.
+
+
+
+ Figure 14: The Minimum Detectable Velocity is a function of RF parameters and target /
+                                 sensor geometry.
+
+The MDV is asymmetric about broadside and may be computed from sensor telemetry and basic
+RF parameters. Let 𝜓 be the grazing angle as defined in Equation 5, 𝜙𝑛 be the ground plane
+squint angle relative to the nose of the aircraft, 𝜙𝜀 be the magnitude of the antenna beam
+maximum pointing error, 𝜃𝑏𝑤𝑎𝑧 be the -3dB antenna beam width, and 𝐾𝑒𝑥𝑜 be the ratio of the
+Endo/Exo-clutter boundary distance from the beam center to half the nominal cross-range beam
+width. Define
+                                                                      𝜃𝑏𝑤𝑎𝑧
+                        𝜑𝑓𝑜𝑟𝑒 ≈ 𝑚𝑎𝑥 (|𝜙𝑛 | − 𝐾𝑒𝑥𝑜                            − 𝜙𝜀 , 0)                                              Equation 15
+                                                                     2 𝑐𝑜𝑠 𝜓
+and
+                                                                     𝜃𝑏𝑤𝑎𝑧
+                         𝜑𝑎𝑓𝑡 ≈ 𝑚𝑖𝑛 (|𝜙𝑛 | + 𝐾𝑒𝑥𝑜                           + 𝜙𝜀 , 𝜋)                                               Equation 16
+                                                                    2 𝑐𝑜𝑠 𝜓
+MDV may then be simplified as the maximum of the MDV forward of broadside and the MDV
+aft of broadside [7]
+
+      𝑀𝐷𝑉 ≈ 𝑚𝑎𝑥 (|𝑣𝑠 cos 𝜓 (cos 𝜑𝑓𝑜𝑟𝑒 − cos|𝜙𝑛 |)|, |𝑣𝑠 | cos 𝜓 (cos 𝜑𝑎𝑓𝑡 − cos|𝜙𝑛 |))                                              Equation 17
+
+where 𝑣𝑠 is the sensor velocity.
+
+
+
+
+22 June 2017                                   Motion Imagery Standards Board                                                                19
+                            ST 1206.1 SAR Motion Imagery Metadata
+
+
+6.2.15         True Pulse Repetition Frequency
+The pulse repetition frequency (PRF) is defined as the time interval between successively
+transmitted pulses. Each pulse corresponds to a unique sensor along-track position over the
+synthetic aperture. For SARMI, assume the PRF is fixed during the collection phase for a single
+SAR image. Note that the effective PRF of as a result frame formation may be significantly less
+than the true system PRF.
+
+6.2.16         Pulse Repetition Frequency Scale Factor
+The PRF scale factor is used to indicate when the effective PRF of a SAR image differs from that
+of the true system PRF described in 6.2.15. The effective PRF is useful for determining the
+location of ambiguous returns in range and/or cross-range that may appear in SARMI data. The
+effective PRF is defined as
+
+                    𝐸𝑓𝑓𝑒𝑐𝑖𝑡𝑣𝑒 𝑃𝑅𝐹 = 𝑃𝑅𝐹 ∗ 𝑃𝑅𝐹 𝑆𝑐𝑎𝑙𝑒 𝐹𝑎𝑐𝑡𝑜𝑟                            Equation 18
+
+
+
+6.2.17         Transmit RF Center Frequency
+The transmit RF center frequency is the center frequency of the RF band when linear FM
+waveforms are employed. For most chirped waveform SARMI systems, the set of transmitted
+frequencies is fixed for every pulse. For systems that adjust the transmitted frequency band
+during the synthetic aperture, the RF center frequency is the frequency at the center of the band
+defined by the minimum overall RF starting frequency and the maximum overall RF ending
+frequency during the synthetic aperture.
+
+6.2.18         Transmit RF Bandwidth
+The RF bandwidth dictates the range resolution in the slant plane independent of aperture size.
+The transmit RF bandwidth may be defined by a single, fixed waveform or a sequence of
+waveforms, such as a step chirp waveform. The transmit RF bandwidth is defined as the
+difference between the maximum and minimum transmit frequencies for a single or sequence of
+waveforms, if applicable.
+
+6.2.19         Radar Cross Section Scale Factor Polynomial
+To determine the Radar Cross Section (RCS) for a pixel in a SARMI frame, the RCS scale factor
+is defined as a quantity that relates pixel power for an ideal point scatterer to the RCS in square
+meters. This relationship is expressed as a bivariate polynomial that is a function of the image
+pixel coordinates as follows
+                                        𝑀   𝑁
+
+           𝑅𝐶𝑆𝑆𝐹𝑃𝑜𝑙𝑦(𝑥𝑟𝑜𝑤, 𝑦𝑐𝑜𝑙) = ∑ ∑ 𝑐𝑅𝐶𝑆(𝑚, 𝑛) ∗ 𝑥𝑟𝑜𝑤 𝑚 𝑦𝑐𝑜𝑙 𝑛                     Equation 19
+                                      𝑚=0 𝑛=0
+
+where 𝑐𝑅𝐶𝑆(𝑚, 𝑛) denotes the bivariate polynomial coefficients where 𝑚 is the row index and 𝑛
+is the column index of the two-dimensional polynomial. The bivariate polynomial provides a
+
+
+22 June 2017                      Motion Imagery Standards Board                                20
+                            ST 1206.1 SAR Motion Imagery Metadata
+
+maximum of (𝑀 + 1) ∗ (𝑁 + 1) coefficients defined by the radiometric polynomial. The
+resulting pixel RCS is defined as the product of the RCS scale factor at the pixel with the pixel
+power:
+
+           𝑅𝐶𝑆𝑡𝑎𝑟𝑔𝑒𝑡 (𝑚2 ) = 𝑅𝐶𝑆𝑆𝐹𝑃𝑜𝑙𝑦(𝑥𝑟𝑜𝑤, 𝑦𝑐𝑜𝑙) ∗ 𝑃𝑝𝑒𝑎𝑘 (𝑥𝑟𝑜𝑤, 𝑦𝑐𝑜𝑙)               Equation 20
+
+The two-dimensional array containing the polynomial coefficients is formatted in KLV using
+MISB ST 1303[8]. The MISB ST 1303 MDARRAY parameters for the RCS scale factor
+polynomial coefficients are:
+MDARRY(Radar Cross Section Scale Factor Polynomial Coefficients
+(06.0E.2B.34.01.01.01.01.0E.01.01.03.3D.13.00.00), 2, 𝑀 + 1, 𝑁 + 1, IMAPB, 0, 1e6)
+
+6.3 Metadata for SAR Coherent Change Products as SARMI
+
+6.3.1 Reference Frame Precision Time Stamp
+SAR coherent change product is formed from two complex SAR images collected at different
+periods of time. The process of forming a SAR coherent change product involves registering a
+complex SAR image to a reference complex SAR image collected at nearly the same geometry.
+Typically, the reference SAR image is collected earlier in time, but this need not be the case.
+Without loss of generality, assume the reference SAR image is collected at an earlier point in
+time as compared to the current SAR image.
+In the optimal case where both SAR images are collected at the exact same geometry, coherence
+naturally degrades over time due to environmental effects such as wind or rain. Therefore, the
+elapsed time between the reference SAR image and the current SAR image is of particular
+interest to analysts. The reference frame time stamp provides the information necessary for
+analysts to calculate the time delta between SAR images utilized to create the SAR coherent
+change product.
+The Reference Frame Precision Time Stamp is expressed as a Precision Time Stamp defined in
+MISB ST 0603 [9]. The Reference Frame Precision Time Stamp is a critical metadata
+component for all SAR coherent change products as SARMI.
+
+6.3.2 Reference Frame Grazing Angle
+The reference frame grazing angle is defined as the angle between the line-of-sight vector from
+the SRP to the sensor and the ground plane at the SRP for the collected reference frame. The
+complement for the current SAR image used in the creation of the SAR coherent change
+products is defined in 6.2.1.
+
+6.3.3 Reference Frame Ground Plane Squint Angle
+The reference frame squint angle may be expressed as the Doppler cone angle between the
+ground track vector and the radar’s line-of-sight vector or as a ground squint angle, which is the
+corresponding angle projected onto the ground plane. Here, the ground plane is the geodetic
+plane orthogonal to the ellipsoid normal at the SRP of the reference plane although it may also
+
+
+22 June 2017                       Motion Imagery Standards Board                                   21
+                            ST 1206.1 SAR Motion Imagery Metadata
+
+be defined as the geocentric plane. The compliment for the current SAR image used in the
+creation of the SAR coherent change products is defined in 6.2.2.
+
+6.3.4 Reference Frame Range Direction Angle Relative to True North
+The reference frame range direction angle relative to True North is the down range direction
+angle of the reference SAR image used in the creation of the SAR coherent change products. The
+compliment for the current SAR image used in the creation of the SAR coherent change products
+is defined in 6.2.8.
+
+6.3.5 Reference Frame Range Layover Angle Relative to True North
+The reference frame range layover angle relative to True North is the direction angle
+perpendicular to the sensor ground track angle at the aperture center of the reference SAR image
+used in the creation of the SAR coherent products. The compliment for the current SAR image
+used in the creation of the SAR coherent change products is defined in 6.2.10.
+
+6.4 Metadata for SARMI Local Set
+
+6.4.1 Document Version
+The document version identifies the version of MISB ST 1206 used in the implementation.
+                                            Requirement
+ST 1206-05     The SARMI Document Version shall be included in all SAR Motion Imagery Metadata
+               Local Set instantiations.
+
+
+
+7 Standards Support for SARMI Attributes
+
+7.1 Feature Exploitation
+The previous sections elaborate on basic metadata necessary for fundamental geospatial
+exploitation of SARMI data. There are more advanced geospatial exploitation applications that
+may be applied to SARMI data. SARMI may be exploited to exhibit temporal changes in
+amplitude that may indicate activity. Furthermore, coherent change products as SARMI data my
+exhibit tracklets that temporally create tracks, such as the entrance of a vehicle into the scene.
+The standards supporting these features already exist within the MISB domain. For signatures
+and tracks in SARMI, MISB ST 0903 [10] on Video Moving Target Indictors supports two-
+dimensional target chips and signature masks, as well as track attributes including the start and
+end times, location, velocity, and speed.
+
+7.2 Simultaneous SARMI and GMTI
+Some SARMI sensors have the capability to operate simultaneously in SAR/GMTI modes. This
+refers to a SAR sensor that has a constant PRF, whereby the same pulses transmitted and
+
+22 June 2017                       Motion Imagery Standards Board                                   22
+                            ST 1206.1 SAR Motion Imagery Metadata
+
+received over the synthetic aperture are used to both process a SAR imagery frame and detect
+moving targets. Data collected for the SAR imagery may be partitioned into sub-apertures to
+meet the coherent processing interval requirements of the MTI modes. This does not refer to a
+system whereby SAR and GMTI pulses are interleaved, as the de-interleaved GMTI pulses may
+utilize different waveforms or waveform parameters than those used to create the SAR imagery.
+Moving target detection is performed on the sequence of range-Doppler images processed from
+pulses along portions of the synthetic array. Each GMTI detection may be characterized by
+range, range-rate, cross-range angle (for multi-channel radars), RCS, and possibly other
+attributes of it response. These properties are typically the input state variables to a tracking
+algorithm, which provides the positions and the velocities of targets over multiple coherent
+processing intervals. The algorithm may also exploit features in target signatures for tracking
+high valued targets in heavily contested environments.
+MISB ST 0903 handily supports this SAR/GMTI construct, as it permits the definition of sub-
+aperture start and end times for each target over a SARMI aperture. The modifications necessary
+to MISB ST 0903 include radar truncation packs that convey location measurements to each
+target within a MTI sub-aperture as well as a subset of the radar target metadata from Table 2-4.1
+in NATO STANAG 4607 [11] such as range-rate and radar cross section to enable feature-aided
+tracking on the ground. The proposed metadata to be passed via these radar truncation pack
+structures are used in conjunction with the SARMI level parameters discussed within this
+Standard.
+
+8 Deprecated Requirements
+                                           Requirement
+
+ST 1206-02 The SARMI Metadata Local Set 16-byte Universal Label Key shall be
+(Deprecated) 06.0E.2B.34.02.0B.01.01.0E.01.03.03.0D.00.00.00 (CRC 54900). [Defined in MISB ST
+               0807 so requirement is not necessary]
+
+
+
+
+22 June 2017                      Motion Imagery Standards Board                                23
+
