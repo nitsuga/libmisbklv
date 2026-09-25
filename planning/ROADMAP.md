@@ -67,14 +67,15 @@ Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 `decision_status: proposed`) · `DECIDED` / `DEFERRED` (has an ADR — see the
 register).
 
-**No open forks remain.** See the decided register
-([`../context/decisions/index.md`](../context/decisions/index.md)) for the
-resolved fork → ADR mapping.
+- Fork 36 — ST 0102 Security Metadata LS as a typed nested registry: `PROPOSED`,
+  [ADR 0040](../context/decisions/0040-st0102-nested-registry.md).
+
+See the decided register
+([`../context/decisions/index.md`](../context/decisions/index.md)) for
+already-resolved forks.
 
 **Candidate future forks** (not yet opened), mostly downstream of
 registry/data breadth:
-- ST 0102 Security LS as a typed nested registry (seen as tag 48 in `falls`;
-  currently opaque passthrough).
 - ST 1601 Geo-Registration LS and ST 1602 Composite Imaging LS as typed nested
   registries (currently opaque passthrough, same shape as ST 0102 above). See
   [#95](https://github.com/nitsuga/libmisbklv/issues/95).

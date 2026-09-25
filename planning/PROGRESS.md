@@ -8,7 +8,9 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-No active work. #50 (benchmark) is parked.
+Fork 36 ([ADR 0040](../context/decisions/0040-st0102-nested-registry.md), ST
+0102 as a typed nested registry) is proposed, awaiting review/acceptance.
+Otherwise no active work; #50 (benchmark) is parked.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
@@ -47,5 +49,6 @@ No active work. #50 (benchmark) is parked.
   external corpus was all 0601 and had no tag 74).
 - ST 0102 Security LS (tag 48) is registered as named opaque `bytes`, not a
   typed nested registry — as are the other embedded Local Sets and the
-  DLP/FLP/VLP packs. Typing any of them is a candidate fork in
-  [ROADMAP](./ROADMAP.md).
+  DLP/FLP/VLP packs. Typing ST 0102 is fork 36
+  ([ADR 0040](../context/decisions/0040-st0102-nested-registry.md), proposed);
+  the rest remain candidate forks in [ROADMAP](./ROADMAP.md).
