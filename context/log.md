@@ -1,5 +1,15 @@
 # Knowledge Bundle Log
 
+## 2026-09-25
+
+* **References ingest** (issue #95): deposited `ST0102.12`, `ST1206.1`,
+  `ST1601.2`, `ST1602.2` (PDF + `pdftotext -layout` extract each) — the four
+  standards named as candidate forks in the UAS-platform coverage survey.
+  Author: claude/sonnet-5.
+* **Fork 36 accepted** (issue #95,
+  [`0040`](./decisions/0040-st0102-nested-registry.md)): ST 0102 Security
+  Metadata LS as a typed nested registry. Author: claude/sonnet-5.
+
 ## 2026-09-21
 
 * **PROGRESS refresh**: `planning/PROGRESS.md` "Now" no longer calls #81

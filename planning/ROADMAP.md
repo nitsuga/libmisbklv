@@ -68,13 +68,11 @@ Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 register).
 
 **No open forks remain.** See the decided register
-([`../context/decisions/index.md`](../context/decisions/index.md)) for the
-resolved fork → ADR mapping.
+([`../context/decisions/index.md`](../context/decisions/index.md)) for
+already-resolved forks.
 
 **Candidate future forks** (not yet opened), mostly downstream of
 registry/data breadth:
-- ST 0102 Security LS as a typed nested registry (seen as tag 48 in `falls`;
-  currently opaque passthrough).
 - ST 1601 Geo-Registration LS and ST 1602 Composite Imaging LS as typed nested
   registries (currently opaque passthrough, same shape as ST 0102 above). See
   [#95](https://github.com/nitsuga/libmisbklv/issues/95).
@@ -100,7 +98,9 @@ Incremental *work* that needs no fork (registry breadth, an SRT test) lives in
 ## Fork lifecycle
 
 When a fork is deliberated, write a `type: Decision` concept in `../context/`
-(`decision_status: proposed` → `accepted`), add its row to the decided register
-([`../context/decisions/index.md`](../context/decisions/index.md)), and update
-PROGRESS. A genuinely open (undeliberated) fork gets a line under **Open forks**
-above until it has an ADR.
+with `decision_status: proposed`, and it stays under **Open forks** above
+(not the decided register) while proposed. Only *on resolution* — when
+`decision_status` moves to `accepted` — add its row to the decided register
+([`../context/decisions/index.md`](../context/decisions/index.md)), update
+PROGRESS, and drop it from this section. A genuinely open (undeliberated)
+fork gets a line under **Open forks** above until it has an ADR.
