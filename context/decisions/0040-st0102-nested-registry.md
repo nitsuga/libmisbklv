@@ -19,7 +19,7 @@ Fork 36, opened from the UAS-platform coverage survey ([#95](https://github.com/
 
 The codebase already has a direct precedent for exactly this shape: ST 0601 tag 74 (`registry/uas0601.toml`) is `kind = "nested_ls"`, `child = "vmti_0903"` — a single nested Local Set, tested by `test/nested_roundtrip_test.cpp`. (ST 0903's own `vTargetSeries`, tag 101, is the sibling `pack` variant — a *series* of repeated child packs, which ST 0102 does not need.) This ADR follows tag 74's pattern exactly: same `ValueKind::NestedLS`, same one-item-one-child shape.
 
-ST 0102.12 §6.7 / Table 2 defines the Local Set's 16-byte UL key (`06 0E 2B 34 02 03 01 01 0E 01 03 03 02 00 00 00`, CRC 40980) and 18 items (tags 1–14, 22–24; tags 15–21 are undefined in this revision — likely where the deprecated linking elements, Appendix A, used to sit in earlier versions). A Universal Set also exists (§6.6) but is out of scope: ST 0601.14-31 (`references/ST0601.19.txt`) confirms tag 48 always carries the LS form, never the UDS form.
+ST 0102.12 §6.7 / Table 2 defines the Local Set's 16-byte UL key (`06 0E 2B 34 02 03 01 01 0E 01 03 03 02 00 00 00`, CRC 40980) and 17 items (tags 1–14, 22–24; tags 15–21 are undefined in this revision — likely where the deprecated linking elements, Appendix A, used to sit in earlier versions). A Universal Set also exists (§6.6) but is out of scope: ST 0601.14-31 (`references/ST0601.19.txt`) confirms tag 48 always carries the LS form, never the UDS form.
 
 **What "typed" means here, precisely.** `.child` is resolved only through `registry_for()` (`src/registries.cpp`) when a caller chooses to descend — the library never auto-descends into a nested set on decode. `Message::get(48)` still returns the raw bytes; a caller who wants Security LS fields looks up the tag-48 descriptor, calls `registry_for(d->child)` to get the `Security0102` registry, `parse_items()`s the raw value into child items, then looks each up via `child->find(tag)` and `codec::decode()` — the same walk `test/nested_roundtrip_test.cpp` does for VMTI today, with no top-level `Message` involved (there is no `ul_key`, deliberately — see Decision). This ADR makes that path exist for ST 0102 tag 48; it does not change what `Message::get(48)` returns.
 
@@ -31,6 +31,7 @@ ST 0102.12 §6.7 / Table 2 defines the Local Set's 16-byte UL key (`06 0E 2B 34 
 - `registry/uas0601.toml` tag 48: `kind = "nested_ls"`, `child = "security_0102"`.
 - `tools/gen_registry.py`: add `"security_0102": "Security0102"` to the `CHILD` dict.
 - `include/misbklv/types.hpp`: add `Security0102` to `enum class RegistryId`.
+- `include/misbklv/registries.hpp`: add `#include "misbklv/registry/security0102_tables.generated.hpp"` — it explicitly includes every generated registry header, and `src/registries.cpp` can't reference `gen::security_0102` without it.
 - `src/registries.cpp`: add a `case RegistryId::Security0102:` arm to `registry_for()` — omitting this leaves `.child` resolving to `nullptr`, silently breaking descent.
 - `CMakeLists.txt`'s `regenerate-registry` target and `.github/workflows/ci.yml`'s drift-check loop (`for r in uas0601 vmti0903 vtarget0903`): both enumerate registry files by name and need `security0102` added, or the new TOML never regenerates and CI's generated-output drift check never covers it.
 
