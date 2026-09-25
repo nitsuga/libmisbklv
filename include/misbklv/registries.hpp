@@ -11,6 +11,7 @@
 #include "misbklv/registry/uas0601_tables.generated.hpp"
 #include "misbklv/registry/vmti0903_tables.generated.hpp"
 #include "misbklv/registry/vtarget0903_tables.generated.hpp"
+#include "misbklv/registry/security0102_tables.generated.hpp"
 
 namespace misbklv {
 

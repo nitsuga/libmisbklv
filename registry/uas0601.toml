@@ -501,10 +501,11 @@ name   = "Generic Flag Data"
 kind   = "uint"
 length = 1
 
-[[item]]                       # §8.48 — MISB ST 0102 Security LS (opaque)
+[[item]]                       # §8.48 — MISB ST 0102 Security LS
 tag   = 48
 name  = "Security Local Set"
-kind  = "bytes"
+kind  = "nested_ls"
+child = "security_0102"
 
 [[item]]                       # §8.49 — uint16 mapped 0..5000
 tag    = 49

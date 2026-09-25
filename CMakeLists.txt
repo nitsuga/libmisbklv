@@ -81,6 +81,10 @@ if(Python3_Interpreter_FOUND)
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_registry.py
             ${CMAKE_CURRENT_SOURCE_DIR}/registry/vtarget0903.toml
             ${_gen_dir}/vtarget0903_tables.generated.hpp
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_registry.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/registry/security0102.toml
+            ${_gen_dir}/security0102_tables.generated.hpp
     COMMENT "Regenerating registry tables from registry/*.toml")
   add_custom_target(regenerate-synthetic-fixtures
     COMMAND ${Python3_EXECUTABLE}
@@ -127,6 +131,10 @@ add_test(NAME nested_vmti
 add_executable(imapb_test test/imapb_test.cpp)
 target_link_libraries(imapb_test PRIVATE misbklv)
 add_test(NAME imapb COMMAND imapb_test)
+
+add_executable(security0102_mandatory_test test/security0102_mandatory_test.cpp)  # ADR 0040
+target_link_libraries(security0102_mandatory_test PRIVATE misbklv)
+add_test(NAME security0102_mandatory COMMAND security0102_mandatory_test)
 
 add_executable(standalone_roundtrip_test test/standalone_roundtrip_test.cpp)
 target_link_libraries(standalone_roundtrip_test PRIVATE misbklv)

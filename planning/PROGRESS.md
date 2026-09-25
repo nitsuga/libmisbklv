@@ -20,9 +20,6 @@ No active work. #50 (benchmark) is parked.
   needs them. (0601 is complete.)
 - **Remaining maintenance issue**: #50 benchmarks Generate-SEI end to end through
   `mpegtsmux` after the merged core benchmark closed its other speculative work.
-- **Implement fork 36** ([ADR 0040](../context/decisions/0040-st0102-nested-registry.md),
-  accepted): `registry/security0102.toml`, the `CHILD`/`RegistryId`/`registries.hpp`/
-  `registries.cpp` wiring, CI drift-loop entry, and `LocalSetBuilder::check_mandatory()`.
 - Candidate *forks* that need a decision first live in [ROADMAP](./ROADMAP.md)'s
   backlog — not enumerated here.
 
@@ -48,8 +45,3 @@ No active work. #50 (benchmark) is parked.
   hand-constructed, not vendor data).
 - Need a real VMTI stream (M3/M5/M6 use hand-authored fixtures; the removed
   external corpus was all 0601 and had no tag 74).
-- ST 0102 Security LS (tag 48) is still registered as opaque `bytes` — fork 36
-  ([ADR 0040](../context/decisions/0040-st0102-nested-registry.md)) decided
-  how to type it, but the implementation (see "Next") hasn't landed. The other
-  embedded Local Sets and the DLP/FLP/VLP packs remain candidate forks in
-  [ROADMAP](./ROADMAP.md).
