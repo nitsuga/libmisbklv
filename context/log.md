@@ -1,5 +1,13 @@
 # Knowledge Bundle Log
 
+## 2026-09-26
+
+* **Fork 37 proposed** (issue #95,
+  [`0041`](./decisions/0041-st1602-nested-registry.md)): ST 1602 Composite
+  Imaging LS as a typed nested registry, split from ST 1601 (still a
+  candidate fork — needs MDARRAY/UUID design work first). Author:
+  claude/sonnet-5.
+
 ## 2026-09-25
 
 * **References ingest** (issue #95): deposited `ST0102.12`, `ST1206.1`,

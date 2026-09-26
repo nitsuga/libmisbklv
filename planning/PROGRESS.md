@@ -20,6 +20,8 @@ No active work. #50 (benchmark) is parked.
   needs them. (0601 is complete.)
 - **Remaining maintenance issue**: #50 benchmarks Generate-SEI end to end through
   `mpegtsmux` after the merged core benchmark closed its other speculative work.
+- **Review fork 37** ([ADR 0041](../context/decisions/0041-st1602-nested-registry.md),
+  ST 1602 as a typed nested registry) — proposed, awaiting acceptance.
 - Candidate *forks* that need a decision first live in [ROADMAP](./ROADMAP.md)'s
   backlog — not enumerated here.
 
