@@ -73,12 +73,15 @@ already-resolved forks.
 
 **Candidate future forks** (not yet opened), mostly downstream of
 registry/data breadth:
-- ST 1601 Geo-Registration LS and ST 1602 Composite Imaging LS as typed nested
-  registries (currently opaque passthrough — the same shape ST 0102 was
-  before [fork 36](../context/decisions/0040-st0102-nested-registry.md)). See
+- ST 1601 Geo-Registration LS as a typed nested registry (currently opaque
+  passthrough — the same shape ST 0102 was before
+  [fork 36](../context/decisions/0040-st0102-nested-registry.md)). Split from
+  ST 1602 (fork 37) because it needs real design work first: 5 of its 10
+  items use the MDARRAY pack type (ST 1303) and one is a raw UUID, neither of
+  which fits the existing registry schema cleanly. See
   [#95](https://github.com/nitsuga/libmisbklv/issues/95).
 - ST 1206 SAR MI LS as a typed nested registry — also currently opaque
-  passthrough like the sets above, but a larger lift: a new imagery-adjacent
+  passthrough like ST 1601, but a larger lift: a new imagery-adjacent
   modality, not a small nested set. See
   [#95](https://github.com/nitsuga/libmisbklv/issues/95).
 - 0903 Array type (§9.1.2) — a descriptor-schema extension.
