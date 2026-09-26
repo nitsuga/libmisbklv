@@ -59,8 +59,10 @@ struct MdArray {
   std::span<const std::byte> apas;      // raw, format depends on apa (empty for Natural/Boolean)
   std::span<const std::byte> elements;  // raw "Array of Elements" bytes -- always well-defined
 
-  std::size_t element_count() const;    // product of dims; parse() has already checked this
-                                         // doesn't overflow against the actual elements length
+  std::size_t element_count() const;    // product of dims -- always >= 1 (ST 1303-09: every
+                                         // Dim_i >= 1), regardless of whether there's data
+  bool has_data() const;                // false iff EBytes == 0 (elements.empty()) -- the
+                                         // shape (dims) is still meaningful even with no data
 
   // Typed access. `parse()` accepts any ebytes width for Natural/IMAPB --
   // width validity is meaningless without knowing which accessor a caller
@@ -93,23 +95,32 @@ struct MdArray {
 //    the full header fits).
 //  - Any arithmetic overflow computing element_count() or
 //    element_count() * ebytes (both checked with overflow-safe multiplication,
-//    not `std::size_t` wraparound).
+//    not `std::size_t` wraparound) -- and, for APA=2, an *underflow* guard:
+//    the bytes remaining after the APA field must be at least
+//    element_count() * ebytes before subtracting to find APAS's length, or a
+//    crafted short value must fail cleanly instead of wrapping to a huge
+//    APAS length.
 //  - An APA value outside 1-5 (0x00 is reserved per ST 1303 Table 3).
 //
 // EBytes == 0 is a real, legal case with a specific meaning per ST 1303
 // §7.2.3: it signals an *empty* Array of Elements regardless of APA (a
 // "no data"/"no change" marker), not a placeholder for variable-length
 // elements -- that placeholder role belongs to EBytes == 1 instead, used by
-// the two variable-length-element Compact algorithms (UintCompact's BER-OID
+// the two Compact algorithms that fix EBytes at 1 (UintCompact's BER-OID
 // elements, Boolean's bit-packed ones). `parse()` treats EBytes == 0 as
-// `elements` being empty and `element_count()` being 0, for every APA; it
-// does not try to guess a non-empty array from a zero width.
+// `elements` being empty (`has_data() == false`) for every APA -- dims/
+// element_count() stay meaningful (shape without data), it's only the
+// element bytes that vanish. For the APA=2/EBytes==0 combination
+// specifically, every byte remaining after the APA field belongs to APAS;
+// the standard doesn't explicitly bless this combination, so `parse()`
+// accepts an empty APAS there in addition to the usual 8-or-16-byte cases,
+// rather than rejecting a case ST 1303 doesn't actually forbid.
 Result<MdArray> parse(std::span<const std::byte> value);
 
 }  // namespace misbklv::mdarray
 ```
 
-**Item 4's element type is fixed by ST 1601's own notation** (`MDARRAY(UINT, ...)` for its row/column pixel coordinates per §6.3.4 NoteA) — `element_uint()` covers item 4 directly. **Items 5, 8, 9, 10's element type is not fully pinned down by the standard text alone**: items 5 and 8 (latitude/longitude/elevation) take their type from external ST 0807-registered keys the standard doesn't reproduce, and could be Natural float or IMAPB depending on encoder choice (ST 1303's own Example 2 language: "run-time" type selection is normal for MDARRAY); items 9/10 are almost certainly Natural-with-item-documented-per-row-IMAPB-ranges per the Context discussion, but this ADR doesn't assert that as fact. **The design responds to this by exposing `apa`/`ebytes`/`dims` on every `MdArray` and providing `element_uint`/`element_float`/`element_imapb` as generic accessors a caller (or a later, smaller ST-1601-specific helper) chooses between based on what's actually on the wire** — not by guessing one specific encoding into the ADR and being wrong. This mirrors how MDARRAY is designed to be self-describing in the first place.
+**Item 4's element type is fixed by ST 1601's own text**: its notation is `MDARRAY(NoteA, 2, 4, NoteB)`, and NoteA explicitly overrides ST 0807's registered Data Type for the underlying row/column keys from BER-OID to UINT (§6.3.4) — `element_uint()` covers item 4 directly. **Items 5, 8, 9, 10's element type is not fully pinned down by the standard text alone**: items 5 and 8 (latitude/longitude/elevation) take their type from external ST 0807-registered keys the standard doesn't reproduce, and could be Natural float or IMAPB depending on encoder choice (ST 1303's own Example 2 language: "run-time" type selection is normal for MDARRAY); items 9/10 are almost certainly Natural-with-item-documented-per-row-IMAPB-ranges per the Context discussion, but this ADR doesn't assert that as fact. **The design responds to this by exposing `apa`/`ebytes`/`dims` on every `MdArray` and providing `element_uint`/`element_float`/`element_imapb` as generic accessors a caller (or a later, smaller ST-1601-specific helper) chooses between based on what's actually on the wire** — not by guessing one specific encoding into the ADR and being wrong. This mirrors how MDARRAY is designed to be self-describing in the first place.
 
 **Per-item typing for the other 5 ST 1601 items**, from Table 1:
 
@@ -137,17 +148,17 @@ Result<MdArray> parse(std::span<const std::byte> value);
 
 - Tags 4, 5, 8, 9, 10 become structurally parseable — a caller gets dimension shape, element count, algorithm code, and (for Natural/IMAPB) typed element values, instead of an opaque blob. `Message::get(98)` itself is unchanged; a caller descends into tag 98 the same way ST 0102/ST 1602 already require.
 - **This is real new schema surface, not a reapplication of an existing pattern** — the standard `RegistryId`/`registries.hpp`/`registries.cpp`/`gen_registry.py` wiring fork 36/37 needed still applies in full for `GeoRegistration1601`; the only thing genuinely new (and needing no `registries.cpp` work) is `ValueKind::MdArray` itself, since it has no child to route into. `codec::encode` needs its one-line addition or nothing can author/round-trip an MDARRAY item through the builder API.
-- Items 5/8/9/10's *exact* typed decode (which of `element_uint`/`element_float`/`element_imapb` actually applies) is not fully settled by this ADR — a caller inspecting a real ST 1601 stream's `apa`/`ebytes` fields picks the right one; item 4 alone is unambiguous (UINT per its own notation).
+- Items 5/8/9/10's *exact* typed decode (which of `element_uint`/`element_float`/`element_imapb` actually applies) is not fully settled by this ADR — a caller inspecting a real ST 1601 stream's `apa`/`ebytes` fields picks the right one; item 4 alone is unambiguous (its own text overrides the type to UINT).
 - Tags using Boolean/UInt-compact/Run-Length APAs (theoretically possible on the wire, though ST 1601's own text implies Natural/IMAPB for its items) parse structurally — safe to detect shape and skip/round-trip — but their element bytes are exposed raw, not decoded.
 - The library gains a genuinely reusable capability: ST 1206 (SAR Motion Imagery, currently a separate candidate fork) also uses MDARRAY — tag 22, Radar Cross Section Scale Factor, confirmed in `references/ST1206.1.txt`. Any future MDARRAY-using standard reuses `mdarray::parse()` directly.
 
 # Assumptions / open questions
 
-- **Whether ST 1601 items 9/10 (and, less certainly, 5/8) are actually encoded as Natural-with-item-documented-per-row-ranges is this ADR's central open question, not a settled fact.** ST 1303's own text (§8.1, Example 3) is the strongest available evidence, but this ADR has no real capture or a cross-implementation reference (e.g. jmisb's ST 1601 handling, not checked — no jmisb source was available to consult) to confirm it. The implementation PR should decode conservatively: expose `apa`/`ebytes`/`dims` and the generic typed accessors; add an ST-1601-item-specific convenience layer only once a real sample or cross-reference confirms which encoding producers actually use.
+- **Whether ST 1601 items 9/10 (and, less certainly, 5/8) are actually encoded as Natural-with-item-documented-per-row-ranges is this ADR's central open question, not a settled fact.** ST 1303's own text (§8.2, Example 3) is the strongest available evidence, but this ADR has no real capture or a cross-implementation reference (e.g. jmisb's ST 1601 handling, not checked — no jmisb source was available to consult) to confirm it. The implementation PR should decode conservatively: expose `apa`/`ebytes`/`dims` and the generic typed accessors; add an ST-1601-item-specific convenience layer only once a real sample or cross-reference confirms which encoding producers actually use.
 - **UInt-compact and Run-Length element decode are real, deferred work**, not merely hypothetical: `MdArray::elements` for those two APAs is exactly as useful as an opaque `bytes` item today (a caller must write their own decode). The difference from full opacity is that the *shape* (dims, ebytes, bias/default value) is already parsed and available.
 - **ST 1601.1-03's cross-item tie-point-count consistency is unenforced**, per Alternatives/Decision.
 - **UUID version (v4/v5) is unvalidated**, per ST 1601's own §6.3.7 language ("recommend" not "require").
-- **Parser hardening is part of this design, not an implementation afterthought**: `parse()` must bound `NDim` against remaining bytes before allocating `dims` (an unbounded BER-OID driving a `reserve()` is a resource-exhaustion vector), check `element_count()` and `element_count() * ebytes` for overflow rather than trusting `std::size_t` wraparound, and reject an out-of-range `APA` or an `ebytes` too wide for the typed accessors — all before touching wire-derived values arithmetically. This is the same class of guard `hardening_test` already owns for BER-OID tags and Report-on-Change packets elsewhere in this codebase.
+- **Parser hardening is part of this design, not an implementation afterthought**: `parse()` must bound `NDim` against remaining bytes before allocating `dims` (an unbounded BER-OID driving a `reserve()` is a resource-exhaustion vector), check `element_count()` and `element_count() * ebytes` for overflow (plus the APA=2 underflow case — see `parse()`'s spec above) rather than trusting `std::size_t` wraparound, and reject an out-of-range `APA` — all before touching wire-derived values arithmetically. Width validation for a specific accessor (e.g. `ebytes` too wide for `element_float()`) is each accessor's own job, not `parse()`'s, since `parse()` can't know which accessor a caller will use. This is the same class of guard `hardening_test` already owns for BER-OID tags and Report-on-Change packets elsewhere in this codebase.
 
 # Citations
 
@@ -156,8 +167,8 @@ Result<MdArray> parse(std::span<const std::byte> value);
 [3] [ADR 0041](./0041-st1602-nested-registry.md) — the second application of the same pattern, confirming it generalizes before this, the third, adds genuinely new schema surface.
 [4] `src/codec.cpp` `decode()`'s `default:` branch vs. `encode()`'s lack of one — confirmed directly, not by analogy, that these two functions need different treatment for a new `ValueKind`.
 [5] ST 1601.2 §6.2, Table 1, §6.3.1-§6.3.10 — the Local Set item table and MDARRAY parameter notes this ADR's per-item decisions are read from.[^st1601]
-[6] ST 1303.2 §7.2 (pack structure), Appendix D (the 5 APAs), §8.1 Example 3 (the heterogeneous-array/APA=2 discouragement that resolves the items-9/10 puzzle, at least as the best available evidence).[^st1303]
+[6] ST 1303.2 §7.2 (pack structure), Appendix D (the 5 APAs), §8.2 Example 3 (the heterogeneous-array/APA=2 discouragement that resolves the items-9/10 puzzle, at least as the best available evidence).[^st1303]
 [7] `references/ST1206.1.txt` — confirms ST 1206 (tag 22) is a second real MDARRAY consumer in this codebase's own reference set, cited in Consequences.
 
 [^st1601]: ST 1601.2 §6.2 (UL key), Table 1 (item list, types, Rules column), §6.3.1-§6.3.10 (per-item MDARRAY notation and notes), ST 1601.1-03 (tie-point count consistency requirement).
-[^st1303]: ST 1303.2 §7.2 (pack byte layout and length accounting), Appendix D / Table 3 (the 5 APA codes), Appendix D.1-D.4 (per-APA APAS/element format, worked examples), ST 1303-17/ST 1303-19 (IMAPB APAS requirements), §8.1 (Type/Data Identifier semantics for heterogeneous arrays, Example 3's APA=2 discouragement).
+[^st1303]: ST 1303.2 §7.2 (pack byte layout and length accounting), Appendix D / Table 3 (the 5 APA codes), Appendix D.1-D.4 (per-APA APAS/element format, worked examples), ST 1303-17/ST 1303-19 (IMAPB APAS requirements), §8.1 (Type/Data Identifier semantics, permits APA=2 on a heterogeneous array "with care"), §8.2 Example 3 (the same case called "not recommended" in practice).
