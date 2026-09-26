@@ -84,7 +84,7 @@ registry/data breadth:
   which fits the existing registry schema cleanly. See
   [#95](https://github.com/nitsuga/libmisbklv/issues/95).
 - ST 1206 SAR MI LS as a typed nested registry — also currently opaque
-  passthrough like the sets above, but a larger lift: a new imagery-adjacent
+  passthrough like ST 1601, but a larger lift: a new imagery-adjacent
   modality, not a small nested set. See
   [#95](https://github.com/nitsuga/libmisbklv/issues/95).
 - 0903 Array type (§9.1.2) — a descriptor-schema extension.

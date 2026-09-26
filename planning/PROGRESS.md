@@ -48,6 +48,8 @@ No active work. #50 (benchmark) is parked.
 - Need a real VMTI stream (M3/M5/M6 use hand-authored fixtures; the removed
   external corpus was all 0601 and had no tag 74).
 - The other embedded Local Sets and the DLP/FLP/VLP packs are still registered
-  as opaque `bytes` (ST 0102, tag 48, is now typed — fork 36,
-  [ADR 0040](../context/decisions/0040-st0102-nested-registry.md)). Typing them
-  is a candidate fork in [ROADMAP](./ROADMAP.md).
+  as opaque `bytes` (ST 0102, tag 48, is typed — fork 36,
+  [ADR 0040](../context/decisions/0040-st0102-nested-registry.md); ST 1602,
+  tag 99, is proposed — fork 37,
+  [ADR 0041](../context/decisions/0041-st1602-nested-registry.md)). Typing the
+  rest is a candidate fork in [ROADMAP](./ROADMAP.md).
