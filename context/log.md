@@ -2,6 +2,9 @@
 
 ## 2026-09-26
 
+* **References ingest**: deposited `ST1303.2` (Multi-Dimensional Array Pack;
+  PDF + `pdftotext -layout` extract) — needed to evaluate MDARRAY typing for
+  the ST 1601 fork. Author: claude/sonnet-5.
 * **Fork 37 proposed** (issue #95,
   [`0041`](./decisions/0041-st1602-nested-registry.md)): ST 1602 Composite
   Imaging LS as a typed nested registry, split from ST 1601 (still a
