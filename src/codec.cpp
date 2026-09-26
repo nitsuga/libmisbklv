@@ -277,7 +277,8 @@ Result<Bytes> encode(const ItemDescriptor& d, const Value& v, std::size_t len) {
     }
     case ValueKind::Bytes:
     case ValueKind::NestedLS:
-    case ValueKind::Pack: {
+    case ValueKind::Pack:
+    case ValueKind::MdArray: {
       if (!std::holds_alternative<std::span<const std::byte>>(v))
         return Result<Bytes>::err(Error::TypeMismatch);
       auto sp = std::get<std::span<const std::byte>>(v);

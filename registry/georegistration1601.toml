@@ -1,0 +1,63 @@
+# ST 1601.2 Geo-Registration Local Set — descriptor source of truth (ADR 0012).
+# Nested under ST 0601 Item 98; no standalone UL key (ADR 0042).
+registry     = "GEO_REGISTRATION_1601"
+tag_encoding = "ber_oid"
+
+[[item]]
+tag      = 1
+name     = "Document Version"
+kind     = "uint"
+length   = 1
+variable = true
+flags    = ["mandatory"]
+
+[[item]]
+tag      = 2
+name     = "Algorithm Name"
+kind     = "utf8"
+variable = true
+flags    = ["mandatory"]
+
+[[item]]
+tag      = 3
+name     = "Algorithm Version"
+kind     = "utf8"
+variable = true
+flags    = ["mandatory"]
+
+[[item]]
+tag  = 4
+name = "Correspondence Points - Row/Column"
+kind = "mdarray"
+
+[[item]]
+tag  = 5
+name = "Correspondence Points - Latitude/Longitude"
+kind = "mdarray"
+
+[[item]]
+tag      = 6
+name     = "Second Image Name"
+kind     = "utf8"
+variable = true
+
+[[item]]
+tag    = 7
+name   = "Algorithm Configuration Identifier"
+kind   = "bytes"
+length = 16
+
+[[item]]
+tag  = 8
+name = "Correspondence Points - Elevation"
+kind = "mdarray"
+
+[[item]]
+tag  = 9
+name = "Correspondence Points - Row/Column Standard Deviation and Correlation Coefficients"
+kind = "mdarray"
+
+[[item]]
+tag  = 10
+name = "Correspondence Points - Latitude/Longitude/Elevation Standard Deviation and Correlation Coefficients"
+kind = "mdarray"

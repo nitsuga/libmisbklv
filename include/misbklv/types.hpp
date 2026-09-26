@@ -82,6 +82,7 @@ enum class ValueKind : std::uint8_t {
   Bytes,
   NestedLS,
   Pack,
+  MdArray,
 };
 
 enum ItemFlags : std::uint8_t { kNone = 0, kMandatory = 1u << 0 };
@@ -94,7 +95,8 @@ enum class RegistryId : std::uint8_t {
   Vmti0903,
   Vtarget0903,
   Security0102,
-  CompositeImaging1602
+  CompositeImaging1602,
+  GeoRegistration1601
 };
 
 struct SpecialValue {

@@ -20,11 +20,6 @@ No active work. #50 (benchmark) is parked.
   needs them. (0601 is complete.)
 - **Remaining maintenance issue**: #50 benchmarks Generate-SEI end to end through
   `mpegtsmux` after the merged core benchmark closed its other speculative work.
-- **Implement fork 38** ([ADR 0042](../context/decisions/0042-st1601-mdarray-registry.md),
-  accepted): `registry/georegistration1601.toml`, the new `misbklv::mdarray`
-  module (`include/misbklv/mdarray.hpp`, `src/mdarray.cpp`), the
-  `CHILD`/`RegistryId`/`registries.hpp`/`registries.cpp` wiring, the
-  `codec::encode` `MdArray` case, and CMake/CI drift-loop entries.
 - Candidate *forks* that need a decision first live in [ROADMAP](./ROADMAP.md)'s
   backlog — not enumerated here.
 
@@ -55,6 +50,6 @@ No active work. #50 (benchmark) is parked.
   [ADR 0040](../context/decisions/0040-st0102-nested-registry.md); ST 1602,
   tag 99, is typed — fork 37,
   [ADR 0041](../context/decisions/0041-st1602-nested-registry.md); ST 1601,
-  tag 98, is decided but not yet implemented — fork 38,
+  tag 98, is typed — fork 38,
   [ADR 0042](../context/decisions/0042-st1601-mdarray-registry.md)). Typing
   the rest is a candidate fork in [ROADMAP](./ROADMAP.md).

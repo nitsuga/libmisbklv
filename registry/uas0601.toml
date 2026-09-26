@@ -979,10 +979,11 @@ tag   = 97
 name  = "Range Image Local Set"
 kind  = "bytes"
 
-[[item]]                       # §8.98 — MISB ST 1601 Geo-Registration LS (opaque)
+[[item]]                       # §8.98 — MISB ST 1601 Geo-Registration LS
 tag   = 98
 name  = "Geo-Registration Local Set"
-kind  = "bytes"
+kind  = "nested_ls"
+child = "geo_registration_1601"
 
 [[item]]                       # §8.99 — MISB ST 1602 Composite Imaging LS
 tag   = 99

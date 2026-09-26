@@ -23,6 +23,8 @@ ffmpeg backend are deferred — see
   `LocalSetBuilder::check_mandatory()`.
 - **ST 1602** Composite Imaging LS — nested under ST 0601 Item 99; typed
   decode/encode.
+- **ST 1601** Geo-Registration LS — nested under ST 0601 Item 98; typed
+  decode/encode, with structural parsing for its ST 1303 MDARRAY values.
 - **ST 1201 IMAPB** float↔integer mapping (incl. structural special values),
   cross-checked against the standards' vectors and jmisb.
 - **MPEG-TS via GStreamer**: extract `stream_type` 0x06 from a file or live
