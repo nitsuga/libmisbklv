@@ -4,7 +4,7 @@ External inputs this library is built on: the MISB standards it implements,
 deposited as the publisher's PDF plus a faithful `.txt` extract for grep/Read.
 They are the ground truth that [`context/`](../context/) synthesizes.
 
-Currently — ten MISB standards, all authored by the Motion Imagery Standards
+Currently — eleven MISB standards, all authored by the Motion Imagery Standards
 Board (MISB), a body of the U.S. National Geospatial-Intelligence Agency:
 
 | File | Standard | Published | Added |
@@ -17,6 +17,7 @@ Board (MISB), a body of the U.S. National Geospatial-Intelligence Agency:
 | `ST0903.6` | Video Moving Target Indicator Metadata | 21 October 2021 | 2026-07-17 |
 | `ST1201.5` | Floating Point to Integer Mapping | 24 June 2021 | 2026-07-17 |
 | `ST1206.1` | SAR Motion Imagery Metadata | 22 June 2017 | 2026-09-25 |
+| `ST1303.2` | Multi-Dimensional Array Pack | 25 June 2020 | 2026-09-26 |
 | `ST1601.2` | Geo-Registration Local Set | 02 March 2023 | 2026-09-25 |
 | `ST1602.2` | Composite Imaging Local Set | 02 March 2023 | 2026-09-25 |
 
