@@ -17,6 +17,8 @@ const Registry* registry_for(RegistryId id) {
       return &gen::vtarget_0903;
     case RegistryId::Security0102:
       return &gen::security_0102;
+    case RegistryId::CompositeImaging1602:
+      return &gen::composite_imaging_1602;
     case RegistryId::None:
     default:
       return nullptr;

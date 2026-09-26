@@ -12,6 +12,7 @@
 #include "misbklv/registry/vmti0903_tables.generated.hpp"
 #include "misbklv/registry/vtarget0903_tables.generated.hpp"
 #include "misbklv/registry/security0102_tables.generated.hpp"
+#include "misbklv/registry/compositeimaging1602_tables.generated.hpp"
 
 namespace misbklv {
 
