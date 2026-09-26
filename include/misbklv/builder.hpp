@@ -33,6 +33,13 @@ class LocalSetBuilder {
   // stages it via append_raw(child_tag, serialize_items()).
   ber::Bytes serialize_items() const;
 
+  // Check every mandatory item (ADR 0010 flags) has been staged, without
+  // emitting a checksum. `finalize()`'s own mandatory check delegates here;
+  // this is the entry point for a nested registry (e.g. Security0102, ADR
+  // 0040) whose own tag 1 is data, not the checksum `finalize()` reserves it
+  // for at the top level.
+  Result<std::monostate> check_mandatory() const;
+
   // Assemble the full packet: key + BER len + items + Item 1 checksum (last).
   // `enforce_mandatory` validates required items when authoring; pass false to
   // faithfully reserialize a packet that legitimately omits items (ADR 0011).

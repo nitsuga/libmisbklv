@@ -1,0 +1,136 @@
+# ST 0102.12 Security Metadata Local Set — descriptor source of truth (ADR 0012).
+# Nested only, under ST 0601 Item 48 (see registry/uas0601.toml); no standalone
+# UL key, like registry/vtarget0903.toml (ADR 0040 — see Alternatives for why a
+# standalone `ul_key` is deliberately omitted). Table 2, §6.7: tags 1-14, 22-24.
+# Tags 15-21 are undefined in this revision and stay unregistered.
+
+registry     = "SECURITY_0102"
+tag_encoding = "ber_oid"
+
+[[item]]                       # §6.7 Table 2 — uint8 enum:
+# UNCLASSIFIED// (0x01), RESTRICTED// (0x02), CONFIDENTIAL// (0x03),
+# SECRET// (0x04), TOP SECRET// (0x05)
+tag    = 1
+name   = "Security Classification"
+kind   = "uint"
+length = 1
+flags  = ["mandatory"]
+
+[[item]]                       # §6.7 Table 2 — uint8 enum:
+# ISO-3166 Two Letter (0x01), ISO-3166 Three Letter (0x02),
+# FIPS 10-4 Two Letter (0x03), FIPS 10-4 Four Letter (0x04),
+# ISO-3166 Numeric (0x05), 1059 Two Letter (0x06),
+# 1059 Three Letter (0x07), Omitted Value (0x08), Omitted Value (0x09),
+# FIPS 10-4 Mixed (0x0A), ISO 3166 Mixed (0x0B), STANAG 1059 Mixed (0x0C),
+# GENC Two Letter (0x0D), GENC Three Letter (0x0E), GENC Numeric (0x0F),
+# GENC Mixed (0x10)
+tag    = 2
+name   = "Classifying Country and Releasing Instructions Country Coding Method"
+kind   = "uint"
+length = 1
+flags  = ["mandatory"]
+
+[[item]]                       # §6.7 Table 2 — text preceded by '//', coded per Item 2's method
+tag      = 3
+name     = "Classifying Country"
+kind     = "utf8"
+variable = true
+flags    = ["mandatory"]
+
+[[item]]                       # §6.7 Table 2 — Security-SCI/SHI information
+tag      = 4
+name     = "Security-SCI/SHI Information"
+kind     = "utf8"
+variable = true
+
+[[item]]                       # §6.7 Table 2 — Caveats
+tag      = 5
+name     = "Caveats"
+kind     = "utf8"
+variable = true
+
+[[item]]                       # §6.7 Table 2 — Releasing Instructions
+tag      = 6
+name     = "Releasing Instructions"
+kind     = "utf8"
+variable = true
+
+[[item]]                       # §6.7 Table 2 — Classified By
+tag      = 7
+name     = "Classified By"
+kind     = "utf8"
+variable = true
+
+[[item]]                       # §6.7 Table 2 — Derived From
+tag      = 8
+name     = "Derived From"
+kind     = "utf8"
+variable = true
+
+[[item]]                       # §6.7 Table 2 — Classification Reason
+tag      = 9
+name     = "Classification Reason"
+kind     = "utf8"
+variable = true
+
+[[item]]                       # §6.7 Table 2 — always 8 bytes, YYYYMMDD (no `length`:
+# no `utf8` item in this codebase carries one; see ADR 0040)
+tag      = 10
+name     = "Declassification Date"
+kind     = "utf8"
+variable = true
+
+[[item]]                       # §6.7 Table 2 — Classification and Marking System
+tag      = 11
+name     = "Classification and Marking System"
+kind     = "utf8"
+variable = true
+
+[[item]]                       # §6.7 Table 2 — uint8 enum:
+# ISO-3166 Two Letter (0x01), ISO-3166 Three Letter (0x02),
+# ISO-3166 Numeric (0x03), FIPS 10-4 Two Letter (0x04),
+# FIPS 10-4 Four Letter (0x05), STANAG 1059 Two Letter (0x06),
+# STANAG 1059 Three Letter (0x07), Omitted Value (0x08), Omitted Value (0x09),
+# Omitted Value (0x0A), Omitted Value (0x0B), Omitted Value (0x0C),
+# GENC Two Letter (0x0D), GENC Three Letter (0x0E), GENC Numeric (0x0F),
+# GENC AdminSub (0x40)
+tag    = 12
+name   = "Object Country Coding Method"
+kind   = "uint"
+length = 1
+flags  = ["mandatory"]
+
+[[item]]                       # §6.7 Table 2 — RFC 2781 UTF-16 (big-endian absent a BOM);
+# stays opaque `bytes` (ADR 0040 Alternatives: no `Utf16` ValueKind for one field)
+tag      = 13
+name     = "Object Country Codes"
+kind     = "bytes"
+flags    = ["mandatory"]
+
+[[item]]                       # §6.7 Table 2 — Classification Comments
+tag      = 14
+name     = "Classification Comments"
+kind     = "utf8"
+variable = true
+
+[[item]]                       # §6.7 Table 2 — uint16, e.g. 0x000A for ST 0102.10;
+# absent, ST 0102 §6.1.15/-57 says version 3 is assumed
+tag    = 22
+name   = "Version"
+kind   = "uint"
+length = 2
+flags  = ["mandatory"]
+
+[[item]]                       # §6.7 Table 2 — always 10 bytes, YYYY-MM-DD (no `length`,
+# same treatment as Item 10)
+tag      = 23
+name     = "Classifying Country and Releasing Instructions Country Coding Method Version Date"
+kind     = "utf8"
+variable = true
+
+[[item]]                       # §6.7 Table 2 — always 10 bytes, YYYY-MM-DD (no `length`,
+# same treatment as Item 10)
+tag      = 24
+name     = "Object Country Coding Method Version Date"
+kind     = "utf8"
+variable = true

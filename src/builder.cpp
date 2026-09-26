@@ -37,13 +37,19 @@ bool LocalSetBuilder::staged_contains(std::uint16_t tag) const {
   return false;
 }
 
+Result<std::monostate> LocalSetBuilder::check_mandatory() const {
+  for (const auto& d : reg_.items)
+    if ((d.flags & kMandatory) && !staged_contains(d.tag))
+      return Result<std::monostate>::err(Error::MissingMandatory);
+  return Result<std::monostate>::ok({});
+}
+
 Result<ber::Bytes> LocalSetBuilder::finalize(std::span<const std::uint8_t> ul_key,
                                              bool enforce_mandatory) && {
   // 1. mandatory-item check (ADR 0011).
-  if (enforce_mandatory)
-    for (const auto& d : reg_.items)
-      if ((d.flags & kMandatory) && !staged_contains(d.tag))
-        return Result<ber::Bytes>::err(Error::MissingMandatory);
+  if (enforce_mandatory) {
+    if (auto r = check_mandatory(); !r) return Result<ber::Bytes>::err(r.error());
+  }
 
   // 2. serialize staged items (callers already excluded the checksum).
   ber::Bytes items = serialize_items();

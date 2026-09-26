@@ -15,6 +15,8 @@ const Registry* registry_for(RegistryId id) {
       return &gen::vmti_0903;
     case RegistryId::Vtarget0903:
       return &gen::vtarget_0903;
+    case RegistryId::Security0102:
+      return &gen::security_0102;
     case RegistryId::None:
     default:
       return nullptr;

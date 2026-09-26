@@ -9,6 +9,10 @@
 * **Fork 36 accepted** (issue #95,
   [`0040`](./decisions/0040-st0102-nested-registry.md)): ST 0102 Security
   Metadata LS as a typed nested registry. Author: claude/sonnet-5.
+* **Fork 36 implemented** ([`0040`](./decisions/0040-st0102-nested-registry.md)):
+  `registry/security0102.toml`, ST 0601 Item 48 → `nested_ls`/`security_0102`,
+  `LocalSetBuilder::check_mandatory()`, and the codegen/CI wiring. Author:
+  claude/sonnet-5.
 
 ## 2026-09-21
 

@@ -19,8 +19,8 @@ Deferred from v1 (revisit): most of ST 0604 (ES timestamps —
 side landed early on the video passthrough path, opt-in —
 [ADR 0023](../context/decisions/0023-st0604-sei-passthrough.md),
 [ADR 0024](../context/decisions/0024-sei-generation-opt-in.md)), an ffmpeg backend,
-ST 0102 security, ST 0807 registry as a data product, ST 1607 amend/segment
-beyond MSID passthrough.
+ST 0807 registry as a data product, ST 1607 amend/segment beyond MSID
+passthrough.
 
 ## Phases
 
@@ -74,7 +74,8 @@ already-resolved forks.
 **Candidate future forks** (not yet opened), mostly downstream of
 registry/data breadth:
 - ST 1601 Geo-Registration LS and ST 1602 Composite Imaging LS as typed nested
-  registries (currently opaque passthrough, same shape as ST 0102 above). See
+  registries (currently opaque passthrough — the same shape ST 0102 was
+  before [fork 36](../context/decisions/0040-st0102-nested-registry.md)). See
   [#95](https://github.com/nitsuga/libmisbklv/issues/95).
 - ST 1206 SAR MI LS as a typed nested registry — also currently opaque
   passthrough like the sets above, but a larger lift: a new imagery-adjacent
