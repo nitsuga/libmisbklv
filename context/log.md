@@ -12,6 +12,11 @@
   `registry/compositeimaging1602.toml`, ST 0601 Item 99 →
   `nested_ls`/`composite_imaging_1602`, and the codegen/CI wiring. Author:
   claude/sonnet-5.
+* **Fork 38 proposed** (issue #95,
+  [`0042`](./decisions/0042-st1601-mdarray-registry.md)): ST 1601
+  Geo-Registration LS as a typed nested registry, with a new
+  `misbklv::mdarray` module for ST 1303's Multi-Dimensional Array Pack.
+  Author: claude/sonnet-5.
 
 ## 2026-09-25
 

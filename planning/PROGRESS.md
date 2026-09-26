@@ -20,6 +20,9 @@ No active work. #50 (benchmark) is parked.
   needs them. (0601 is complete.)
 - **Remaining maintenance issue**: #50 benchmarks Generate-SEI end to end through
   `mpegtsmux` after the merged core benchmark closed its other speculative work.
+- **Review fork 38** ([ADR 0042](../context/decisions/0042-st1601-mdarray-registry.md),
+  ST 1601 as a typed nested registry, with a new MDARRAY/ST 1303 decode path)
+  — proposed, awaiting acceptance.
 - Candidate *forks* that need a decision first live in [ROADMAP](./ROADMAP.md)'s
   backlog — not enumerated here.
 
@@ -49,5 +52,7 @@ No active work. #50 (benchmark) is parked.
   as opaque `bytes` (ST 0102, tag 48, is typed — fork 36,
   [ADR 0040](../context/decisions/0040-st0102-nested-registry.md); ST 1602,
   tag 99, is typed — fork 37,
-  [ADR 0041](../context/decisions/0041-st1602-nested-registry.md)). Typing the
-  rest is a candidate fork in [ROADMAP](./ROADMAP.md).
+  [ADR 0041](../context/decisions/0041-st1602-nested-registry.md); ST 1601,
+  tag 98, is proposed — fork 38,
+  [ADR 0042](../context/decisions/0042-st1601-mdarray-registry.md)). Typing
+  the rest is a candidate fork in [ROADMAP](./ROADMAP.md).
