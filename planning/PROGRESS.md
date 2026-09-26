@@ -51,5 +51,7 @@ No active work. #50 (benchmark) is parked.
   tag 99, is typed — fork 37,
   [ADR 0041](../context/decisions/0041-st1602-nested-registry.md); ST 1601,
   tag 98, is typed — fork 38,
-  [ADR 0042](../context/decisions/0042-st1601-mdarray-registry.md)). Typing
-  the rest is a candidate fork in [ROADMAP](./ROADMAP.md).
+  [ADR 0042](../context/decisions/0042-st1601-mdarray-registry.md); ST 1206,
+  tag 95, is typed — fork 39,
+  [ADR 0043](../context/decisions/0043-st1206-sarmi-nested-registry.md)).
+  Typing the rest is a candidate fork in [ROADMAP](./ROADMAP.md).
