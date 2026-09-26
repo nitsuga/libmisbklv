@@ -1,7 +1,7 @@
 ---
 type: Decision
 title: ST 1601 Geo-Registration LS as a typed nested registry, with a new MDARRAY (ST 1303) decode path
-decision_status: proposed
+decision_status: accepted
 tags: [decision, registry, 1601, 1303, mdarray, geo-registration, nested-ls, phase-3]
 generated:
   by: claude/sonnet-5

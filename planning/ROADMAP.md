@@ -67,11 +67,7 @@ Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 `decision_status: proposed`) · `DECIDED` / `DEFERRED` (has an ADR — see the
 register).
 
-- Fork 38 — ST 1601 Geo-Registration LS as a typed nested registry (with a new
-  MDARRAY/ST 1303 decode path): `PROPOSED`,
-  [ADR 0042](../context/decisions/0042-st1601-mdarray-registry.md).
-
-See the decided register
+**No open forks remain.** See the decided register
 ([`../context/decisions/index.md`](../context/decisions/index.md)) for
 already-resolved forks.
 
