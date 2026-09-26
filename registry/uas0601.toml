@@ -984,10 +984,11 @@ tag   = 98
 name  = "Geo-Registration Local Set"
 kind  = "bytes"
 
-[[item]]                       # §8.99 — MISB ST 1602 Composite Imaging LS (opaque)
+[[item]]                       # §8.99 — MISB ST 1602 Composite Imaging LS
 tag   = 99
 name  = "Composite Imaging Local Set"
-kind  = "bytes"
+kind  = "nested_ls"
+child = "composite_imaging_1602"
 
 [[item]]                       # §8.100 — MISB ST 1607 Segment LS (opaque)
 tag   = 100

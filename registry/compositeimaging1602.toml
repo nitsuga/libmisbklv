@@ -1,0 +1,164 @@
+# ST 1602.2 Composite Imaging Local Set — descriptor source of truth (ADR 0012).
+# Nested only, under ST 0601 Item 99 (see registry/uas0601.toml); no standalone
+# UL key, like registry/security0102.toml and registry/vtarget0903.toml
+# (ADR 0041 — see Alternatives for why a standalone `ul_key` is deliberately
+# omitted). Table 1, §7.2: tags 1-18, all defined.
+
+registry     = "COMPOSITE_IMAGING_1602"
+tag_encoding = "ber_oid"
+
+[[item]]                       # §7.2 Table 1 / §7.3.1 — same field as ST 0603 Precision
+# Time Stamp; optional if identical to the parent's.
+tag    = 1
+name   = "Precision Time Stamp"
+units  = "microseconds"
+kind   = "uint"
+length = 8
+
+[[item]]                       # §7.2 Table 1 / §7.3.2 — plain uint, app-defined width
+# (ST 1602-03); mandatory
+tag      = 2
+name     = "Document Version"
+kind     = "uint"
+length   = 1
+variable = true
+flags    = ["mandatory"]
+
+[[item]]                       # §7.3.3.1 — variable-length uint, app-defined width
+tag      = 3
+name     = "Source Image Rows"
+units    = "pixels"
+kind     = "uint"
+length   = 4
+variable = true
+
+[[item]]                       # §7.3.3.2 — variable-length uint, app-defined width
+tag      = 4
+name     = "Source Image Columns"
+units    = "pixels"
+kind     = "uint"
+length   = 4
+variable = true
+
+[[item]]                       # §7.3.4.1 — variable-length uint, app-defined width
+tag      = 5
+name     = "Source Image AOI Rows"
+units    = "pixels"
+kind     = "uint"
+length   = 4
+variable = true
+
+[[item]]                       # §7.3.4.2 — variable-length uint, app-defined width
+tag      = 6
+name     = "Source Image AOI Columns"
+units    = "pixels"
+kind     = "uint"
+length   = 4
+variable = true
+
+[[item]]                       # §7.3.4.3 — variable-length signed int, app-defined width
+tag      = 7
+name     = "Source Image AOI Position X"
+units    = "pixels"
+kind     = "int"
+length   = 4
+signed   = true
+variable = true
+
+[[item]]                       # §7.3.4.4 — variable-length signed int, app-defined width
+tag      = 8
+name     = "Source Image AOI Position Y"
+units    = "pixels"
+kind     = "int"
+length   = 4
+signed   = true
+variable = true
+
+[[item]]                       # §7.3.5.1 — variable-length uint, app-defined width; mandatory
+tag      = 9
+name     = "Sub-Image Rows"
+units    = "pixels"
+kind     = "uint"
+length   = 4
+variable = true
+flags    = ["mandatory"]
+
+[[item]]                       # §7.3.5.2 — variable-length uint, app-defined width; mandatory
+tag      = 10
+name     = "Sub-Image Columns"
+units    = "pixels"
+kind     = "uint"
+length   = 4
+variable = true
+flags    = ["mandatory"]
+
+[[item]]                       # §7.3.5.3 — variable-length signed int, app-defined width; mandatory
+tag      = 11
+name     = "Sub-Image Position X"
+units    = "pixels"
+kind     = "int"
+length   = 4
+signed   = true
+variable = true
+flags    = ["mandatory"]
+
+[[item]]                       # §7.3.5.4 — variable-length signed int, app-defined width; mandatory
+tag      = 12
+name     = "Sub-Image Position Y"
+units    = "pixels"
+kind     = "int"
+length   = 4
+signed   = true
+variable = true
+flags    = ["mandatory"]
+
+[[item]]                       # §7.3.5.5 — variable-length uint, app-defined width
+tag      = 13
+name     = "Active Sub-Image Rows"
+units    = "pixels"
+kind     = "uint"
+length   = 4
+variable = true
+
+[[item]]                       # §7.3.5.6 — variable-length uint, app-defined width
+tag      = 14
+name     = "Active Sub-Image Columns"
+units    = "pixels"
+kind     = "uint"
+length   = 4
+variable = true
+
+[[item]]                       # §7.3.5.7 — variable-length signed int, app-defined width
+tag      = 15
+name     = "Active Sub-Image Offset X"
+units    = "pixels"
+kind     = "int"
+length   = 4
+signed   = true
+variable = true
+
+[[item]]                       # §7.3.5.8 — variable-length signed int, app-defined width
+tag      = 16
+name     = "Active Sub-Image Offset Y"
+units    = "pixels"
+kind     = "int"
+length   = 4
+signed   = true
+variable = true
+
+[[item]]                       # §7.2 Table 1 — uint8; defaults to 0 (opaque) if absent
+# per the standard (not enforced here)
+tag    = 17
+name   = "Transparency"
+kind   = "uint"
+length = 1
+
+[[item]]                       # §7.2 Table 1 / ST 1602-04 — uint8; mandatory. The standard
+# also requires values be unique and non-zero across composited images in the
+# same stream — a cross-item, cross-message constraint this registry cannot
+# express or enforce (see ADR 0041 Alternatives).
+tag    = 18
+name   = "Z-Order"
+kind   = "uint"
+length = 1
+flags  = ["mandatory"]

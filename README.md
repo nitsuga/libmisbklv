@@ -21,6 +21,8 @@ ffmpeg backend are deferred — see
 - **ST 0102** Security Metadata LS — nested under ST 0601 Item 48; typed
   decode/encode, with mandatory-field validation via
   `LocalSetBuilder::check_mandatory()`.
+- **ST 1602** Composite Imaging LS — nested under ST 0601 Item 99; typed
+  decode/encode.
 - **ST 1201 IMAPB** float↔integer mapping (incl. structural special values),
   cross-checked against the standards' vectors and jmisb.
 - **MPEG-TS via GStreamer**: extract `stream_type` 0x06 from a file or live
