@@ -143,15 +143,18 @@ Result<MdArray> parse(std::span<const std::byte> value) {
       auto bias = read(remaining, apas_pos);
       if (!bias) return Result<MdArray>::err(bias.error());
       array.apas = remaining.first(apas_pos);
-      array.elements = array.ebytes == 0 ? std::span<const std::byte>{} : remaining.subspan(apas_pos);
-      if (array.ebytes == 0 && apas_pos != remaining.size()) return Result<MdArray>::err(Error::BadLength);
+      array.elements =
+          array.ebytes == 0 ? std::span<const std::byte>{} : remaining.subspan(apas_pos);
+      if (array.ebytes == 0 && apas_pos != remaining.size())
+        return Result<MdArray>::err(Error::BadLength);
       break;
     }
     case Apa::RunLength:
       if (remaining.size() < array.ebytes) return Result<MdArray>::err(Error::BadLength);
       array.apas = remaining.first(array.ebytes);
       array.elements = remaining.subspan(array.ebytes);
-      if (array.ebytes == 0 && !array.elements.empty()) return Result<MdArray>::err(Error::BadLength);
+      if (array.ebytes == 0 && !array.elements.empty())
+        return Result<MdArray>::err(Error::BadLength);
       break;
   }
   return Result<MdArray>::ok(array);

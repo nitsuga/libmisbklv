@@ -63,7 +63,7 @@ struct MdArray {
 
   std::size_t element_count() const;    // product of dims -- always >= 1 (ST 1303-09: every
                                          // Dim_i >= 1), regardless of whether there's data
-  bool has_data() const;                // false iff EBytes == 0 (elements.empty()) -- the
+  bool has_data() const;                // false iff EBytes == 0 -- the
                                          // shape (dims) is still meaningful even with no data
 
   // Typed access. `parse()` accepts any ebytes width for Natural/IMAPB --
@@ -91,10 +91,9 @@ struct MdArray {
 // formula), and APAS is whatever remains before that (checked to be exactly
 // 8 or 16 bytes, per ST 1303-19).
 //
-// Rejects (BadLength / RangeError, not UB) rather than silently misparsing:
+// Rejects (BadLength / OutOfRange, not UB) rather than silently misparsing:
 //  - NDim inconsistent with remaining bytes (each Dim_i needs >= 1 byte;
-//    caps the dims.reserve() this function does before it's even validated
-//    the full header fits).
+//    bounds `dims` growth by input length and fast-fails an impossible header).
 //  - Any arithmetic overflow computing element_count() or
 //    element_count() * ebytes (both checked with overflow-safe multiplication,
 //    not `std::size_t` wraparound) -- and, for APA=2, an *underflow* guard:
@@ -125,7 +124,9 @@ struct MdArray {
 // exception for an empty array -- so `parse()` still requires a valid 8- or
 // 16-byte APAS under APA=2 regardless of EBytes, and rejects anything else
 // (including an empty one) as malformed rather than inferring a permissive
-// reading the standard's own SHALL language doesn't support.
+// reading the standard's own SHALL language doesn't support. IMAPB APAS bounds
+// are decoded from the wire: non-finite bounds can yield a non-finite accessor
+// result, which callers needing finite values must reject themselves.
 Result<MdArray> parse(std::span<const std::byte> value);
 
 }  // namespace misbklv::mdarray
@@ -169,7 +170,7 @@ Result<MdArray> parse(std::span<const std::byte> value);
 - **UInt-compact and Run-Length element decode are real, deferred work**, not merely hypothetical: `MdArray::elements` for those two APAs is exactly as useful as an opaque `bytes` item today (a caller must write their own decode). The difference from full opacity is that the *shape* (dims, ebytes, bias/default value) is already parsed and available.
 - **ST 1601.1-03's cross-item tie-point-count consistency is unenforced**, per Alternatives/Decision.
 - **UUID version (v4/v5) is unvalidated**, per ST 1601's own §6.3.7 language ("recommend" not "require").
-- **Parser hardening is part of this design, not an implementation afterthought**: `parse()` must bound `NDim` against remaining bytes before allocating `dims` (an unbounded BER-OID driving a `reserve()` is a resource-exhaustion vector), check `element_count()` and `element_count() * ebytes` for overflow (plus the APA=2 underflow case — see `parse()`'s spec above) rather than trusting `std::size_t` wraparound, and reject an out-of-range `APA` — all before touching wire-derived values arithmetically. Width validation for a specific accessor (e.g. `ebytes` too wide for `element_float()`) is each accessor's own job, not `parse()`'s, since `parse()` can't know which accessor a caller will use. This is the same class of guard `hardening_test` already owns for BER-OID tags and Report-on-Change packets elsewhere in this codebase.
+- **Parser hardening is part of this design, not an implementation afterthought**: `parse()` must bound `NDim` against remaining bytes before growing `dims` (each dimension consumes at least one input byte, so growth is input-bounded), check `element_count()` and `element_count() * ebytes` for overflow (plus the APA=2 underflow case — see `parse()`'s spec above) rather than trusting `std::size_t` wraparound, and reject an out-of-range `APA` — all before touching wire-derived values arithmetically. Width validation for a specific accessor (e.g. `ebytes` too wide for `element_float()`) is each accessor's own job, not `parse()`'s, since `parse()` can't know which accessor a caller will use. This is the same class of guard `hardening_test` already owns for BER-OID tags and Report-on-Change packets elsewhere in this codebase.
 
 # Citations
 

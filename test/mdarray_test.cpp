@@ -46,8 +46,9 @@ static void append_float(ber::Bytes& out, float value) {
 
 int main() {
   {
-    auto raw = pack({2, 2}, 2, 1, {std::byte{0}, std::byte{1}, std::byte{0}, std::byte{2},
-                                    std::byte{0}, std::byte{3}, std::byte{0}, std::byte{4}});
+    auto raw = pack({2, 2}, 2, 1,
+                    {std::byte{0}, std::byte{1}, std::byte{0}, std::byte{2}, std::byte{0},
+                     std::byte{3}, std::byte{0}, std::byte{4}});
     auto parsed = mdarray::parse(raw);
     check(parsed && parsed->element_count() == 4 && parsed->has_data(), "Natural shape/data");
     auto item = parsed ? parsed->element_uint(2) : Result<std::uint64_t>::err(Error::BadLength);
@@ -109,13 +110,44 @@ int main() {
   }
   {
     auto short_natural = pack({2}, 2, 1, {std::byte{0}});
-    auto bad_imapb = pack({1}, 1, 2, {std::byte{0}});
+    ber::Bytes short_imapb_tail(15);
+    auto short_imapb = pack({1000}, 4, 2, short_imapb_tail);
     auto bad_boolean = pack({9}, 1, 3, {std::byte{0}});
     auto bad_apa = pack({1}, 1, 6, {std::byte{0}});
     check(!mdarray::parse(short_natural), "Natural short payload rejected");
-    check(!mdarray::parse(bad_imapb), "IMAPB APAS rejected");
+    check(!mdarray::parse(short_imapb), "IMAPB element underflow rejected");
     check(!mdarray::parse(bad_boolean), "Boolean short payload rejected");
     check(!mdarray::parse(bad_apa), "Unknown APA rejected");
+  }
+  {
+    const ber::Bytes ndim_too_large{std::byte{2}, std::byte{1}};
+    const ber::Bytes zero_ndim{std::byte{0}};
+    const ber::Bytes truncated_ebytes{std::byte{1}, std::byte{1}};
+    const ber::Bytes truncated_apa{std::byte{1}, std::byte{1}, std::byte{1}};
+    auto zero_dim = pack({0}, 1, 1, {std::byte{0}});
+    auto oversized_ebytes = pack({1}, std::uint64_t{1} << 32, 1, {});
+    auto wide_boolean = pack({1}, 2, 3, {});
+    auto zero_apa = pack({1}, 1, 0, {std::byte{0}});
+    auto missing_bias = pack({1}, 1, 4, {});
+    auto short_run_length = pack({1}, 2, 5, {std::byte{0}});
+    check(!mdarray::parse(ndim_too_large), "NDim beyond input rejected");
+    check(!mdarray::parse(zero_ndim), "Zero NDim rejected");
+    check(!mdarray::parse(truncated_ebytes), "Truncated EBytes rejected");
+    check(!mdarray::parse(truncated_apa), "Truncated APA rejected");
+    check(!mdarray::parse(zero_dim), "Zero dimension rejected");
+    check(!mdarray::parse(oversized_ebytes), "Oversized EBytes rejected");
+    check(!mdarray::parse(wide_boolean), "Wide Boolean rejected");
+    check(!mdarray::parse(zero_apa), "Zero APA rejected");
+    check(!mdarray::parse(missing_bias), "Missing UInt compact bias rejected");
+    check(!mdarray::parse(short_run_length), "Short Run-length default rejected");
+  }
+  {
+    auto raw = pack({1}, 3, 1, {std::byte{0}, std::byte{0}, std::byte{1}});
+    auto parsed = mdarray::parse(raw);
+    auto float_item = parsed ? parsed->element_float(0) : Result<double>::err(Error::BadLength);
+    auto imapb_item = parsed ? parsed->element_imapb(0) : Result<double>::err(Error::BadLength);
+    check(!float_item && float_item.error() == Error::BadLength, "Float width rejected");
+    check(!imapb_item && imapb_item.error() == Error::TypeMismatch, "Accessor APA rejected");
   }
   {
     auto overflow = pack({std::numeric_limits<std::size_t>::max(), 2}, 1, 1, {});

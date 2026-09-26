@@ -2,6 +2,9 @@
 
 ## 2026-09-26
 
+* **PR #104 review follow-up**: synchronized ADR 0042's parser contract with
+  the implementation and added targeted malformed-MDARRAY regressions. Author:
+  openai/gpt-5.
 * **References ingest**: deposited `ST1303.2` (Multi-Dimensional Array Pack;
   PDF + `pdftotext -layout` extract) — needed to evaluate MDARRAY typing for
   the ST 1601 fork. Author: claude/sonnet-5.

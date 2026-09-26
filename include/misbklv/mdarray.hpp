@@ -30,6 +30,7 @@ struct MdArray {
   bool has_data() const { return ebytes != 0; }
   Result<std::uint64_t> element_uint(std::size_t flat_index) const;
   Result<double> element_float(std::size_t flat_index) const;
+  // Non-finite APAS bounds can produce a non-finite result.
   Result<double> element_imapb(std::size_t flat_index) const;
 };
 
