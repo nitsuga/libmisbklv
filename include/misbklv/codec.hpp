@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Value codecs (raw-int / linear-LDS / IMAPB / utf8) + checksum. Shared,
+// Value codecs (raw-int / linear-LDS / IMAPB / utf8 / opaque) + checksum. Shared,
 // parameterized by the descriptor (ADR 0010) — not one function per item.
 // Bidirectional (ADR 0011). Public API; internal helpers live in codec.cpp.
 #pragma once

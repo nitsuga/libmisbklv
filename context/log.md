@@ -2,6 +2,9 @@
 
 ## 2026-09-26
 
+* **PR #104 review follow-up**: synchronized ADR 0042's parser contract with
+  the implementation and added targeted malformed-MDARRAY regressions. Author:
+  openai/gpt-5.
 * **References ingest**: deposited `ST1303.2` (Multi-Dimensional Array Pack;
   PDF + `pdftotext -layout` extract) — needed to evaluate MDARRAY typing for
   the ST 1601 fork. Author: claude/sonnet-5.
@@ -12,6 +15,10 @@
   `registry/compositeimaging1602.toml`, ST 0601 Item 99 →
   `nested_ls`/`composite_imaging_1602`, and the codegen/CI wiring. Author:
   claude/sonnet-5.
+* **Fork 38 implemented** ([`0042`](./decisions/0042-st1601-mdarray-registry.md)):
+  ST 1601 Geo-Registration is now typed beneath ST 0601 Item 98, with a bounded
+  structural ST 1303 MDARRAY parser and all five Array Processing Algorithms.
+  Author: openai/gpt-5.
 * **Fork 38 accepted** (issue #95,
   [`0042`](./decisions/0042-st1601-mdarray-registry.md)): ST 1601
   Geo-Registration LS as a typed nested registry, with a new

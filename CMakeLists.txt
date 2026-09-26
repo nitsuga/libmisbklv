@@ -23,6 +23,7 @@ endif()
 add_library(misbklv STATIC
   src/ber.cpp
   src/codec.cpp
+  src/mdarray.cpp
   src/packet.cpp
   src/builder.cpp
   src/series.cpp
@@ -89,6 +90,10 @@ if(Python3_Interpreter_FOUND)
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_registry.py
             ${CMAKE_CURRENT_SOURCE_DIR}/registry/compositeimaging1602.toml
             ${_gen_dir}/compositeimaging1602_tables.generated.hpp
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_registry.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/registry/georegistration1601.toml
+            ${_gen_dir}/georegistration1601_tables.generated.hpp
     COMMENT "Regenerating registry tables from registry/*.toml")
   add_custom_target(regenerate-synthetic-fixtures
     COMMAND ${Python3_EXECUTABLE}
@@ -143,6 +148,14 @@ add_test(NAME security0102_mandatory COMMAND security0102_mandatory_test)
 add_executable(compositeimaging1602_mandatory_test test/compositeimaging1602_mandatory_test.cpp)  # ADR 0041
 target_link_libraries(compositeimaging1602_mandatory_test PRIVATE misbklv)
 add_test(NAME compositeimaging1602_mandatory COMMAND compositeimaging1602_mandatory_test)
+
+add_executable(georegistration1601_mandatory_test test/georegistration1601_mandatory_test.cpp)  # ADR 0042
+target_link_libraries(georegistration1601_mandatory_test PRIVATE misbklv)
+add_test(NAME georegistration1601_mandatory COMMAND georegistration1601_mandatory_test)
+
+add_executable(mdarray_test test/mdarray_test.cpp)
+target_link_libraries(mdarray_test PRIVATE misbklv)
+add_test(NAME mdarray COMMAND mdarray_test)
 
 add_executable(standalone_roundtrip_test test/standalone_roundtrip_test.cpp)
 target_link_libraries(standalone_roundtrip_test PRIVATE misbklv)

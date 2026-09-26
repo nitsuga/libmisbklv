@@ -165,7 +165,7 @@ jobs:
       - name: Regenerate committed outputs
         run: |
           bash ci/with-capacity.sh 1 bash -c '
-          for r in uas0601 vmti0903 vtarget0903 security0102 compositeimaging1602; do
+          for r in uas0601 vmti0903 vtarget0903 security0102 compositeimaging1602 georegistration1601; do
             python3 tools/gen_registry.py \
               "registry/$r.toml" "include/misbklv/registry/${r}_tables.generated.hpp"
           done
