@@ -1,5 +1,11 @@
 # Knowledge Bundle Log
 
+## 2026-09-26
+
+* **References ingest**: deposited `ST1303.2` (Multi-Dimensional Array Pack;
+  PDF + `pdftotext -layout` extract) — needed to evaluate MDARRAY typing for
+  the ST 1601 fork. Author: claude/sonnet-5.
+
 ## 2026-09-25
 
 * **References ingest** (issue #95): deposited `ST0102.12`, `ST1206.1`,
