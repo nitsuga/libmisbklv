@@ -54,6 +54,11 @@ _(`type: Sample Data` — characterized input assets / test vectors.)_
   removed third-party media, provenance decision, and current project-owned
   synthetic fixtures.
 
+## Coverage Surveys
+
+* [Public U.S. military UAS metadata coverage survey](./uas-metadata-coverage-survey.md)
+  — public-evidence boundary and the sample-led ST 0903 priority.
+
 ## Decisions
 
 _(`type: Decision` — ADRs: the *why* of resolved forks.)_

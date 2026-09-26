@@ -8,7 +8,8 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-No active work. #50 (benchmark) is parked.
+No active implementation. #107 awaits an authorized VMTI source or profile;
+#50 (benchmark) is parked.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be
      true after a month of no work is knowledge, not status: it belongs in a
@@ -16,8 +17,9 @@ No active work. #50 (benchmark) is parked.
 
 ## Next
 
-- **Registry breadth — 0903 side**: the remaining VMTI/VTarget items, as data
-  needs them. (0601 is complete.)
+- **Registry breadth — 0903 side**: [#107](https://github.com/nitsuga/libmisbklv/issues/107)
+  takes the smallest demonstrated VMTI/VTarget slice when a source identifies
+  it. (0601 is complete.)
 - **Remaining maintenance issue**: #50 benchmarks Generate-SEI end to end through
   `mpegtsmux` after the merged core benchmark closed its other speculative work.
 - Candidate *forks* that need a decision first live in [ROADMAP](./ROADMAP.md)'s
