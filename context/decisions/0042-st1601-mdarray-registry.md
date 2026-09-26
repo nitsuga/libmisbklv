@@ -5,7 +5,7 @@ decision_status: accepted
 tags: [decision, registry, 1601, 1303, mdarray, geo-registration, nested-ls, phase-3]
 generated:
   by: claude/sonnet-5
-  at: 2026-09-26T00:00:00Z
+  at: 2026-09-26T05:22:39Z
 fork: 38
 sources:
   - id: st1601
