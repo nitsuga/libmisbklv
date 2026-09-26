@@ -22,18 +22,21 @@ Fork 38, the last of the three registry-typing forks split out of the UAS-platfo
 
 Tag 98 of the ST 0601 registry (`registry/uas0601.toml`) carries the Geo-Registration Local Set today as `kind = "bytes"`. ST 1601.2 §6.2 / Table 1 defines its 16-byte UL key (`06 0E 2B 34 02 0B 01 01 0E 01 03 03 01 00 00 00`, CRC 39238) and 10 items (tags 1-10, all defined).
 
-**Why MDARRAY doesn't fit the existing schema.** This codebase's `ValueKind::Pack` (ST 0903's VTarget Series, tag 101) is a *repeated child-registry TLV sequence* — read a length, route to a child registry, decode named tags, repeat. MDARRAY is structurally nothing like that: it's a single value whose own header (dimension count, per-dimension sizes, element byte width, one of five "Array Processing Algorithm" codes, and optional algorithm-specific parameters) must be parsed before you know where the following element data ends, and that element data is homogeneous array content, not a sequence of tagged items. There is no "child registry" to route into. Building on `Pack` would mean stretching a mechanism designed for one shape onto a completely different one.
+**Why MDARRAY doesn't fit the existing schema.** This codebase's `ValueKind::Pack` (ST 0903's VTarget Series, tag 101) is a *repeated child-registry TLV sequence* — read a length, route to a child registry, decode named tags, repeat. MDARRAY is structurally nothing like that: it's a single value whose own header (dimension count, per-dimension sizes, element byte width, one of five "Array Processing Algorithm" codes, and optional algorithm-specific parameters) must be parsed before you know where the following element data ends, and that element data is homogeneous array content, not a sequence of tagged items. There is no "child registry" to route into.
 
-**Confirmed against the standard, not assumed:**
-- ST 1303 Appendix D / Table 3 defines exactly 5 Array Processing Algorithm (APA) codes: `0x01` Natural (no processing), `0x02` ST 1201 IMAPB (Element-Processed), `0x03` Boolean (Compact), `0x04` Unsigned Integer (Compact, BER-OID with optional bias), `0x05` Run-Length (Compact, patch list).
-- ST 1601 items 9 and 10's own text (§6.3.9/§6.3.10) describes *different* IMAPB ranges per array row (e.g. σ uses `IMAPB(0,100,EBytes)`, ρ uses `IMAPB(-1,1,EBytes)`) — but ST 1303-17 requires the whole array's APAS to carry exactly *one* Minimum/Maximum pair, and ST 1303 §8.1 explicitly acknowledges this: a heterogeneous array's "Data Identifier" (per-row meaning) can vary while the encoded APA parameters apply uniformly, and "care in choosing the APAS parameters is important because the data may have different value ranges." So decode only ever needs one global `(min, max)` per MDARRAY value, applied identically to every element — the per-row "natural range" documentation in ST 1601 is informative for a human reader (like every other TOML comment in this codebase's registries), not a second wire-level parameter set. This resolved what initially looked like a contradiction; it isn't one.
-- Every APA's Array-of-Elements section is *provably* the same shape: whatever bytes remain in the value after the header and APAS are consumed (ST 1303 §7.2's own length-accounting equation makes this explicit — Pack Length minus every preceding field's length). This holds for all 5 APAs, including the two Compact ones whose *internal* element structure is genuinely more work to interpret (UInt-compact is a solid block of sequentially-dependent BER-OID values with no way to locate an individual element without decoding from the start; RLE is a list of variable-count "patch" records). Locating the array's *outer* boundary never requires interpreting its *inner* structure.
+**MDARRAY wire layout, confirmed against ST 1303.2 directly** (§7.2, Table 1/Figure 4): `NDim` (BER-OID) → `Dim1`...`Dim_NDim` (each BER-OID) → `EBytes` (BER-OID) → `APA` (BER-OID) → `APAS` (optional, format depends on `APA`) → Array of Elements (optional, whatever bytes remain in the value). Appendix D / Table 3 defines exactly 5 APA codes: `0x01` Natural (no processing, no APAS), `0x02` ST 1201 IMAPB (Element-Processed; APAS is one Minimum/Maximum pair per ST 1303-17/-19, length 8 or 16 bytes, both 32-bit or both 64-bit IEEE 754, its length found by subtracting every other field's length from the total pack length), `0x03` Boolean (Compact; no APAS; elements bit-packed, `ceil(count/8)` bytes), `0x04` Unsigned Integer (Compact; APAS is one BER-OID bias; elements are concatenated BER-OID values with no per-element boundary marker), `0x05` Run-Length (Compact; APAS is one fixed-`EBytes`-width default value; elements are a variable-count list of value+coordinate+run-length "patch" records). In every case the Array of Elements' *outer* boundary is unambiguous — "whatever remains in the value" — even though the *inner* structure of the two Compact algorithms (0x04, 0x05) requires sequential decode to enumerate individual elements.
+
+**A real ambiguity this ADR does not fully resolve: which APA does ST 1601 actually put on the wire for items 9 and 10?** Their own text (§6.3.9/§6.3.10) documents *different* IMAPB ranges per array row — e.g. σ uses `IMAPB(0,100,EBytes)`, ρ uses `IMAPB(-1,1,EBytes)` — which looks at first like it needs per-row APAS parameters. It doesn't, and can't: ST 1303's own Example 3 (§8.1) explicitly says using the pack-level APA=2 for a heterogeneous array "is not recommended... because it is impeded by the need to represent values with ranges orders of magnitude apart using a single mapping" — precisely items 9/10's situation (σ∈[0,100] or wider vs. ρ∈[-1,1]). The far more plausible reading is that items 9/10 use **APA=1 (Natural)**, with each element already an ST 1201 IMAPB-mapped integer that the *item's own documented per-row range* (not the generic MDARRAY pack) is needed to decode — consistent with NoteC/NoteD's "EBytes is the max length across all IMAP'ed sigma and rho values" (which only makes sense if each row is independently mapped against its own range, then packed at a shared width). **This ADR does not have a real capture or cross-implementation reference (e.g. jmisb) to confirm this reading**, so the design below deliberately doesn't hardcode it — see Decision and Assumptions.
 
 # Decision
 
-**Add `ValueKind::MdArray` and a dedicated `misbklv::mdarray` module for structural parsing, with typed element access for the two algorithms this codebase's own data actually uses (Natural, IMAPB) and byte-level access for the other three.** Add a new nested registry `GEO_REGISTRATION_1601` and change ST 0601 tag 98 from `bytes` to `nested_ls` pointing at it, following the exact pattern of fork 36/37.
+**Add `ValueKind::MdArray` and a dedicated `misbklv::mdarray` module for structural parsing, exposing typed accessors for the algorithms and element types this codebase can identify from the wire itself — not a hardcoded assumption about what ST 1601 items 9/10 use.** Add a new nested registry `GEO_REGISTRATION_1601` and change ST 0601 tag 98 from `bytes` to `nested_ls` pointing at it, following fork 36/37's pattern exactly, including every piece of standard wiring that pattern needs:
 
-**Why `codec::decode`/`codec::encode` need no changes.** `codec::decode`'s `default:` branch already returns the raw byte span for any `ValueKind` it doesn't special-case (this is how `Bytes`, `NestedLS`, and `Pack` are all handled today — confirmed by reading `src/codec.cpp` directly, not assumed by analogy). `ValueKind::MdArray` falls into that same default branch for free. And unlike `NestedLS`/`Pack`, an MDARRAY item has no child registry to route into — it's a self-contained leaf value — so `include/misbklv/registries.hpp`/`registries.cpp` need no changes either. The entire new surface is the `mdarray` module plus the registry/enum plumbing every prior fork has already established the pattern for.
+- `registry/georegistration1601.toml` (new), `registry/uas0601.toml` tag 98 → `nested_ls`/`child = "geo_registration_1601"`.
+- `tools/gen_registry.py`: add `"mdarray": "MdArray"` to the `KIND` dict (or `validate()` rejects any item using it), and `"geo_registration_1601": "GeoRegistration1601"` to `CHILD`.
+- `include/misbklv/types.hpp`: add `GeoRegistration1601` to `RegistryId`, and `MdArray` to `ValueKind`.
+- `include/misbklv/registries.hpp` / `src/registries.cpp`: the generated-header include and a `registry_for()` case for `GeoRegistration1601` — the same plumbing every prior nested registry needed. (`ValueKind::MdArray` itself needs none of this — it has no child registry, so nothing routes through `registry_for()` for it. Confirmed directly: `ItemDescriptor::child` is only read by `registry_for()`, which `MdArray` items never populate.)
+- `src/codec.cpp`: **`decode()` needs no change** — its `default:` branch already returns the raw byte span for any `ValueKind` it doesn't special-case (confirmed by reading the function directly; this is how `Bytes`/`NestedLS`/`Pack` already work). **`encode()` does need a one-line change**: unlike `decode()`, `encode()` has no `default:` — it falls through to `TypeMismatch` for any kind not explicitly listed. Add `case ValueKind::MdArray:` to the existing `Bytes`/`NestedLS`/`Pack` passthrough group, or authoring/round-tripping an MDARRAY item's raw bytes via `LocalSetBuilder::set()`/`Message::set()` fails outright.
 
 **The `mdarray` module** (`include/misbklv/mdarray.hpp`, `src/mdarray.cpp`):
 
@@ -50,38 +53,51 @@ enum class Apa : std::uint8_t {
 
 struct MdArray {
   std::vector<std::uint64_t> dims;      // NDim entries, row-major (ST 1303 §7.2.6.1)
-  std::uint8_t ebytes;
+  std::uint32_t ebytes;                  // widened; EBytes is BER-OID, not inherently <= 255
   Apa apa;
   std::span<const std::byte> apas;      // raw, format depends on apa (empty for Natural/Boolean)
   std::span<const std::byte> elements;  // raw "Array of Elements" bytes -- always well-defined
 
-  std::size_t element_count() const;    // product of dims
+  std::size_t element_count() const;    // product of dims; parse() has already checked this
+                                         // doesn't overflow against the actual elements length
 
-  // Typed access -- only meaningful when apa is Natural or Imapb; both assert
-  // on the wrong apa rather than silently returning nonsense (ADR 0011's
-  // "trust internal invariants" pattern -- caller already knows apa from the
-  // struct it's holding).
-  std::uint64_t element_uint(std::size_t flat_index) const;      // Natural: big-endian, ebytes wide
-  double element_imapb(std::size_t flat_index) const;             // Imapb: (min, max) from apas, per ST 1201
+  // Typed access. Each asserts on a mismatched apa/ebytes (this codebase's
+  // existing "trust checked invariants" pattern -- the caller already holds
+  // an MdArray whose apa/ebytes it can read before choosing an accessor) but
+  // ebytes-vs-accessor-width mismatches (e.g. ebytes > 8) are rejected by
+  // parse() itself, not deferred to these accessors.
+  std::uint64_t element_uint(std::size_t flat_index) const;    // Natural, big-endian, ebytes wide
+  double element_float(std::size_t flat_index) const;           // Natural, IEEE 754, ebytes 4 or 8
+  double element_imapb(std::size_t flat_index) const;             // Imapb: (min, max) from apas
 };
 
 // Parses NDim, every Dim_i, EBytes, APA, and (per APA's own rule) APAS, then
 // takes the remainder of `value` as the elements span. Structurally correct
-// for all 5 APAs; does not interpret Boolean/UintCompact/RunLength element
-// bytes beyond exposing them as a span.
+// for all 5 APAs -- the outer elements boundary never requires interpreting
+// the elements themselves, even for the two Compact algorithms whose inner
+// per-element boundaries this module doesn't enumerate.
+//
+// Rejects (BadLength / RangeError, not UB) rather than silently misparsing:
+//  - NDim inconsistent with remaining bytes (each Dim_i needs >= 1 byte;
+//    caps the dims.reserve() this function does before it's even validated
+//    the full header fits).
+//  - Any arithmetic overflow computing element_count() or
+//    element_count() * ebytes (both checked with overflow-safe multiplication,
+//    not `std::size_t` wraparound).
+//  - EBytes outside what fits a real element (parse() itself enforces
+//    ebytes <= 8 before element_uint()/element_float()/element_imapb() can be
+//    called meaningfully; EBytes == 0 is legal per ST 1303 §7.2.3 as a
+//    placeholder for the two variable-length-element Compact algorithms
+//    (UintCompact, and the value slot doesn't apply the same way to
+//    Boolean) and is handled per-APA, not rejected outright).
+//  - An APA value outside 1-5 (0x00 is reserved per ST 1303 Table 3; ST
+//    1303-14 requires a Table 3 value).
 Result<MdArray> parse(std::span<const std::byte> value);
 
 }  // namespace misbklv::mdarray
 ```
 
-Per-APA parsing rules, from ST 1303 Appendix D (used by `parse()`, verified against the standard's own worked examples in Figures 6-12):
-- **Natural (`0x01`)**: no APAS. `elements.size() == element_count() * ebytes`.
-- **IMAPB (`0x02`)**: APAS length = (bytes remaining after the APA field) − (`element_count() * ebytes`); ST 1303-19 requires this to resolve to exactly 8 (two 32-bit floats) or 16 (two 64-bit doubles) — `parse()` rejects anything else as malformed. `element_imapb(i)` decodes `apas` as the (min, max) pair per that width, then applies ST 1201 IMAPB with `ebytes` width to element `i`.
-- **Boolean (`0x03`)**: no APAS. `elements.size() == ceil(element_count() / 8.0)` (bit-packed, ST 1303 §D.2). No element accessor provided — bit-unpacking is straightforward but nothing in this codebase's target standards uses it yet.
-- **UInt-compact (`0x04`)**: APAS is a single BER-OID (the bias) — self-length-prefixed, so `parse()` reads exactly one BER-OID value and that's the whole APAS. `elements` is the remainder: a solid block of concatenated BER-OID-encoded values with no per-element boundary markers (ST 1303 §D.3) — genuinely requires full sequential decode to enumerate, which this ADR doesn't provide.
-- **Run-Length (`0x05`)**: APAS is a single fixed-width value, `ebytes` bytes (the default/background value). `elements` is the remainder: a variable-count list of `[value(ebytes) | coord(BER-OID)×NDim | run_length(BER-OID)×NDim]` patch records (ST 1303 §D.4, Figure 11) — enumerating patches isn't provided.
-
-**`ValueKind::MdArray` is a marker with no `.child`.** Unlike `NestedLS`/`Pack`, nothing routes through `registry_for()` for it — a caller who wants structured access calls `mdarray::parse()` directly on the item's raw bytes, the same way a caller descending into a `NestedLS` calls `parse_items()` directly rather than going through `codec::decode`.
+**Items 4 and 8's element type is fixed by ST 1601's own notation** (`MDARRAY(UINT, ...)` for tag 4's row/column pixel coordinates per §6.3.4 NoteA) — `element_uint()` covers item 4 directly. **Items 5, 8, 9, 10's element type is not fully pinned down by the standard text alone**: item 5/8 (latitude/longitude/elevation) take their type from external ST 0807-registered keys the standard doesn't reproduce, and could be Natural float or IMAPB depending on encoder choice (ST 1303's own Example 2 language: "run-time" type selection is normal for MDARRAY); items 9/10 are almost certainly Natural-with-item-documented-per-row-IMAPB-ranges per the Context discussion, but this ADR doesn't assert that as fact. **The design responds to this by exposing `apa`/`ebytes`/`dims` on every `MdArray` and providing `element_uint`/`element_float`/`element_imapb` as generic accessors a caller (or a later, smaller ST-1601-specific helper) chooses between based on what's actually on the wire** — not by guessing one specific encoding into the ADR and being wrong. This mirrors how MDARRAY is designed to be self-describing in the first place.
 
 **Per-item typing for the other 5 ST 1601 items**, from Table 1:
 
@@ -90,42 +106,46 @@ Per-APA parsing rules, from ST 1303 Appendix D (used by `parse()`, verified agai
 | 1 (Document Version) | `uint`, `variable = true` | Mandatory. Plain `uint` per Table 1 — app-defined width, same treatment ADR 0041 gave ST 1602's tag 2. |
 | 2 (Algorithm Name), 3 (Algorithm Version) | `utf8`, variable | Both Mandatory. |
 | 6 (Second Image Name) | `utf8`, variable | Optional. |
-| 7 (Algorithm Configuration Identifier) | `bytes`, `fixed_len = 16` | Optional. RFC 4122 UUID, 16 raw bytes — no version constraint is wire-enforced (ST 1601 recommends v4/v5 but doesn't mandate it), so this is opaque bytes at the exact width, the same treatment this codebase already gives other 16-byte binary identifiers (e.g. the ST 0604 SEI UUID in `src/gst/gst_video.cpp`). No new `ValueKind` needed — a fixed 16-byte span is exactly what `Bytes` already is. |
+| 7 (Algorithm Configuration Identifier) | `bytes`, `fixed_len = 16` | Optional. RFC 4122 UUID, 16 raw bytes — no version constraint is wire-enforced (ST 1601 recommends v4/v5 but doesn't mandate it), so this is opaque bytes at the exact width, the same treatment this codebase already gives other 16-byte binary identifiers (e.g. the ST 0604 SEI UUID in `src/gst/gst_video.cpp`). No new `ValueKind` needed. |
 
-**Mandatory flags: tags 1, 2, 3** (`flags = ["mandatory"]`), matching Table 1's Rules column. Tags 4-10 are all Optional (the standard doesn't require any tie-point data be present at all — a Geo-Registration LS can legitimately carry only the algorithm identification). `LocalSetBuilder::check_mandatory()` (from ADR 0040) applies unchanged.
+**Mandatory flags: tags 1, 2, 3** (`flags = ["mandatory"]`), matching Table 1's Rules column. Tags 4-10 are all Optional (a Geo-Registration LS can legitimately carry only the algorithm identification, with no tie-point data at all). `LocalSetBuilder::check_mandatory()` (from ADR 0040) applies unchanged.
 
-**Cross-item constraint left unenforced.** ST 1601.1-03 requires tags 4, 5, 8, 9, 10 to use the same tie-point count when present together. This is a cross-item, cross-array-shape constraint `check_mandatory()` has no mechanism for (it checks tag presence, not relationships between decoded array dimensions) — recorded as a TOML comment, matching how ST 1602's Z-Order uniqueness rule (ADR 0041) and ST 0102's Version-conditional requirements (ADR 0040) were already left as caller-enforced, not library-enforced.
+**Cross-item constraint left unenforced.** ST 1601.1-03 requires tags 4, 5, 8, 9, 10 to use the same tie-point count when present together — for the 2-D items (4, 5, 9, 10) that count is `Dim2`; for item 8 (1-D: `MDARRAY(NoteA, 1, NoteB)`) it's `Dim1`. This is a cross-item, cross-array-shape constraint `check_mandatory()` has no mechanism for (it checks tag presence, not relationships between decoded array dimensions) — recorded as a TOML comment, matching how ST 1602's Z-Order uniqueness rule (ADR 0041) and ST 0102's Version-conditional requirements (ADR 0040) were already left as caller-enforced, not library-enforced.
 
 # Alternatives considered
 
-- **Keep tags 4/5/8/9/10 opaque `bytes`, type only tags 1/2/3/6/7.** Rejected: unlike ST 0102's single UTF-16 field, the MDARRAY items *are* what ST 1601 exists for — tie-point correspondence data is the standard's entire substance. Typing everything except the substance isn't a meaningful "typed" fork.
+- **Keep tags 4/5/8/9/10 opaque `bytes`, type only tags 1/2/3/6/7.** Rejected: unlike ST 0102's single UTF-16 field, the MDARRAY items *are* what ST 1601 exists for — tie-point correspondence data is the standard's entire substance.
 - **Model MDARRAY as a `Pack` with a synthetic child registry.** Rejected — see Context. `Pack` assumes repeated tagged TLV items; MDARRAY is a self-describing header plus homogeneous (or algorithmically-packed) element data. There's no tag to dispatch on inside an MDARRAY value.
-- **Full typed decode for all 5 APAs, including Boolean/UInt-compact/Run-Length element interpretation.** Rejected for now: nothing in this codebase's target standards uses these three (ST 1601 only uses Natural and IMAPB), and each would need meaningfully different, untested decode logic (bit-unpacking, sequential variable-length BER-OID decode, or patch-list reconstruction) built against zero real usage. Structural parsing (correct byte boundaries, safe to skip/round-trip) is provided for all 5 — only *element interpretation* is deferred for the three unused ones, and adding it later needs no re-fork, just a new method on `MdArray`.
-- **A typed encode/authoring API for MDARRAY** (constructing a new array from scratch, choosing APA, etc.). Rejected: every consumer of this library so far decodes existing telemetry; nobody has asked to synthesize new geo-registration data. Encoding an MDARRAY item (when round-tripping or hand-assembling one from already-correct wire bytes) goes through the existing raw-bytes path (`append_raw`), the same way every nested LS body is built today — no new mechanism needed for that.
-- **Per-row IMAPB ranges in `element_imapb()`** (to match ST 1601's item text literally). Rejected — see Context: the wire format only carries one (min, max) pair per array; there's nothing to select per-row even if the API wanted to.
+- **Hardcode item 9/10 decode as "one global IMAPB range from APAS."** Rejected — this was this ADR's own first draft, and it's wrong: ST 1303 itself discourages exactly this (one mapping across orders-of-magnitude-different per-row ranges), and NoteC/NoteD's "max EBytes across all IMAP'ed sigma/rho values" language only makes sense if each row is mapped against its own range before a shared width is chosen — which a single pack-level APAS pair cannot represent.
+- **Auto-apply ST 1601's per-row IMAPB ranges inside the generic `mdarray` module** (a `decode_st1601_item9(MdArray)`-style helper baked into the ST-1303-generic module). Rejected for *this* ADR: it bakes one invoking standard's item-specific semantics into what should be a standard-agnostic ST 1303 module, and the exact encoding items 9/10 use isn't confirmed (see Context). A small, separate, ST-1601-specific convenience layer on top of the generic `mdarray` module is a reasonable smaller follow-up once a real capture or cross-implementation reference confirms the encoding — not part of this fork.
+- **Full typed decode for all 5 APAs, including Boolean/UInt-compact/Run-Length element interpretation.** Rejected for now: nothing in this codebase's target standards uses these three for anything currently in scope, and each would need meaningfully different, untested decode logic built against zero real usage. Structural parsing (correct byte boundaries, safe to skip/round-trip) is provided for all 5 — only *element interpretation* is deferred for the three unused ones.
+- **A typed encode/authoring API for MDARRAY** (constructing a new array from scratch, choosing APA, etc.). Rejected: every consumer of this library so far decodes existing telemetry; nobody has asked to synthesize new geo-registration data. Encoding an MDARRAY item goes through the existing raw-bytes path (`append_raw`, and now `LocalSetBuilder::set()` once `encode()` gains its `MdArray` case), the same way every nested LS body is built today.
 
 # Consequences
 
-- Tags 4, 5, 8, 9, 10 become structurally parseable — a caller gets dimension shape, element count, and (for Natural/IMAPB) typed element values, instead of an opaque blob. `Message::get(98)` itself is unchanged; a caller descends into tag 98 the same way ST 0102/ST 1602 already require (find the descriptor, `parse_items()`, then per-child-tag `mdarray::parse()` for the MDARRAY ones).
-- Tags using Boolean/UInt-compact/Run-Length APAs (theoretically possible on the wire, though ST 1601's own text implies Natural/IMAPB for its items) parse structurally — safe to detect shape and skip/round-trip — but their element bytes are exposed raw, not decoded. This is a real, documented gap, not silent data loss: nothing is hidden, a future caller needing those algorithms builds on `MdArray`'s existing fields.
-- The library gains a genuinely reusable capability: any future MISB standard using MDARRAY (ST 1303 is used across several MISB standards beyond ST 1601) can reuse `mdarray::parse()` directly, unlike a bespoke per-standard hack.
-- No change to `codec.cpp`, `registries.cpp`, or `registries.hpp` — confirmed directly, not assumed, by reading `codec::decode`'s existing default-branch behavior.
+- Tags 4, 5, 8, 9, 10 become structurally parseable — a caller gets dimension shape, element count, algorithm code, and (for Natural/IMAPB) typed element values, instead of an opaque blob. `Message::get(98)` itself is unchanged; a caller descends into tag 98 the same way ST 0102/ST 1602 already require.
+- **This is real new schema surface, not a reapplication of an existing pattern** — the standard `RegistryId`/`registries.hpp`/`registries.cpp`/`gen_registry.py` wiring fork 36/37 needed still applies in full for `GeoRegistration1601`; the only thing genuinely new (and needing no `registries.cpp` work) is `ValueKind::MdArray` itself, since it has no child to route into. `codec::encode` needs its one-line addition or nothing can author/round-trip an MDARRAY item through the builder API.
+- Items 5/8/9/10's *exact* typed decode (which of `element_uint`/`element_float`/`element_imapb` actually applies) is not fully settled by this ADR — a caller inspecting a real ST 1601 stream's `apa`/`ebytes` fields picks the right one; item 4 alone is unambiguous (UINT per its own notation).
+- Tags using Boolean/UInt-compact/Run-Length APAs (theoretically possible on the wire, though ST 1601's own text implies Natural/IMAPB for its items) parse structurally — safe to detect shape and skip/round-trip — but their element bytes are exposed raw, not decoded.
+- The library gains a genuinely reusable capability: ST 1206 (SAR Motion Imagery, currently a separate candidate fork) also uses MDARRAY — tag 22, Radar Cross Section Scale Factor, confirmed in `references/ST1206.1.txt`. Any future MDARRAY-using standard reuses `mdarray::parse()` directly.
 
 # Assumptions / open questions
 
-- **UInt-compact and Run-Length element decode are real, deferred work**, not merely hypothetical: `MdArray::elements` for those two APAs is exactly as useful as an opaque `bytes` item today (a caller must write their own decode). The difference from full opacity is that the *shape* (dims, ebytes, bias/default value) is already parsed and available, which is strictly better than nothing.
-- **Whether real ST 1601 producers ever emit anything but Natural/IMAPB for tags 4/5/8/9/10 is unconfirmed.** The standard's item text (§6.3.4-§6.3.10) describes them in terms that only make sense for Natural or IMAPB (floating-point tie-point coordinates and uncertainties), so this is a reasonable bet, not a guarantee — nothing prevents a compliant encoder from choosing a Compact APA for any of them.
-- **ST 1601.1-03's cross-item tie-point-count consistency is unenforced**, per Alternatives/Decision — a caller who decodes tags 4, 5, 8, 9, 10 and finds mismatched tie-point counts (from `element_count()` per item) has found a genuinely non-compliant stream; this library doesn't reject it, matching this codebase's general posture of decoding what's on the wire rather than validating every cross-field rule a standard states.
-- **UUID version (v4/v5) is unvalidated**, per ST 1601's own §6.3.7 language ("recommend" not "require") — `bytes`/16 accepts any 16-byte value regardless of the RFC 4122 version bits.
+- **Whether ST 1601 items 9/10 (and, less certainly, 5/8) are actually encoded as Natural-with-item-documented-per-row-ranges is this ADR's central open question, not a settled fact.** ST 1303's own text (§8.1, Example 3) is the strongest available evidence, but this ADR has no real capture or a cross-implementation reference (e.g. jmisb's ST 1601 handling, not checked — no jmisb source was available to consult) to confirm it. The implementation PR should decode conservatively: expose `apa`/`ebytes`/`dims` and the generic typed accessors; add an ST-1601-item-specific convenience layer only once a real sample or cross-reference confirms which encoding producers actually use.
+- **UInt-compact and Run-Length element decode are real, deferred work**, not merely hypothetical: `MdArray::elements` for those two APAs is exactly as useful as an opaque `bytes` item today (a caller must write their own decode). The difference from full opacity is that the *shape* (dims, ebytes, bias/default value) is already parsed and available.
+- **ST 1601.1-03's cross-item tie-point-count consistency is unenforced**, per Alternatives/Decision.
+- **UUID version (v4/v5) is unvalidated**, per ST 1601's own §6.3.7 language ("recommend" not "require").
+- **Parser hardening is part of this design, not an implementation afterthought**: `parse()` must bound `NDim` against remaining bytes before allocating `dims` (an unbounded BER-OID driving a `reserve()` is a resource-exhaustion vector), check `element_count()` and `element_count() * ebytes` for overflow rather than trusting `std::size_t` wraparound, and reject an out-of-range `APA` or an `ebytes` too wide for the typed accessors — all before touching wire-derived values arithmetically. This is the same class of guard `hardening_test` already owns for BER-OID tags and Report-on-Change packets elsewhere in this codebase.
 
 # Citations
 
 [1] [ADR 0010](./0010-registry-descriptor-schema.md) — the `ValueKind` enum and `ItemDescriptor` schema this extends with a new marker kind.
 [2] [ADR 0040](./0040-st0102-nested-registry.md) — the nested-registry pattern (no `ul_key`, `check_mandatory()`) this fork reuses unchanged.
 [3] [ADR 0041](./0041-st1602-nested-registry.md) — the second application of the same pattern, confirming it generalizes before this, the third, adds genuinely new schema surface.
-[4] `src/codec.cpp` `decode()`'s `default:` branch — confirmed directly that `NestedLS`/`Pack`/`Bytes` (and now `MdArray`) all fall through to raw-span decode with no per-kind special casing needed.
+[4] `src/codec.cpp` `decode()`'s `default:` branch vs. `encode()`'s lack of one — confirmed directly, not by analogy, that these two functions need different treatment for a new `ValueKind`.
 [5] ST 1601.2 §6.2, Table 1, §6.3.1-§6.3.10 — the Local Set item table and MDARRAY parameter notes this ADR's per-item decisions are read from.[^st1601]
-[6] ST 1303.2 §7.2 (pack structure), Appendix D (the 5 APAs), §8.1 (heterogeneous-array Data Identifier semantics, resolving the apparent per-row-IMAPB-range contradiction).[^st1303]
+[6] ST 1303.2 §7.2 (pack structure), Appendix D (the 5 APAs), §8.1 Example 3 (the heterogeneous-array/APA=2 discouragement that resolves the items-9/10 puzzle, at least as the best available evidence).[^st1303]
+[7] `references/ST1206.1.txt` — confirms ST 1206 (tag 22) is a second real MDARRAY consumer in this codebase's own reference set, cited in Consequences.
 
 [^st1601]: ST 1601.2 §6.2 (UL key), Table 1 (item list, types, Rules column), §6.3.1-§6.3.10 (per-item MDARRAY notation and notes), ST 1601.1-03 (tie-point count consistency requirement).
-[^st1303]: ST 1303.2 §7.2 (pack byte layout and length accounting), Appendix D / Table 3 (the 5 APA codes), Appendix D.1-D.4 (per-APA APAS/element format, worked examples), ST 1303-17/ST 1303-19 (IMAPB APAS requirements), §8.1 (Type/Data Identifier semantics for heterogeneous arrays).
+[^st1303]: ST 1303.2 §7.2 (pack byte layout and length accounting), Appendix D / Table 3 (the 5 APA codes), Appendix D.1-D.4 (per-APA APAS/element format, worked examples), ST 1303-17/ST 1303-19 (IMAPB APAS requirements), §8.1 (Type/Data Identifier semantics for heterogeneous arrays, Example 3's APA=2 discouragement).
