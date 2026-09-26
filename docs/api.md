@@ -306,7 +306,8 @@ auto bytes = msg->encode();      // Result<Bytes>: UL key + items + checksum (au
   Time Stamp) first for ST 0601. The checksum (Item 1) is appended automatically
   last; `get<T>` reads back whatever you've set.
 - For advanced authoring — **nested** Local Sets (e.g. a VMTI LS inside 0601
-  Item 74, or a Security0102 LS inside Item 48), **VTarget Series**,
+  Item 74, a Security0102 LS inside Item 48, or a CompositeImaging1602 LS
+  inside Item 99), **VTarget Series**,
   mandatory-item enforcement, or a custom UL key — drop to the lower-level
   [`LocalSetBuilder`](../include/misbklv/builder.hpp) and
   [`series.hpp`](../include/misbklv/series.hpp) that `Message` is built on.
