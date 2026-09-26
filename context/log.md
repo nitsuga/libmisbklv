@@ -2,6 +2,12 @@
 
 ## 2026-09-26
 
+* **Fork 39 implemented** ([`0043`](./decisions/0043-st1206-sarmi-nested-registry.md)):
+  ST 0601 Item 95 now routes to SARMI descriptors, reusing the ST 1303 MDARRAY
+  parser for the RCS scale-factor polynomial. Author: openai/gpt-5.
+* **Fork 39 accepted** ([`0043`](./decisions/0043-st1206-sarmi-nested-registry.md)):
+  ST 1206 SAR Motion Imagery as a nested-only typed registry. Author:
+  openai/gpt-5.
 * **PR #104 review follow-up**: synchronized ADR 0042's parser contract with
   the implementation and added targeted malformed-MDARRAY regressions. Author:
   openai/gpt-5.

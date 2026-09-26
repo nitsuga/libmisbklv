@@ -14,6 +14,7 @@
 #include "misbklv/registry/security0102_tables.generated.hpp"
 #include "misbklv/registry/compositeimaging1602_tables.generated.hpp"
 #include "misbklv/registry/georegistration1601_tables.generated.hpp"
+#include "misbklv/registry/sarmi1206_tables.generated.hpp"
 
 namespace misbklv {
 

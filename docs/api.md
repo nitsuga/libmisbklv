@@ -273,9 +273,9 @@ auto bytes  = msg->encode();                 // Result<Bytes>; original packet e
 - **Named tags** — `tag` may be a plain number or a generated per-registry enum:
   `tags::Uas0601::SensorLatitude`, `tags::Vmti0903::…`, `tags::Vtarget0903::…`,
   `tags::Security0102::…`, `tags::CompositeImaging1602::…`,
-  `tags::GeoRegistration1601::…` (generated from the registry, so the value
-  equals the ST tag number). Names and numbers are interchangeable; use a number
-  for any tag not in the registry.
+  `tags::GeoRegistration1601::…`, `tags::Sarmi1206::…` (generated from the
+  registry, so the value equals the ST tag number). Names and numbers are
+  interchangeable; use a number for any tag not in the registry.
 
 The registry (ST 0601 vs standalone ST 0903 VMTI) is chosen automatically from
 the packet's 16-byte UL key.
@@ -308,7 +308,8 @@ auto bytes = msg->encode();      // Result<Bytes>: UL key + items + checksum (au
   last; `get<T>` reads back whatever you've set.
 - For advanced authoring — **nested** Local Sets (e.g. a VMTI LS inside 0601
   Item 74, a Security0102 LS inside Item 48, a GeoRegistration1601 LS inside
-  Item 98, or a CompositeImaging1602 LS inside Item 99), **VTarget Series**,
+  Item 98, a CompositeImaging1602 LS inside Item 99, or a Sarmi1206 LS inside
+  Item 95), **VTarget Series**,
   mandatory-item enforcement, or a custom UL key — drop to the lower-level
   [`LocalSetBuilder`](../include/misbklv/builder.hpp) and
   [`series.hpp`](../include/misbklv/series.hpp) that `Message` is built on.

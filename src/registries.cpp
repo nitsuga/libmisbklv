@@ -21,6 +21,8 @@ const Registry* registry_for(RegistryId id) {
       return &gen::composite_imaging_1602;
     case RegistryId::GeoRegistration1601:
       return &gen::geo_registration_1601;
+    case RegistryId::Sarmi1206:
+      return &gen::sarmi_1206;
     case RegistryId::None:
     default:
       return nullptr;

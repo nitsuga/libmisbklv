@@ -94,6 +94,10 @@ if(Python3_Interpreter_FOUND)
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_registry.py
             ${CMAKE_CURRENT_SOURCE_DIR}/registry/georegistration1601.toml
             ${_gen_dir}/georegistration1601_tables.generated.hpp
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_registry.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/registry/sarmi1206.toml
+            ${_gen_dir}/sarmi1206_tables.generated.hpp
     COMMENT "Regenerating registry tables from registry/*.toml")
   add_custom_target(regenerate-synthetic-fixtures
     COMMAND ${Python3_EXECUTABLE}
@@ -152,6 +156,10 @@ add_test(NAME compositeimaging1602_mandatory COMMAND compositeimaging1602_mandat
 add_executable(georegistration1601_mandatory_test test/georegistration1601_mandatory_test.cpp)  # ADR 0042
 target_link_libraries(georegistration1601_mandatory_test PRIVATE misbklv)
 add_test(NAME georegistration1601_mandatory COMMAND georegistration1601_mandatory_test)
+
+add_executable(sarmi1206_mandatory_test test/sarmi1206_mandatory_test.cpp)  # ADR 0043
+target_link_libraries(sarmi1206_mandatory_test PRIVATE misbklv)
+add_test(NAME sarmi1206_mandatory COMMAND sarmi1206_mandatory_test)
 
 add_executable(mdarray_test test/mdarray_test.cpp)
 target_link_libraries(mdarray_test PRIVATE misbklv)

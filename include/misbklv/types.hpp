@@ -96,7 +96,8 @@ enum class RegistryId : std::uint8_t {
   Vtarget0903,
   Security0102,
   CompositeImaging1602,
-  GeoRegistration1601
+  GeoRegistration1601,
+  Sarmi1206
 };
 
 struct SpecialValue {
