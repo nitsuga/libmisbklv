@@ -38,6 +38,7 @@ Tag 98 of the ST 0601 registry (`registry/uas0601.toml`) carries the Geo-Registr
 - `include/misbklv/registries.hpp` / `src/registries.cpp`: the generated-header include and a `registry_for()` case for `GeoRegistration1601` — the same plumbing every prior nested registry needed. (`ValueKind::MdArray` itself needs none of this — it has no child registry, so nothing routes through `registry_for()` for it. Confirmed directly: `ItemDescriptor::child` is only read by `registry_for()`, which `MdArray` items never populate.)
 - `src/codec.cpp`: **`decode()` needs no change** — its `default:` branch already returns the raw byte span for any `ValueKind` it doesn't special-case (confirmed by reading the function directly; this is how `Bytes`/`NestedLS`/`Pack` already work). **`encode()` does need a one-line change**: unlike `decode()`, `encode()` has no `default:` — it falls through to `TypeMismatch` for any kind not explicitly listed. Add `case ValueKind::MdArray:` to the existing `Bytes`/`NestedLS`/`Pack` passthrough group, or authoring/round-tripping an MDARRAY item's raw bytes via `LocalSetBuilder::set()`/`Message::set()` fails outright.
 - `CMakeLists.txt`: `src/mdarray.cpp` needs adding to the library's source list (alongside `src/codec.cpp`), and `georegistration1601.toml` needs its own `regenerate-registry` codegen command, the same as every prior registry TOML.
+- `.github/workflows/ci.yml`: add `georegistration1601` to the hardcoded drift-check loop (`for r in uas0601 vmti0903 vtarget0903 security0102 compositeimaging1602; do ...`) — every prior registry TOML is in this list; omitting the new one means CI never checks it for generated-output drift.
 
 **The `mdarray` module** (`include/misbklv/mdarray.hpp`, `src/mdarray.cpp`):
 
@@ -48,7 +49,8 @@ enum class Apa : std::uint8_t {
   Natural = 1,         // no processing; raw fixed-width elements
   Imapb = 2,            // ST 1201 IMAPB per element; APAS = one (min, max) pair
   BooleanCompact = 3,   // bit-packed; APAS is empty
-  UintCompact = 4,      // BER-OID elements, optional bias in APAS
+  UintCompact = 4,      // BER-OID elements; APAS always holds the bias (a BER-OID,
+                         // even when the bias itself is 0 -- never absent)
   RunLength = 5,        // patch-list encoding; APAS carries the default value
 };
 
@@ -101,6 +103,13 @@ struct MdArray {
 //    crafted short value must fail cleanly instead of wrapping to a huge
 //    APAS length.
 //  - An APA value outside 1-5 (0x00 is reserved per ST 1303 Table 3).
+//  - **Wrong elements length for the two algorithms with an exact, checkable
+//    one** (not just "whatever remains" -- these two get validated, not just
+//    accepted): Natural (APA=1) must have exactly
+//    `element_count() * ebytes` bytes of elements (ST 1303 §7.2.6.1);
+//    Boolean (APA=3) must have exactly `ceil(element_count() / 8.0)` bytes
+//    (ST 1303 Appendix D.2). A value with extra or missing trailing bytes
+//    under either APA is malformed, not silently truncated/padded.
 //
 // EBytes == 0 is a real, legal case with a specific meaning per ST 1303
 // §7.2.3: it signals an *empty* Array of Elements regardless of APA (a
@@ -108,13 +117,15 @@ struct MdArray {
 // elements -- that placeholder role belongs to EBytes == 1 instead, used by
 // the two Compact algorithms that fix EBytes at 1 (UintCompact's BER-OID
 // elements, Boolean's bit-packed ones). `parse()` treats EBytes == 0 as
-// `elements` being empty (`has_data() == false`) for every APA -- dims/
-// element_count() stay meaningful (shape without data), it's only the
-// element bytes that vanish. For the APA=2/EBytes==0 combination
-// specifically, every byte remaining after the APA field belongs to APAS;
-// the standard doesn't explicitly bless this combination, so `parse()`
-// accepts an empty APAS there in addition to the usual 8-or-16-byte cases,
-// rather than rejecting a case ST 1303 doesn't actually forbid.
+// `elements` being empty (`has_data() == false`) for every APA except 0x02 --
+// dims/element_count() stay meaningful (shape without data), it's only the
+// element bytes that vanish. **APA=2 is the one exception, and does not get
+// an EBytes==0 carve-out**: ST 1303-17/-19 are SHALL requirements that APAS
+// always contain a Minimum/Maximum pair sized 8 or 16 bytes, with no stated
+// exception for an empty array -- so `parse()` still requires a valid 8- or
+// 16-byte APAS under APA=2 regardless of EBytes, and rejects anything else
+// (including an empty one) as malformed rather than inferring a permissive
+// reading the standard's own SHALL language doesn't support.
 Result<MdArray> parse(std::span<const std::byte> value);
 
 }  // namespace misbklv::mdarray
@@ -129,7 +140,7 @@ Result<MdArray> parse(std::span<const std::byte> value);
 | 1 (Document Version) | `uint`, `variable = true` | Mandatory. Plain `uint` per Table 1 — app-defined width, same treatment ADR 0041 gave ST 1602's tag 2. |
 | 2 (Algorithm Name), 3 (Algorithm Version) | `utf8`, variable | Both Mandatory. |
 | 6 (Second Image Name) | `utf8`, variable | Optional. |
-| 7 (Algorithm Configuration Identifier) | `bytes`, `fixed_len = 16` | Optional. RFC 4122 UUID, 16 raw bytes — no version constraint is wire-enforced (ST 1601 recommends v4/v5 but doesn't mandate it), so this is opaque bytes at the exact width, the same treatment this codebase already gives other 16-byte binary identifiers (e.g. the ST 0604 SEI UUID in `src/gst/gst_video.cpp`). No new `ValueKind` needed. |
+| 7 (Algorithm Configuration Identifier) | `bytes`, `fixed_len = 16` | Optional. RFC 4122 UUID, 16 raw bytes. **`fixed_len = 16` is documentary, not enforced** — `codec::decode`/`encode` treat every `bytes` item identically (return/copy whatever span is there, per-length or not), the same as `fixed_len` on any other `bytes` item in this codebase's registries; nothing rejects a mis-sized value at this tag today. No version constraint is wire-enforced either (ST 1601 recommends v4/v5 but doesn't mandate it). No new `ValueKind` needed — this is the same opaque-bytes treatment this codebase already gives other 16-byte binary identifiers (e.g. the ST 0604 SEI UUID in `src/gst/gst_video.cpp`). |
 
 **Mandatory flags: tags 1, 2, 3** (`flags = ["mandatory"]`), matching Table 1's Rules column. Tags 4-10 are all Optional (a Geo-Registration LS can legitimately carry only the algorithm identification, with no tie-point data at all). `LocalSetBuilder::check_mandatory()` (from ADR 0040) applies unchanged.
 
