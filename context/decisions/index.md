@@ -55,3 +55,4 @@ diverge — e.g. fork 7 → ADR 0004; one fork can span several ADRs — fork 4 
 | 35 | [0039 — Extraction scope and error policy (issue #80)](./0039-extraction-scope-and-error-policy.md) | accepted |
 | 36 | [0040 — ST 0102 Security Metadata LS as a typed nested registry (issue #95)](./0040-st0102-nested-registry.md) | accepted |
 | 37 | [0041 — ST 1602 Composite Imaging LS as a typed nested registry (issue #95)](./0041-st1602-nested-registry.md) | accepted |
+| 38 | [0042 — ST 1601 Geo-Registration LS as a typed nested registry, with a new MDARRAY (ST 1303) decode path (issue #95)](./0042-st1601-mdarray-registry.md) | accepted |
