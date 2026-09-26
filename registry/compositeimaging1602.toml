@@ -74,7 +74,7 @@ length   = 4
 signed   = true
 variable = true
 
-[[item]]                       # §7.3.5 — variable-length uint, app-defined width; mandatory
+[[item]]                       # §7.3.5.1 — variable-length uint, app-defined width; mandatory
 tag      = 9
 name     = "Sub-Image Rows"
 units    = "pixels"
@@ -83,7 +83,7 @@ length   = 4
 variable = true
 flags    = ["mandatory"]
 
-[[item]]                       # §7.3.5 — variable-length uint, app-defined width; mandatory
+[[item]]                       # §7.3.5.2 — variable-length uint, app-defined width; mandatory
 tag      = 10
 name     = "Sub-Image Columns"
 units    = "pixels"
@@ -92,7 +92,7 @@ length   = 4
 variable = true
 flags    = ["mandatory"]
 
-[[item]]                       # §7.3.5 — variable-length signed int, app-defined width; mandatory
+[[item]]                       # §7.3.5.3 — variable-length signed int, app-defined width; mandatory
 tag      = 11
 name     = "Sub-Image Position X"
 units    = "pixels"
@@ -102,7 +102,7 @@ signed   = true
 variable = true
 flags    = ["mandatory"]
 
-[[item]]                       # §7.3.5 — variable-length signed int, app-defined width; mandatory
+[[item]]                       # §7.3.5.4 — variable-length signed int, app-defined width; mandatory
 tag      = 12
 name     = "Sub-Image Position Y"
 units    = "pixels"
@@ -112,7 +112,7 @@ signed   = true
 variable = true
 flags    = ["mandatory"]
 
-[[item]]                       # §7.3.6 — variable-length uint, app-defined width
+[[item]]                       # §7.3.5.5 — variable-length uint, app-defined width
 tag      = 13
 name     = "Active Sub-Image Rows"
 units    = "pixels"
@@ -120,7 +120,7 @@ kind     = "uint"
 length   = 4
 variable = true
 
-[[item]]                       # §7.3.6 — variable-length uint, app-defined width
+[[item]]                       # §7.3.5.6 — variable-length uint, app-defined width
 tag      = 14
 name     = "Active Sub-Image Columns"
 units    = "pixels"
@@ -128,7 +128,7 @@ kind     = "uint"
 length   = 4
 variable = true
 
-[[item]]                       # §7.3.6 — variable-length signed int, app-defined width
+[[item]]                       # §7.3.5.7 — variable-length signed int, app-defined width
 tag      = 15
 name     = "Active Sub-Image Offset X"
 units    = "pixels"
@@ -137,7 +137,7 @@ length   = 4
 signed   = true
 variable = true
 
-[[item]]                       # §7.3.6 — variable-length signed int, app-defined width
+[[item]]                       # §7.3.5.8 — variable-length signed int, app-defined width
 tag      = 16
 name     = "Active Sub-Image Offset Y"
 units    = "pixels"

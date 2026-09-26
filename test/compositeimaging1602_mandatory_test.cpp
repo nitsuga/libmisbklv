@@ -22,7 +22,7 @@ int main() {
   const Registry& reg = gen::composite_imaging_1602;
 
   {
-    // ST 0601 Item 99 routes to CompositeImaging1602 (ADR 0041): the routing
+    // (a) ST 0601 Item 99 routes to CompositeImaging1602 (ADR 0041): the routing
     // registry_for() depends on, not just the registry existing in isolation.
     const ItemDescriptor* d99 = gen::uas_0601.find(99);
     check(d99 != nullptr, "uas0601 has Item 99");
