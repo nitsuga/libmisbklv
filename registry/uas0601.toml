@@ -959,10 +959,11 @@ tag   = 94
 name  = "MIIS Core Identifier"
 kind  = "bytes"
 
-[[item]]                       # §8.95 — MISB ST 1206 SAR MI LS (opaque)
+[[item]]                       # §8.95 — MISB ST 1206 SAR MI LS
 tag   = 95
 name  = "SAR Motion Imagery Local Set"
-kind  = "bytes"
+kind  = "nested_ls"
+child = "sarmi_1206"
 
 [[item]]                       # §8.96 — IMAPB(0, 1500000); 3 B => 0.25 m
 tag      = 96

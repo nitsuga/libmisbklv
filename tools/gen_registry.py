@@ -29,7 +29,7 @@ MAPPED_KINDS = {"linear_lds", "imapb"}
 NESTED_KINDS = {"nested_ls", "pack"}                    # route into a child registry
 CHILD = {"uas_0601": "Uas0601", "vmti_0903": "Vmti0903", "vtarget_0903": "Vtarget0903",
          "security_0102": "Security0102", "composite_imaging_1602": "CompositeImaging1602",
-         "geo_registration_1601": "GeoRegistration1601"}
+         "geo_registration_1601": "GeoRegistration1601", "sarmi_1206": "Sarmi1206"}
 
 
 def die(msg):

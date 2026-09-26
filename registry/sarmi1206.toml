@@ -1,0 +1,235 @@
+# ST 1206.1 SAR Motion Imagery Metadata — descriptor source of truth (ADR 0012).
+# Nested only under ST 0601 Item 95; no standalone UL key (ADR 0043).
+registry     = "SARMI_1206"
+tag_encoding = "ber_oid"
+
+[[item]]
+tag = 1
+name = "Grazing Angle"
+units = "deg"
+kind = "imapb"
+length = 2
+min = 0.0
+max = 90.0
+
+[[item]]
+tag = 2
+name = "Ground Plane Squint Angle"
+units = "deg"
+kind = "imapb"
+length = 2
+min = -90.0
+max = 90.0
+flags = ["mandatory"]
+
+[[item]]
+tag = 3
+name = "Look Direction"
+kind = "uint"
+length = 1
+flags = ["mandatory"]
+
+[[item]]
+tag = 4
+name = "Image Plane"
+kind = "uint"
+length = 1
+
+[[item]]
+tag = 5
+name = "Range Resolution"
+units = "m"
+kind = "imapb"
+length = 4
+min = 0.0
+max = 1000000.0
+
+[[item]]
+tag = 6
+name = "Cross-Range Resolution"
+units = "m"
+kind = "imapb"
+length = 4
+min = 0.0
+max = 1000000.0
+
+[[item]]
+tag = 7
+name = "Range Image Plane Pixel Size"
+units = "m"
+kind = "imapb"
+length = 4
+min = 0.0
+max = 1000000.0
+
+[[item]]
+tag = 8
+name = "Cross-Range Image Plane Pixel Size"
+units = "m"
+kind = "imapb"
+length = 4
+min = 0.0
+max = 1000000.0
+
+[[item]]
+tag = 9
+name = "Image Rows"
+kind = "uint"
+length = 2
+
+[[item]]
+tag = 10
+name = "Image Columns"
+kind = "uint"
+length = 2
+
+[[item]]
+tag = 11
+name = "Range Direction Angle Relative to True North"
+units = "deg"
+kind = "imapb"
+length = 2
+min = 0.0
+max = 360.0
+
+[[item]]
+tag = 12
+name = "True North Direction Relative to Top Image Edge"
+units = "deg"
+kind = "imapb"
+length = 2
+min = 0.0
+max = 360.0
+
+[[item]]
+tag = 13
+name = "Range Layover Angle Relative to True North"
+units = "deg"
+kind = "imapb"
+length = 2
+min = 0.0
+max = 360.0
+
+[[item]]
+tag = 14
+name = "Ground Aperture Angular Extent"
+units = "deg"
+kind = "imapb"
+length = 2
+min = 0.0
+max = 90.0
+
+[[item]]
+tag = 15
+name = "Aperture Duration"
+units = "microseconds"
+kind = "uint"
+length = 4
+
+[[item]]
+tag = 16
+name = "Ground Track Angle"
+units = "deg"
+kind = "imapb"
+length = 2
+min = 0.0
+max = 360.0
+
+[[item]]
+tag = 17
+name = "Minimum Detectable Velocity"
+units = "m/s"
+kind = "imapb"
+length = 2
+min = 0.0
+max = 100.0
+
+[[item]]
+tag = 18
+name = "True Pulse Repetition Frequency"
+units = "Hz"
+kind = "imapb"
+length = 4
+min = 0.0
+max = 1000000.0
+
+[[item]]
+tag = 19
+name = "Pulse Repetition Frequency Scale Factor"
+kind = "imapb"
+length = 2
+min = 0.0
+max = 1.0
+
+[[item]]
+tag = 20
+name = "Transmit RF Center Frequency"
+units = "Hz"
+kind = "imapb"
+length = 4
+min = 0.0
+max = 1000000000000.0
+
+[[item]]
+tag = 21
+name = "Transmit RF Bandwidth"
+units = "Hz"
+kind = "imapb"
+length = 4
+min = 0.0
+max = 100000000000.0
+
+[[item]]
+tag = 22
+name = "Radar Cross Section Scale Factor Polynomial"
+kind = "mdarray"
+
+[[item]]
+tag = 23
+name = "Reference Frame Precision Time Stamp"
+units = "microseconds"
+kind = "uint"
+length = 8
+
+[[item]]
+tag = 24
+name = "Reference Frame Grazing Angle"
+units = "deg"
+kind = "imapb"
+length = 2
+min = 0.0
+max = 90.0
+
+[[item]]
+tag = 25
+name = "Reference Frame Ground Plane Squint Angle"
+units = "deg"
+kind = "imapb"
+length = 2
+min = -90.0
+max = 90.0
+
+[[item]]
+tag = 26
+name = "Reference Frame Range Direction Angle Relative to True North"
+units = "deg"
+kind = "imapb"
+length = 2
+min = 0.0
+max = 360.0
+
+[[item]]
+tag = 27
+name = "Reference Frame Range Layover Angle Relative to True North"
+units = "deg"
+kind = "imapb"
+length = 2
+min = 0.0
+max = 360.0
+
+[[item]]
+tag = 28
+name = "Document Version"
+kind = "uint"
+length = 1
+flags = ["mandatory"]
