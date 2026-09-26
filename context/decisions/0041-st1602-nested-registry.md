@@ -1,7 +1,7 @@
 ---
 type: Decision
 title: ST 1602 Composite Imaging LS as a typed nested registry
-decision_status: proposed
+decision_status: accepted
 tags: [decision, registry, 1602, composite-imaging, nested-ls, phase-3]
 generated:
   by: claude/sonnet-5

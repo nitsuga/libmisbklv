@@ -67,10 +67,7 @@ Status legend: `OPEN` (undiscussed) · `PROPOSED` (Decision concept written,
 `decision_status: proposed`) · `DECIDED` / `DEFERRED` (has an ADR — see the
 register).
 
-- Fork 37 — ST 1602 Composite Imaging LS as a typed nested registry: `PROPOSED`,
-  [ADR 0041](../context/decisions/0041-st1602-nested-registry.md).
-
-See the decided register
+**No open forks remain.** See the decided register
 ([`../context/decisions/index.md`](../context/decisions/index.md)) for
 already-resolved forks.
 

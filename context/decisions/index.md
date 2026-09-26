@@ -54,3 +54,4 @@ diverge — e.g. fork 7 → ADR 0004; one fork can span several ADRs — fork 4 
 | 34 | [0038 — Live video liveness uses a last-delivery timestamp](./0038-live-video-delivery-timestamp.md) | accepted |
 | 35 | [0039 — Extraction scope and error policy (issue #80)](./0039-extraction-scope-and-error-policy.md) | accepted |
 | 36 | [0040 — ST 0102 Security Metadata LS as a typed nested registry (issue #95)](./0040-st0102-nested-registry.md) | accepted |
+| 37 | [0041 — ST 1602 Composite Imaging LS as a typed nested registry (issue #95)](./0041-st1602-nested-registry.md) | accepted |
