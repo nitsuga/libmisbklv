@@ -9,11 +9,12 @@
 // the probe even while the muxer backpressures), with no finish()/drain. If a
 // probe callback outlives the VideoCtx free, it reads/locks freed memory.
 //
-// Bare, this guards against a hard crash on teardown. The real teeth are under a
-// memory checker: `ctest` runs it through valgrind when one is available (see
-// CMakeLists.txt), which reports the use-after-free deterministically. Pre-fix
-// code fails here with ~50 invalid accesses into a freed VideoCtx; the fix is
-// clean.
+// Bare, this guards against a hard crash on teardown. The intended teeth are
+// under a memory checker: `ctest` runs it through valgrind when one is available
+// (see CMakeLists.txt), where the original fix recorded ~50 invalid accesses
+// into a freed VideoCtx on pre-fix code. A 2026-10-24 re-check reproduced no
+// errors on two reconstructions of the pre-fix code, so treat detection as
+// unverified (context/log.md, 2026-10-24).
 //
 // Usage: teardown_probe_uaf_test [iters] [stream_ms]
 #include <chrono>
