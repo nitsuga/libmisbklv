@@ -20,22 +20,37 @@
 
 namespace misbklv::detail {
 
+// Per-unit payload that rides with a mark (issue #111).
+struct PtsAux {
+  std::int64_t source_pts_90k = -1;  // raw container PTS, -1 if none
+  std::int32_t pts_epoch = 0;        // 33-bit wrap epoch of that PTS
+};
+
 class PtsMarks {
  public:
   // The bytes appended at absolute stream offset `off` carry `pts` nanoseconds
   // (kNoPts if the container gave that unit no timestamp). Offsets must be
   // non-decreasing.
-  void mark(std::size_t off, std::int64_t pts) { marks_.push_back({off, pts}); }
+  //
+  // `aux` rides with the mark (the offline extractor puts the raw source PTS and
+  // wrap epoch there, issue #111); read it back with aux() after at().
+  void mark(std::size_t off, std::int64_t pts, PtsAux aux = PtsAux{}) {
+    marks_.push_back({off, pts, aux});
+  }
 
   // The timestamp in effect at absolute offset `off`. Consumes marks, so calls
   // must also be non-decreasing in `off` — which is how both extractors emit.
   std::int64_t at(std::size_t off) {
     while (!marks_.empty() && marks_.front().off <= off) {
       cur_ = marks_.front().pts;
+      cur_aux_ = marks_.front().aux;
       marks_.pop_front();
     }
     return cur_;
   }
+
+  // The aux of the mark most recently returned by at() (or dropped by prune()).
+  PtsAux aux() const { return cur_aux_; }
 
   // Drop marks whose offset falls behind `stream_off` — their bytes have
   // already left the caller's reassembly buffer, so no future `at()` call can
@@ -47,6 +62,7 @@ class PtsMarks {
   void prune(std::size_t stream_off) {
     while (!marks_.empty() && marks_.front().off < stream_off) {
       cur_ = marks_.front().pts;
+      cur_aux_ = marks_.front().aux;
       marks_.pop_front();
     }
   }
@@ -59,9 +75,11 @@ class PtsMarks {
   struct Mark {
     std::size_t off;
     std::int64_t pts;
+    PtsAux aux;
   };
   std::deque<Mark> marks_;
   std::int64_t cur_ = kNoPts;  // before the first mark: nothing known
+  PtsAux cur_aux_;
 };
 
 }  // namespace misbklv::detail

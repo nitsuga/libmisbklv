@@ -27,9 +27,12 @@ class KlvFramer {
   // byte, then resync) so later valid packets in the same feed still emit and
   // the bad bytes are not retained. An incomplete frame stays buffered for the
   // next feed.
+  //
+  // `aux` rides with the unit like the timestamp does; inside `on_packet`,
+  // packet_aux() is the aux of the unit that carried that packet's first byte.
   std::optional<Error> feed(std::span<const std::byte> bytes, std::int64_t pts_ns,
-                            const PacketHandler& on_packet) {
-    marks_.mark(stream_off_ + reassembly_.size(), pts_ns);
+                            const PacketHandler& on_packet, PtsAux aux = PtsAux{}) {
+    marks_.mark(stream_off_ + reassembly_.size(), pts_ns, aux);
     reassembly_.insert(reassembly_.end(), bytes.begin(), bytes.end());
 
     std::optional<Error> error;
@@ -69,7 +72,9 @@ class KlvFramer {
       }
       if (!*frame) break;
       const std::size_t n = **frame;
-      on_packet(KlvPacket{rest.subspan(0, n), marks_.at(stream_off_ + pos)});
+      const std::int64_t pts = marks_.at(stream_off_ + pos);
+      packet_aux_ = marks_.aux();
+      on_packet(KlvPacket{rest.subspan(0, n), pts});
       pos += n;
     }
     if (pos) {
@@ -83,6 +88,7 @@ class KlvFramer {
   }
 
   std::span<const std::byte> remainder() const { return reassembly_; }
+  PtsAux packet_aux() const { return packet_aux_; }
 
  private:
   inline static constexpr std::array<std::byte, 4> kSmpteUlPrefix = {
@@ -91,6 +97,7 @@ class KlvFramer {
   std::size_t max_packet_bytes_;
   std::vector<std::byte> reassembly_;
   PtsMarks marks_;
+  PtsAux packet_aux_;
   std::size_t stream_off_ = 0;
 };
 

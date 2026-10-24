@@ -2,6 +2,7 @@
 #include "misbklv/ts.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <unordered_map>
@@ -86,46 +87,154 @@ std::int64_t pes_pts_90k(std::span<const std::byte> pes) {
          (static_cast<std::int64_t>(u8(pes, 13)) >> 1);
 }
 
-// The earliest PTS anywhere in the buffer, in 90 kHz ticks (-1 if nothing is
-// timestamped). This is the origin `pts_ns` is measured from: the start of the
-// source's presentation, which is what the insert path's timeline is also
-// anchored to (ADR 0021). A cheap header-only pre-pass — it looks at the first
-// 14 bytes of each PES, never at payload.
+// Unrolls 33-bit PTS values observed in file order into a wrap epoch.
+// Half-range rule: a step back of more than 2^32 ticks is a wrap (epoch++); a
+// step forward of more than 2^32 is a PES reordered from before a wrap (reported
+// one epoch back, running state untouched). Both mean the buffer straddles a
+// wrap, so both set `wrapped()`: a buffer that starts just after a wrap but still
+// holds a pre-wrap reordered frame is not continuous. Anything smaller is
+// ordinary jitter/reorder, except a step back past `kReorderTolerance`, which no
+// legitimate reorder produces and is reported as a regression.
+class PtsUnroller {
+ public:
+  // About 30 s: far beyond any video reorder depth, short of any real splice.
+  static constexpr std::int64_t kReorderTolerance = 30 * 90'000;
+
+  std::int32_t observe(std::int64_t pts) {
+    if (prev_ < 0) {
+      prev_ = pts;
+      return 0;
+    }
+    constexpr std::int64_t kHalf = TsTimeline::kPtsModulus / 2;
+    const std::int64_t delta = pts - prev_;
+    if (delta < -kHalf) {
+      ++epoch_;
+      wrapped_ = true;
+    } else if (delta > kHalf) {
+      wrapped_ = true;
+      return epoch_ - 1;
+    } else if (delta < -kReorderTolerance) {
+      regressed_ = true;
+    }
+    prev_ = pts;
+    return epoch_;
+  }
+  bool wrapped() const { return wrapped_; }
+  bool regressed() const { return regressed_; }
+
+ private:
+  std::int64_t prev_ = -1;
+  std::int32_t epoch_ = 0;
+  bool wrapped_ = false;
+  bool regressed_ = false;
+};
+
+// The PTS of the PES that starts in TS packet `i`, in 90 kHz ticks, or -1. The
+// 14 header bytes may not fit in the first packet (a large adaptation field), so
+// they are gathered across that PID's following packets exactly as extraction
+// reassembles the PES; scan and extraction must agree on which PES are timed.
+std::int64_t pes_start_pts_90k(std::span<const std::byte> ts, std::size_t i) {
+  const std::uint16_t pid = ((u8(ts, i + 1) & 0x1f) << 8) | u8(ts, i + 2);
+  std::array<std::byte, 14> head{};
+  std::size_t n = 0;
+  for (std::size_t j = i; j + kPkt <= ts.size() && n < head.size(); j += kPkt) {
+    if (u8(ts, j) != 0x47) continue;
+    const std::uint16_t jpid = ((u8(ts, j + 1) & 0x1f) << 8) | u8(ts, j + 2);
+    if (jpid != pid) continue;
+    if (j != i && ((u8(ts, j + 1) >> 6) & 1)) break;  // next PES began first
+    const std::uint8_t afc = (u8(ts, j + 3) >> 4) & 3;
+    std::size_t off = j + 4;
+    if (afc & 2) off += 1 + u8(ts, off);
+    if (!(afc & 1) || off > j + kPkt) continue;
+    const std::size_t take = std::min(head.size() - n, j + kPkt - off);
+    std::copy_n(ts.begin() + off, take, head.begin() + n);
+    n += take;
+  }
+  if (n < head.size()) return -1;
+  if (u8(head, 0) != 0 || u8(head, 1) != 0 || u8(head, 2) != 1) return -1;
+  return pes_pts_90k(head);
+}
+
+// Everything the timestamp pre-pass learns. A cheap header-only pass — it looks
+// at the first 14 bytes of each PES, never at payload.
 //
-// Taking the minimum rather than the first in file order matters: with
+// `origin_90k` is the earliest PTS anywhere in the buffer: the start of the
+// source's presentation, which is what the insert path's timeline is also
+// anchored to (ADR 0021). The minimum, not the first in file order: with
 // reordered video the first PES in the file is not the earliest presentation
 // time, and picking it would shift every reported timestamp by the reorder
 // delay.
 //
-// ponytail: the PTS is 33 bits (wraps every ~26.5 h), so a capture crossing the
-// wrap has a minimum near zero and timestamps come out ~26.5 h off. Upgrade
-// path: unroll PTS to 64 bits before picking the origin, with a false-positive
-// guard so reordered PES near the wrap are not read as a wrap.
-std::int64_t earliest_pts_90k(std::span<const std::byte> ts) {
-  std::int64_t best = -1;
+// The origin is still the raw minimum, so a wrap leaves `pts_ns` ~26.5 h off, as
+// it always did; the flags and epochs are what make that visible (issue #111).
+// ponytail: unroll the origin (min over raw + epoch * 2^33) to make pts_ns
+// itself wrap-correct; held back to keep pts_ns byte-compatible.
+struct ScanResult {
+  std::int64_t origin_90k = -1;
+  std::int32_t origin_epoch = 0;
+  bool wrapped = false;
+  bool regressed = false;
+  bool discontinuity = false;
+  bool any_pts = false;
+  // TS packet offset of a PES start -> wrap epoch, for PES with a nonzero epoch
+  // only (empty unless the buffer wraps).
+  std::unordered_map<std::size_t, std::int32_t> epoch_at;
+};
+
+ScanResult scan_timestamps(std::span<const std::byte> ts) {
+  ScanResult r;
+  PtsUnroller unroller;
   for (std::size_t i = 0; i + kPkt <= ts.size(); i += kPkt) {
     if (u8(ts, i) != 0x47) continue;
-    if (!((u8(ts, i + 1) >> 6) & 1)) continue;  // not a PES start
     const std::uint8_t afc = (u8(ts, i + 3) >> 4) & 3;
-    std::size_t off = i + 4;
-    if (afc & 2) off += 1 + u8(ts, off);
-    if (!(afc & 1) || off + 14 > i + kPkt) continue;
-    auto pes = ts.subspan(off, (i + kPkt) - off);
-    if (u8(pes, 0) != 0 || u8(pes, 1) != 0 || u8(pes, 2) != 1) continue;
-    const std::int64_t pts = pes_pts_90k(pes);
-    if (pts >= 0 && (best < 0 || pts < best)) best = pts;
+    if ((afc & 2) && u8(ts, i + 4) >= 1 && (u8(ts, i + 5) & 0x80)) r.discontinuity = true;
+    if (!((u8(ts, i + 1) >> 6) & 1)) continue;  // not a PES start
+    const std::int64_t pts = pes_start_pts_90k(ts, i);
+    if (pts < 0) continue;
+    r.any_pts = true;
+    const std::int32_t epoch = unroller.observe(pts);
+    if (epoch != 0) r.epoch_at[i] = epoch;
+    if (r.origin_90k < 0 || pts < r.origin_90k) {
+      r.origin_90k = pts;
+      r.origin_epoch = epoch;
+    }
   }
-  return best;
+  r.wrapped = unroller.wrapped();
+  r.regressed = unroller.regressed();
+  return r;
 }
 
 }  // namespace
 
 Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
                                       const PacketHandler& on_packet) {
+  return extract_ts_klv_timed(ts, [&](const TsKlvPacket& p) { on_packet(p.packet); }, nullptr);
+}
+
+Result<std::monostate> extract_ts_klv_timed(std::span<const std::byte> ts,
+                                            const TsPacketHandler& on_packet,
+                                            TsTimeline* timeline) {
   std::unordered_map<std::uint16_t, std::vector<std::byte>> pes;  // PID -> current PES
   int klv_pid = -1;
-  const std::int64_t origin_90k = earliest_pts_90k(ts);
+  const ScanResult scan = scan_timestamps(ts);
+  const std::int64_t origin_90k = scan.origin_90k;
+  if (timeline) {
+    timeline->origin_pts_90k = origin_90k;
+    timeline->origin_pts_epoch = scan.origin_epoch;
+    timeline->pts_wrap_observed = scan.wrapped;
+    timeline->pts_regression_observed = scan.regressed;
+    timeline->discontinuity_indicator_observed = scan.discontinuity;
+    timeline->continuity = !scan.any_pts ? TsTimeline::Continuity::NoTimestamps
+                           : (scan.wrapped || scan.regressed || scan.discontinuity)
+                               ? TsTimeline::Continuity::Interrupted
+                               : TsTimeline::Continuity::Continuous;
+  }
+  std::unordered_map<std::uint16_t, std::size_t> pes_off;  // PID -> TS offset of current PES
   detail::KlvFramer framer;
+  const PacketHandler deliver = [&](const KlvPacket& kp) {
+    const auto aux = framer.packet_aux();
+    on_packet(TsKlvPacket{kp, aux.source_pts_90k, aux.pts_epoch});
+  };
   std::optional<Error> frame_error;  // first framing failure, returned at the end
   std::size_t pending_pes_bytes = 0;
   auto release = [&](std::vector<std::byte>& bytes) {
@@ -169,8 +278,11 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
       // Upgrade path: validate the cell
       // sequence byte and indication transitions per PID once the RP 217 layout
       // is confirmed from a source in references/ (ADR 0039).
+      std::int32_t epoch = 0;
+      if (const auto e = scan.epoch_at.find(pes_off[pid]); e != scan.epoch_at.end())
+        epoch = e->second;
       for (const auto cell : cells) {
-        frame_error = framer.feed(cell, pts_ns, on_packet);
+        frame_error = framer.feed(cell, pts_ns, deliver, {pts90, epoch});
         if (frame_error) break;
       }
       if (!frame_error && malformed) frame_error = Error::BadLength;
@@ -200,6 +312,7 @@ Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
         frame_error = Error::ResourceLimit;
         break;
       }
+      pes_off[pid] = i;
       auto& current = pes[pid];
       current.assign(payload.begin(), payload.end());
       pending_pes_bytes += current.size();

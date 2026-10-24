@@ -7,6 +7,8 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <span>
 
 #include "misbklv/backend.hpp"  // PacketHandler, KlvPacket, Result
@@ -50,11 +52,92 @@ namespace misbklv {
 // a chunk re-anchors the timeline to that chunk.
 //
 // PTS wrap limit: PTS is 33 bits and wraps about every 26.5 h. A capture that
-// crosses the wrap gets timestamps about 26.5 h off, because the origin is the
-// minimum PTS. Workaround: use KLV Item 2 (Precision Time Stamp), or split the
-// file before extracting. The live path's behavior across the wrap is not
-// specified.
+// crosses the wrap gets `pts_ns` about 26.5 h off, because the origin is the
+// minimum PTS; this overload cannot tell you that happened. Use
+// extract_ts_klv_timed() below, which reports the wrap (and the raw PTS needed
+// to unroll it), or KLV Item 2 (Precision Time Stamp), or split the file before
+// extracting. The live path's behavior across the wrap is not specified.
 Result<std::monostate> extract_ts_klv(std::span<const std::byte> ts,
                                       const PacketHandler& on_packet);
+
+// Timestamp provenance for one extraction (issue #111). `pts_ns` stays exactly
+// what extract_ts_klv() reports; this says where it came from and how far to
+// trust it, so a consumer lining KLV up with independently decoded video does
+// not re-parse PES/TS headers or guess an offset.
+//
+// Domain: MPEG-TS PES PTS, 90 kHz ticks, 33 bits (0 .. kPtsModulus-1).
+struct TsTimeline {
+  inline static constexpr std::int64_t kPtsModulus = std::int64_t{1} << 33;
+
+  enum class Continuity {
+    // No PES anywhere in the buffer carried a PTS. Every packet is `kNoPts`.
+    // This is a property of the stream; there is nothing to be continuous.
+    NoTimestamps,
+    // PTS present, and this buffer showed no wrap and no discontinuity
+    // indicator, and no PTS step back past the reorder tolerance. Scoped to the
+    // buffer: it says nothing about bytes before or after it, and a forward
+    // splice (or a backward one inside the tolerance) is not detectable.
+    Continuous,
+    // A 33-bit wrap, a PTS regression, and/or an adaptation-field
+    // discontinuity_indicator was observed. `pts_ns` is NOT a trustworthy
+    // continuous timeline across the break; unroll from the per-packet raw PTS
+    // and epoch instead, or split.
+    Interrupted,
+  };
+
+  Continuity continuity = Continuity::NoTimestamps;
+
+  // Source PTS (90 kHz) that `pts_ns == 0` corresponds to: the earliest PTS
+  // anywhere in the supplied buffer (all PIDs; ADR 0021). -1 if NoTimestamps.
+  // For a buffer that starts mid-stream this is the earliest PTS *in the
+  // buffer*, not the stream's start; the library cannot know the difference.
+  std::int64_t origin_pts_90k = -1;
+
+  // The buffer straddles a 33-bit PTS wrap (any PID, file order, half-range
+  // rule: a backward step of more than 2^32 ticks is a wrap; a forward step that
+  // large is a PES reordered from before one, which also marks the straddle).
+  bool pts_wrap_observed = false;
+
+  // Wrap epoch of the PES `origin_pts_90k` came from (file-order epoch across
+  // all PIDs, 0 until the first wrap). Unrolled origin:
+  // origin_pts_90k + origin_pts_epoch * kPtsModulus.
+  std::int32_t origin_pts_epoch = 0;
+
+  // A PTS stepped back by more than ~30 s (and not a wrap), which no video
+  // reorder produces: a splice or restart. Independent clocks in a multi-program
+  // buffer can trip it too; both errors lean toward Interrupted.
+  bool pts_regression_observed = false;
+
+  // Any TS packet in the buffer had adaptation-field discontinuity_indicator set.
+  bool discontinuity_indicator_observed = false;
+};
+
+// A packet plus its raw source timestamp. For a PES without a PTS (or a
+// NoTimestamps stream) `source_pts_90k` is -1, matching `packet.pts_ns ==
+// kNoPts`.
+struct TsKlvPacket {
+  KlvPacket packet;
+  // Raw 33-bit PTS of the PES that carried the packet's first byte. With the
+  // timeline's origin, and absent a wrap: packet.pts_ns == (source_pts_90k -
+  // origin_pts_90k) converted to ns (x100000/9, truncated).
+  std::int64_t source_pts_90k = -1;
+  // Wrap epoch of that PES in the same file-order, all-PID numbering as
+  // TsTimeline::origin_pts_epoch (0 until the first wrap, negative for a PES
+  // reordered back across it). Unrolled source time is
+  // source_pts_90k + pts_epoch * kPtsModulus; subtracting the unrolled origin
+  // gives the exact continuous offset that pts_ns cannot across a wrap.
+  std::int32_t pts_epoch = 0;
+};
+
+using TsPacketHandler = std::function<void(const TsKlvPacket&)>;
+
+// Same extraction as extract_ts_klv() (identical framing, errors and `pts_ns`),
+// plus provenance. `timeline` is filled whenever the call returns, including
+// on error (it reflects the whole buffer, which is scanned up front); it may
+// be null. Whole-stream input gives the stream's own origin; a buffer that
+// begins mid-stream anchors at its own earliest PTS, and origin_pts_90k says
+// which source tick that was.
+Result<std::monostate> extract_ts_klv_timed(std::span<const std::byte> ts,
+                                            const TsPacketHandler& on_packet, TsTimeline* timeline);
 
 }  // namespace misbklv

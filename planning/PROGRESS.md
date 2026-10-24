@@ -8,7 +8,7 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-No active implementation. #107 awaits an authorized VMTI source or profile;
+Issue #111 (timestamp provenance, `extract_ts_klv_timed`) is in review as a PR. #107 awaits an authorized VMTI source or profile;
 #50 (benchmark) is parked.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be

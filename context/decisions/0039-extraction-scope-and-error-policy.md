@@ -67,7 +67,8 @@ the policy on top of it and resolves the open questions left in
    off, since the origin is the minimum PTS. Workaround: KLV Item 2 (Precision
    Time Stamp), or split the file. The live path's behavior across the wrap is
    not specified (no explicit handling in `src/gst/`; segment behavior is not
-   verified). Upgrade path is in a `ponytail:` comment at `earliest_pts_90k`.
+   verified). Update (issue #111, [`0044`](./0044-ts-timestamp-provenance.md)):
+   `extract_ts_klv_timed` now *reports* the wrap; `pts_ns` is still unchanged.
 7. **Real-capture coverage stays synthetic-only**, per
    [`0028`](./0028-hermetic-synthetic-fixtures.md).
 
