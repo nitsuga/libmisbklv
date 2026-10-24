@@ -12,6 +12,9 @@
   to 18.0 s over 8 runs. Whether the test still detects the #57 use-after-free
   was not established in either mode (0 errors on two reconstructions of the
   pre-fix code); tracked as a follow-up. Author: claude/sonnet-5-5.
+* **Issue #111 implemented** ([`0044`](./decisions/0044-ts-timestamp-provenance.md)):
+  `extract_ts_klv_timed` reports raw source PTS, origin, wrap and
+  discontinuity status; `pts_ns` unchanged. Author: claude/sonnet-5-5.
 
 ## 2026-09-26
 

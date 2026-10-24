@@ -226,8 +226,10 @@ relock is visible to a reader instead of being smoothed over.
 `Message` needs no media backend — hand it raw KLV bytes (e.g. from
 `extract_ts_klv`, which pulls KLV from a `.ts` buffer with zero dependencies and
 uses the same nanosecond units and relative source timing as `KlvStream` — its
-absolute origin can differ by about a frame, and it does not handle the 33-bit
-PTS wrap (about 26.5 h); it also reads the `0x15` sync-KLV streams gstreamer's
+absolute origin can differ by about a frame, and `pts_ns` does not unroll the
+33-bit PTS wrap (about 26.5 h); `extract_ts_klv_timed` adds the raw source PTS,
+the normalization origin, and wrap/discontinuity status so you can detect and
+unroll it, see [ADR 0044](../context/decisions/0044-ts-timestamp-provenance.md); it also reads the `0x15` sync-KLV streams gstreamer's
 demuxer drops, which the live path does not — offline only, single KLV PID;
 fragmented 0x15 cells are concatenated without sequence or loss validation; see
 [ADR 0039](../context/decisions/0039-extraction-scope-and-error-policy.md)):

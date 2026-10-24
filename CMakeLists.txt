@@ -317,6 +317,11 @@ add_test(NAME ts_extract_timed_0x06 COMMAND ts_extract_test ${_timed_06} ${_basi
 add_test(NAME ts_extract_untimed_0x06 COMMAND ts_extract_test ${_untimed_06} ${_basic})
 add_test(NAME ts_extract_timed_0x15 COMMAND ts_extract_test ${_timed_15} ${_basic})
 
+# Timestamp provenance (issue #111): synthetic origin / wrap / discontinuity.
+add_executable(ts_timeline_test test/ts_timeline_test.cpp)
+target_link_libraries(ts_timeline_test PRIVATE misbklv)
+add_test(NAME ts_timeline COMMAND ts_timeline_test)
+
 # --- Benchmark (issue #50) ---------------------------------------------------
 # Timing harness for the paths #50 parks work behind. Deliberately NOT an
 # add_test: a timing threshold in CI measures the runner, not the library. Built

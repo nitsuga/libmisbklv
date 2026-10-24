@@ -122,9 +122,11 @@ specified for what it can actually see.
   frame later than the earliest PTS `extract_ts_klv` finds. Intervals are exact
   in both, and a round trip uses one reader throughout, so this is a documented
   edge rather than a defect to chase.
-- **No 33-bit PTS wraparound handling** (~26.5 h of stream). A file that wraps
-  would produce a negative jump; no sample does, and handling it means tracking
-  discontinuities the standalone reader has no other reason to model.
+- **No 33-bit PTS wraparound handling** (~26.5 h of stream; since issue #111 it is
+  *reported*, not handled, see [`0044`](./0044-ts-timestamp-provenance.md)). A file that wraps
+  would produce a negative jump; no sample does. Unrolling `pts_ns` itself was
+  held back for compatibility; `extract_ts_klv_timed` reports the wrap and the
+  raw PTS needed to unroll it.
 - **`extract_ts_klv` wants the whole stream.** Its origin is the minimum over
   the buffer it is handed, so extracting from a mid-file chunk re-anchors the
   timeline to that chunk. Documented on the function.

@@ -62,12 +62,13 @@ the policy on top of it and resolves the open questions left in
    past the PES end, or 1-4 trailing bytes too short for a cell header) is a
    terminal `BadLength`; PES on other PIDs or before selection are not checked,
    and `0x06` PES are unaffected.
-6. **33-bit PTS wrap: limit documented, no code change.** A capture crossing
+6. **33-bit PTS wrap: limit documented; `pts_ns` unchanged.** A capture crossing
    the wrap (about every 26.5 h) gets `extract_ts_klv` timestamps about 26.5 h
    off, since the origin is the minimum PTS. Workaround: KLV Item 2 (Precision
    Time Stamp), or split the file. The live path's behavior across the wrap is
    not specified (no explicit handling in `src/gst/`; segment behavior is not
-   verified). Upgrade path is in a `ponytail:` comment at `earliest_pts_90k`.
+   verified). Update (issue #111, [`0044`](./0044-ts-timestamp-provenance.md)):
+   `extract_ts_klv_timed` now *reports* the wrap; `pts_ns` is still unchanged.
 7. **Real-capture coverage stays synthetic-only**, per
    [`0028`](./0028-hermetic-synthetic-fixtures.md).
 
@@ -83,8 +84,10 @@ the policy on top of it and resolves the open questions left in
   (`test/hardening_test.cpp`), and rejecting removed working behavior.
 - **Fragment state machine (sequence and first/middle/last checks)** — not
   built: the RP 217 layout is not in `references/`. Deferred; see decision 5.
-- **Unroll PTS across the wrap** — needs a false-positive guard for reordered
-  PES; not worth it before a real capture hits it. Deferred.
+- **Unroll `pts_ns` across the wrap** — needs a false-positive guard for
+  reordered PES; not worth it before a real capture hits it. Deferred. The wrap
+  is now *reported* instead, so a consumer can unroll it
+  ([`0044`](./0044-ts-timestamp-provenance.md)).
 
 # Consequences
 
