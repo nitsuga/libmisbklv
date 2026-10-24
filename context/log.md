@@ -1,5 +1,18 @@
 # Knowledge Bundle Log
 
+## 2026-10-24
+
+* **`teardown_probe_uaf` runs under `valgrind --fair-sched=yes`**: the default
+  scheduler's lock gives no fairness guarantee and is the likely cause of
+  single `push()`/teardown calls stalling for 10-50 s (seen per iteration in a
+  timed copy of the test), so the test took 75 s to over 15 min and CI's 600 s
+  timeout fired once. The starvation mechanism is inferred, not traced. Measured on
+  the shared runner host, 8 mid-stream teardowns at 200 ms: native 1.8 s,
+  `--tool=none` 5.9 s, default memcheck as above, `--fair-sched=yes` 15.3
+  to 18.0 s over 8 runs. Whether the test still detects the #57 use-after-free
+  was not established in either mode (0 errors on two reconstructions of the
+  pre-fix code); tracked as a follow-up. Author: claude/sonnet-5-5.
+
 ## 2026-09-26
 
 * **Public U.S. military UAS metadata coverage survey**:

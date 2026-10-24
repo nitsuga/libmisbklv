@@ -287,13 +287,21 @@ if(TARGET misbklv-gst)  # gstreamer extraction round-trip (ADR 0013 / B1)
 
   # SEI-probe teardown use-after-free guard (issue #57): destroys the Inserter
   # mid-stream so a probe is in flight at the VideoCtx free. Run under valgrind
-  # when present (deterministic UAF detection); bare otherwise (crash guard).
+  # when present (UAF detection; its power is under review, see context/log.md
+  # 2026-10-24); bare otherwise (crash guard).
   add_executable(teardown_probe_uaf_test test/teardown_probe_uaf_test.cpp)
   target_link_libraries(teardown_probe_uaf_test PRIVATE misbklv-gst Threads::Threads)
   find_program(VALGRIND_EXECUTABLE valgrind)
   if(VALGRIND_EXECUTABLE AND NOT MISBKLV_SANITIZE)
+    # --fair-sched=yes: the default scheduler's unfair thread lock appears to
+    # starve the pipeline's streaming threads, stalling single push()/teardown
+    # calls for tens of seconds; the test then varies from about a minute to past
+    # CI's 600 s timeout. Fair scheduling makes it steady and short (numbers in
+    # context/log.md, 2026-10-24). Keep `yes`, not `try`: a silent fallback would
+    # bring the stalls back. Keep --error-exitcode first: CI greps the ctest
+    # command for it.
     add_test(NAME teardown_probe_uaf COMMAND ${VALGRIND_EXECUTABLE}
-      --error-exitcode=97 --leak-check=no --errors-for-leak-kinds=none
+      --error-exitcode=97 --leak-check=no --errors-for-leak-kinds=none --fair-sched=yes
       $<TARGET_FILE:teardown_probe_uaf_test> 8 200)
   else()
     add_test(NAME teardown_probe_uaf COMMAND teardown_probe_uaf_test 8 200)
