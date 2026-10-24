@@ -50,8 +50,9 @@ struct ExtractOptions {
 // demuxer's running time (its segment spans the whole program), while
 // `extract_ts_klv` subtracts the earliest PTS in the buffer it was handed.
 // Intervals are exact in both, within one PTS epoch: `extract_ts_klv` does not
-// handle the 33-bit PTS wrap (about every 26.5 h; see ts.hpp), and the live
-// path's behavior across the wrap is not specified.
+// unroll the 33-bit PTS wrap (about every 26.5 h; extract_ts_klv_timed in
+// ts.hpp reports it), and the live path's behavior across the wrap is not
+// specified.
 struct KlvPacket {
   std::span<const std::byte> bytes;  // parse_packet-able
   std::int64_t pts_ns = kNoPts;      // ns from the start of the source, or kNoPts
