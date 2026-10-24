@@ -6,6 +6,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <optional>
 #include <vector>
 
 #include "misbklv/ts.hpp"
@@ -25,7 +26,9 @@ constexpr std::int64_t kMod = TsTimeline::kPtsModulus;
 constexpr std::uint16_t kKlvPid = 0x0101;
 constexpr std::uint16_t kVideoPid = 0x0100;
 
-std::byte B(int v) { return static_cast<std::byte>(v & 0xFF); }
+std::byte B(int v) {
+  return static_cast<std::byte>(v & 0xFF);
+}
 
 // A minimal valid KLV packet: ST 0601 key, BER length, one tag-1 (checksum-less
 // is fine for framing) TLV carrying `marker`.
@@ -91,6 +94,7 @@ void add(std::vector<std::byte>& ts, std::uint16_t pid, const std::vector<std::b
 struct Got {
   std::int64_t pts_ns, src;
   std::int32_t epoch;
+  std::optional<std::int64_t> rel_ticks, rel_ns;  // via the public helpers
 };
 
 struct Run {
@@ -104,20 +108,23 @@ Run run(const std::vector<std::byte>& ts) {
   auto res = extract_ts_klv_timed(
       ts,
       [&](const TsKlvPacket& p) {
-        r.pkts.push_back({p.packet.pts_ns, p.source_pts_90k, p.pts_epoch});
+        r.pkts.push_back({p.packet.pts_ns, p.source_pts_90k, p.pts_epoch,
+                          unrolled_offset_90k(p, r.tl), unrolled_offset_ns(p, r.tl)});
       },
       &r.tl);
   r.ok = static_cast<bool>(res);
   return r;
 }
 
-std::int64_t ns(std::int64_t ticks) { return ticks * 100'000 / 9; }
+std::int64_t ns(std::int64_t ticks) {
+  return ticks * 100'000 / 9;
+}
 
 }  // namespace
 
-// Unrolled source time of packet `g` relative to the unrolled origin, in ticks.
-std::int64_t unrolled_offset(const Run& r, const Got& g) {
-  return (g.src + g.epoch * kMod) - (r.tl.origin_pts_90k + r.tl.origin_pts_epoch * kMod);
+// Offset of packet `g` from the unrolled origin, in ticks, from the public helper.
+std::int64_t unrolled_offset(const Run&, const Got& g) {
+  return g.rel_ticks.value_or(INT64_MIN);
 }
 
 int main() {
@@ -178,8 +185,8 @@ int main() {
     std::vector<std::byte> alone;
     add(alone, kKlvPid, pes(1000, klv(1)), false, 8);
     auto a = run(alone);
-    check(a.tl.continuity == C::Continuous && a.tl.origin_pts_90k == 1000 &&
-              a.pkts.size() == 1 && a.pkts[0].src == 1000,
+    check(a.tl.continuity == C::Continuous && a.tl.origin_pts_90k == 1000 && a.pkts.size() == 1 &&
+              a.pkts[0].src == 1000,
           "split-header PES alone is not NoTimestamps");
   }
 
@@ -318,6 +325,24 @@ int main() {
       check(t.pkts[0].src == w.pkts[2].src, "raw PTS identifies the packet in both");
       check(w.pkts[2].pts_ns - t.pkts[0].pts_ns == ns(7'200), "consumer can reconcile via origin");
     }
+  }
+
+  std::printf("unrolled_offset helpers\n");
+  {
+    std::vector<std::byte> ts;
+    add(ts, kKlvPid, pes(kMod - 3'600, klv(1)));
+    add(ts, kKlvPid, pes(0, klv(2)));
+    add(ts, kKlvPid, pes(-1, klv(3)));
+    auto r = run(ts);
+    if (check(r.pkts.size() == 3, "three packets")) {
+      check(r.pkts[0].rel_ticks == -3'600 && r.pkts[1].rel_ticks == 0, "ticks across the wrap");
+      check(r.pkts[0].rel_ns == -ns(3'600), "ns variant");
+      check(!r.pkts[2].rel_ticks && !r.pkts[2].rel_ns, "untimed packet -> empty");
+    }
+    std::vector<std::byte> none;
+    add(none, kKlvPid, pes(-1, klv(1)));
+    auto n = run(none);
+    check(n.pkts.size() == 1 && !n.pkts[0].rel_ticks, "NoTimestamps timeline -> empty");
   }
 
   std::printf("legacy overload unchanged\n");

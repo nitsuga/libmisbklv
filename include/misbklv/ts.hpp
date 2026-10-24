@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <span>
 
 #include "misbklv/backend.hpp"  // PacketHandler, KlvPacket, Result
@@ -128,6 +129,25 @@ struct TsKlvPacket {
   // gives the exact continuous offset that pts_ns cannot across a wrap.
   std::int32_t pts_epoch = 0;
 };
+
+// The packet's offset from the timeline origin in 90 kHz ticks, unrolled across
+// any 33-bit wrap: (source_pts + epoch * 2^33) - (origin_pts + origin_epoch *
+// 2^33). This is the canonical way to combine the two raw/epoch pairs; either
+// origin field alone is insufficient after a wrap. Equals `pts_ns` (scaled) when
+// no wrap was observed. Empty if the packet is untimed or the timeline has no
+// origin (`NoTimestamps`). The video-side origin policy stays the caller's.
+inline std::optional<std::int64_t> unrolled_offset_90k(const TsKlvPacket& p, const TsTimeline& t) {
+  if (p.source_pts_90k < 0 || t.origin_pts_90k < 0) return std::nullopt;
+  return (p.source_pts_90k + std::int64_t{p.pts_epoch} * TsTimeline::kPtsModulus) -
+         (t.origin_pts_90k + std::int64_t{t.origin_pts_epoch} * TsTimeline::kPtsModulus);
+}
+
+// Same, in nanoseconds (x100000/9, truncated like `pts_ns`).
+inline std::optional<std::int64_t> unrolled_offset_ns(const TsKlvPacket& p, const TsTimeline& t) {
+  const auto ticks = unrolled_offset_90k(p, t);
+  if (!ticks) return std::nullopt;
+  return *ticks * 100'000 / 9;
+}
 
 using TsPacketHandler = std::function<void(const TsKlvPacket&)>;
 

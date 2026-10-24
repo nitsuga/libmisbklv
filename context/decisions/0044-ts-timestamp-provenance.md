@@ -37,6 +37,9 @@ unchanged.
   `Continuity` = `NoTimestamps` / `Continuous` / `Interrupted`. Unrolled packet
   offset from the origin is exact across a wrap and aligns with video on the
   same program clock.
+- **One canonical combiner.** `unrolled_offset_90k`/`unrolled_offset_ns` do the
+  raw/epoch/origin arithmetic (empty for an untimed packet or `NoTimestamps`),
+  so consumers do not repeat it; the video-side origin policy stays theirs.
 - **`pts_ns` is not "fixed" across a wrap.** Compatibility was an explicit
   requirement; the flags make the existing limitation visible instead.
 - **One scan, same parse as extraction.** The pre-pass reads each PES's PTS
