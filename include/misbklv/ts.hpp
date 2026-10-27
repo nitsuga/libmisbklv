@@ -218,20 +218,22 @@ class TsKlvStream {
   // short of a packet are ignored, as in the span overloads. No further calls.
   Result<std::monostate> finish(TsTimeline* timeline);
 
-  // Bookkeeping sizes, for tests and diagnostics: all are bounded independently of the input
-  // length.
+  // Bookkeeping sizes, for tests and diagnostics: all but expired_starts are bounded
+  // independently of the input length.
   struct Stats {
     std::size_t unresolved_starts;  // PES starts not yet observed (unresolved, or queued behind an
                                     // older start)
     std::size_t deferred_jobs;      // finished PES waiting for an earlier start to resolve
     std::size_t epoch_entries;      // wrap epochs retained for PES that may still be framed
     std::size_t pending_pes_bytes;
-    // Cumulative, not a bound: PES starts whose 14 header bytes had not arrived within
-    // kHeaderWindowPackets and were therefore resolved as untimed. Their PTS never reached the wrap
-    // unroller, so a wrap or an earlier origin only such a start would show goes unseen: the one
-    // way the result can differ from the span overload. A caller that must fail closed rejects a
-    // non-zero count. Starts cut off by the next PES start on the same PID, or by the end of the
-    // input, are not counted: the span overload cannot read their PTS either.
+    // Cumulative, not a bound: PES starts whose 14 header bytes had not arrived within 16384
+    // packets and were therefore resolved as untimed. A start whose header arrives later has a PTS
+    // that never reached the wrap unroller, so a wrap or an earlier origin only it would show goes
+    // unseen, the way the timeline can differ from the span overload. A caller that must fail
+    // closed rejects a non-zero count. The count is an upper bound on that divergence: it also
+    // counts a start whose header bytes never arrive (the next start on its PID or the end of the
+    // input comes first), which the span overload finds untimed too. A start cut off before the
+    // window expires is not counted.
     std::size_t expired_starts;
   };
   Stats stats() const;
