@@ -321,6 +321,10 @@ add_test(NAME ts_extract_timed_0x15 COMMAND ts_extract_test ${_timed_15} ${_basi
 add_executable(ts_timeline_test test/ts_timeline_test.cpp)
 target_link_libraries(ts_timeline_test PRIVATE misbklv)
 add_test(NAME ts_timeline COMMAND ts_timeline_test)
+add_executable(ts_stream_test test/ts_stream_test.cpp)
+target_link_libraries(ts_stream_test PRIVATE misbklv)
+target_compile_definitions(ts_stream_test PRIVATE MISBKLV_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures")
+add_test(NAME ts_stream COMMAND ts_stream_test)
 
 # --- Benchmark (issue #50) ---------------------------------------------------
 # Timing harness for the paths #50 parks work behind. Deliberately NOT an

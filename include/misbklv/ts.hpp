@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <span>
 
@@ -159,5 +160,73 @@ using TsPacketHandler = std::function<void(const TsKlvPacket&)>;
 // which source tick that was.
 Result<std::monostate> extract_ts_klv_timed(std::span<const std::byte> ts,
                                             const TsPacketHandler& on_packet, TsTimeline* timeline);
+
+// Incremental extraction for inputs too large to hold as one span (issue #115). The
+// stream is fed in arbitrary chunks (a chunk need not be packet-aligned; the
+// 188-byte grid starts at the first byte fed, like the span overloads) and is read
+// once, front to back. Memory is bounded by the pending PES bytes (the same
+// allowance as the span overloads), at most 16384 unresolved PES starts, and the
+// wrap epochs of PES that may still be framed, not by the input length; see Stats.
+//
+// Same extraction as extract_ts_klv_timed() (identical framing, PID selection,
+// errors, raw `source_pts_90k` and `pts_epoch` per packet, and the same final
+// TsTimeline), with two differences that follow from reading once:
+//  - The origin is the earliest PTS anywhere in the stream, which is unknown until
+//    the end, so `packet.pts_ns` is always `kNoPts`. Compute offsets after
+//    finish() with unrolled_offset_90k()/unrolled_offset_ns() and the final
+//    timeline, as extract_ts_klv_timed() callers already can.
+//  - After a terminal framing failure feed() keeps returning that error and stops
+//    extracting, but keeps scanning timestamps so finish() still fills the
+//    timeline for the whole stream, as the span overloads do. Callers that do not
+//    need the timeline may stop feeding.
+//
+// Wrap epochs are numbered in file order of PES starts, as in the span overloads.
+// A PES whose 14 header bytes span several packets resolves later than its start;
+// delivery of KLV packets waits for every earlier start to resolve, so epochs
+// match the span overloads. That wait is bounded: a start whose header bytes have
+// not all arrived within 16384 transport packets (about 3 MB) of its start is
+// treated as untimed. This is the one place the result can differ from the span
+// overloads, which wait for that PID's next packets however far away they are,
+// and the difference is not confined to that PES: its PTS is never shown to the
+// wrap unroller, so it can change the wrap epochs of later packets and the
+// timeline (wrap flag, origin), and if it is a KLV PES it is delivered with
+// `source_pts_90k == -1` (untimed). It only matters for a PES header split
+// across packets that far apart, or a damaged start, and it keeps one such start
+// from stalling every later delivery.
+// Pending PES bytes beyond the allowance above fail with ResourceLimit.
+//
+// Not thread-safe; handler calls happen on the feeding thread.
+class TsKlvStream {
+ public:
+  explicit TsKlvStream(TsPacketHandler on_packet);
+  ~TsKlvStream();
+  TsKlvStream(const TsKlvStream&) = delete;
+  TsKlvStream& operator=(const TsKlvStream&) = delete;
+
+  // Feeds the next bytes. Returns the first terminal framing failure so far, if
+  // any (sticky), otherwise ok. Packets completed by these bytes are delivered
+  // before it returns.
+  Result<std::monostate> feed(std::span<const std::byte> ts);
+
+  // Ends the stream: resolves pending timestamps, flushes the last PES of each PID
+  // and fills `timeline` (may be null). Returns what extract_ts_klv_timed() would
+  // for the same bytes: the first framing failure, Truncated for a final
+  // incomplete frame, Backend when no KLV PID was found, else ok. Trailing bytes
+  // short of a packet are ignored, as in the span overloads. No further calls.
+  Result<std::monostate> finish(TsTimeline* timeline);
+
+  // Bookkeeping sizes, for tests and diagnostics: all are bounded independently of the input length.
+  struct Stats {
+    std::size_t unresolved_starts;  // PES starts whose timestamp is not yet resolved
+    std::size_t deferred_jobs;      // finished PES waiting for an earlier start to resolve
+    std::size_t epoch_entries;      // wrap epochs retained for PES that may still be framed
+    std::size_t pending_pes_bytes;
+  };
+  Stats stats() const;
+
+ private:
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
+};
 
 }  // namespace misbklv

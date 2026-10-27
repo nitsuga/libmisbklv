@@ -58,3 +58,4 @@ diverge — e.g. fork 7 → ADR 0004; one fork can span several ADRs — fork 4 
 | 38 | [0042 — ST 1601 Geo-Registration LS as a typed nested registry, with a new MDARRAY (ST 1303) decode path (issue #95)](./0042-st1601-mdarray-registry.md) | accepted |
 | 39 | [0043 — ST 1206 SAR Motion Imagery LS as a typed nested registry (issue #95)](./0043-st1206-sarmi-nested-registry.md) | accepted |
 | —  | [0044 — Timestamp provenance from extract_ts_klv (issue #111)](./0044-ts-timestamp-provenance.md) | accepted |
+| —  | [0045 — Incremental TS KLV extraction (issue #115)](./0045-incremental-ts-extraction.md) | accepted |
