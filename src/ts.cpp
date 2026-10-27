@@ -423,6 +423,7 @@ struct TsKlvStream::Impl {
   detail::KlvFramer framer;
   std::optional<Error> frame_error;
   std::size_t pending_pes_bytes = 0;
+  std::size_t expired_starts = 0;
 
   // Extraction is terminal after a failure: release what it held. Timestamp scanning continues (so
   // finish() still fills the whole-stream timeline) but retains nothing for framing, so state stays
@@ -530,6 +531,7 @@ struct TsKlvStream::Impl {
     while (!pending.empty() && !pending.front().resolved &&
            slot - pending.front().start_slot >= kHeaderWindowPackets) {
       const Pending& front = pending.front();
+      ++expired_starts;
       Head& head = heads[front.pid];
       if (head.active && head.seq == drained) head.active = false;
       if (front.framed && !frame_error &&
@@ -620,7 +622,8 @@ TsKlvStream::~TsKlvStream() = default;
 
 TsKlvStream::Stats TsKlvStream::stats() const {
   const Impl& s = *impl_;
-  return {s.pending.size(), s.jobs.size(), s.epoch_at.size(), s.pending_pes_bytes};
+  return {s.pending.size(), s.jobs.size(), s.epoch_at.size(), s.pending_pes_bytes,
+          s.expired_starts};
 }
 
 Result<std::monostate> TsKlvStream::feed(std::span<const std::byte> ts) {

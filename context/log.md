@@ -2,6 +2,10 @@
 
 ## 2026-10-27
 
+* **`TsKlvStream::Stats::expired_starts`** ([`0045`](./decisions/0045-incremental-ts-extraction.md)): a cumulative
+  count of PES starts resolved as untimed because their header bytes did not arrive within the window, the one case
+  where the stream result can differ from the span overload. `ts_stream_test` pins it for the late-header and
+  damaged-start cases and requires 0 on the ordinary streams. For klvplayer#30. Author: claude/sonnet-5-5.
 * **Issue #115 implemented** ([`0045`](./decisions/0045-incremental-ts-extraction.md)):
   `TsKlvStream` extracts KLV from a transport stream fed in chunks, one pass, memory bounded by pending PES
   bytes, matching `extract_ts_klv_timed` except `pts_ns` is `kNoPts` and a PES header that arrives more than 16,384

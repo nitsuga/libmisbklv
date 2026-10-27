@@ -102,6 +102,7 @@ struct Out {
   };
   std::vector<P> packets;
   TsTimeline tl;
+  std::size_t expired_starts = 0;
   int status = 0;  // 0 ok, else 1 + Error
 };
 
@@ -137,6 +138,7 @@ Out stream(const std::vector<std::byte>& ts, std::size_t chunk, std::mt19937* ji
     off += n;
   }
   o.status = code(s.finish(&o.tl));
+  o.expired_starts = s.stats().expired_starts;
   return o;
 }
 
@@ -160,6 +162,7 @@ void compare(const std::vector<std::byte>& ts, const std::string& name) {
     check(got.packets == want.packets, tag + ": packets (" + std::to_string(got.packets.size()) +
                                            " vs " + std::to_string(want.packets.size()) + ")");
     check(same_timeline(got.tl, want.tl), tag + ": timeline");
+    check(got.expired_starts == 0, tag + ": no start expired");
   }
   const Out got = stream(ts, 0, &jitter);
   check(got.status == want.status && got.packets == want.packets && same_timeline(got.tl, want.tl),
@@ -297,6 +300,7 @@ int main() {
     TsTimeline tl;
     check(code(s.finish(&tl)) == want.status && want.status == 0,
           "damaged start: same result as the span overload");
+    check(s.stats().expired_starts == 1, "damaged start: counted as one expired start");
     check(delivered == want.packets.size() && same_timeline(tl, want.tl),
           "damaged start: same packets and timeline");
   }
@@ -338,6 +342,7 @@ int main() {
     const Out got = stream(ts, 4096);
     check(want.tl.origin_pts_90k == 1000, "late header: span overload sees the late PTS");
     check(got.tl.origin_pts_90k == 900'000, "late header: stream treats the start as untimed");
+    check(got.expired_starts == 1, "late header: the expired start is counted");
     check(got.status == want.status && got.packets == want.packets,
           "late header: packets and result still match");
   }
@@ -364,6 +369,7 @@ int main() {
     const Out got = stream(ts, 4096);
     check(want.tl.pts_wrap_observed && !got.tl.pts_wrap_observed,
           "late non-KLV start: the wrap goes unseen");
+    check(got.expired_starts == 1, "late non-KLV start: the expired start is counted");
     check(want.packets.size() == 3 && got.packets.size() == 3 && want.packets[0].epoch == 1 &&
               got.packets[0].epoch == 0,
           "late non-KLV start: later epochs differ");
@@ -389,6 +395,7 @@ int main() {
     const Out got = stream(ts, 4096);
     check(want.packets.size() == 2 && got.packets.size() == 2,
           "late KLV header: both packets delivered");
+    check(got.expired_starts == 1, "late KLV header: the expired start is counted");
     if (want.packets.size() == 2 && got.packets.size() == 2) {
       check(want.packets[1].src == 4000 && want.packets[1].epoch == 1,
             "late KLV header: span overload times it with the wrap epoch");

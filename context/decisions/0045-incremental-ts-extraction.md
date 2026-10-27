@@ -40,7 +40,9 @@ Add `TsKlvStream` (`feed()` in arbitrary chunks, `finish(TsTimeline*)`). The spa
   header whose remaining bytes arrive later than the window is timed there and untimed here, so its PTS never
   reaches the wrap unroller and can change the epochs of later packets and the timeline (wrap flag, origin); a KLV
   PES in that state is framed with `source_pts_90k == -1` rather than a PTS with a guessed epoch
-  (`test/ts_stream_test.cpp` pins all three).
+  (`test/ts_stream_test.cpp` pins all three). `Stats::expired_starts` counts such starts (cumulative), so a
+  caller that must fail closed can reject a non-zero count; starts cut off by the next PES start on the same PID
+  or by the end of the input are not counted, since the span overloads cannot read their PTS either.
 - **Epochs are retained only while needed.** A wrap epoch is kept for a PES start only while that PES may still
   be framed (before the KLV PID is chosen: any PID; after: the KLV PID) and is erased when it is framed or
   dropped, so a file that crosses a wrap does not grow state for the rest of the input (`Stats::epoch_entries`).

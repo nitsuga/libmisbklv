@@ -226,6 +226,13 @@ class TsKlvStream {
     std::size_t deferred_jobs;      // finished PES waiting for an earlier start to resolve
     std::size_t epoch_entries;      // wrap epochs retained for PES that may still be framed
     std::size_t pending_pes_bytes;
+    // Cumulative, not a bound: PES starts whose 14 header bytes had not arrived within
+    // kHeaderWindowPackets and were therefore resolved as untimed. Their PTS never reached the wrap
+    // unroller, so a wrap or an earlier origin only such a start would show goes unseen: the one
+    // way the result can differ from the span overload. A caller that must fail closed rejects a
+    // non-zero count. Starts cut off by the next PES start on the same PID, or by the end of the
+    // input, are not counted: the span overload cannot read their PTS either.
+    std::size_t expired_starts;
   };
   Stats stats() const;
 
