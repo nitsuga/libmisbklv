@@ -186,7 +186,7 @@ Opened here during scoping, each resolved by an ADR (see the
   (ADR 0015). The single biggest planned risk is gone.
 - **Live 0x15 extraction gap** — stock `tsdemux` cannot surface 0x15, so the
   live GStreamer path handles 0x06 only. The gst-free whole-buffer extractor
-  handles both offline; live 0x15 needs an incremental TS demux. Decided
+  handles both offline (`TsKlvStream`, ADR 0045, does so incrementally for files); live 0x15 needs an incremental TS demux fed from a live source. Decided
   unsupported on the live path, along with single-PID and the PTS-wrap limit:
   [`0039`](./decisions/0039-extraction-scope-and-error-policy.md).
 - **CI** — the gst backend is exercised in the main build/test job and a

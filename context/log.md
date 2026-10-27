@@ -4,7 +4,8 @@
 
 * **Issue #115 implemented** ([`0045`](./decisions/0045-incremental-ts-extraction.md)):
   `TsKlvStream` extracts KLV from a transport stream fed in chunks, one pass, memory bounded by pending PES
-  bytes, identical to `extract_ts_klv_timed` except `pts_ns` is `kNoPts`. Author: claude/sonnet-5-5.
+  bytes, matching `extract_ts_klv_timed` except `pts_ns` is `kNoPts` and a PES header that arrives more than 16,384
+  packets after its start is treated as untimed. Author: claude/sonnet-5-5.
 
 ## 2026-10-24
 

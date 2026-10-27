@@ -51,7 +51,8 @@ namespace misbklv {
 // Each packet carries `pts_ns` — nanoseconds from the start of the source,
 // measured from the earliest PTS anywhere in `ts` (ADR 0021), or `kNoPts` if
 // its PES was untimed. `ts` must therefore be the whole stream: extracting from
-// a chunk re-anchors the timeline to that chunk.
+// a chunk re-anchors the timeline to that chunk (for input fed in chunks use
+// TsKlvStream below).
 //
 // PTS wrap limit: PTS is 33 bits and wraps about every 26.5 h. A capture that
 // crosses the wrap gets `pts_ns` about 26.5 h off, because the origin is the
@@ -165,8 +166,8 @@ Result<std::monostate> extract_ts_klv_timed(std::span<const std::byte> ts,
 // stream is fed in arbitrary chunks (a chunk need not be packet-aligned; the
 // 188-byte grid starts at the first byte fed, like the span overloads) and is read
 // once, front to back. Memory is bounded by the pending PES bytes (the same
-// allowance as the span overloads), at most 16384 PES starts awaiting a timestamp
-// (unresolved, or resolved but queued behind an older one), and the wrap epochs
+// allowance as the span overloads), the PES starts awaiting a timestamp (a start
+// is resolved or expired within 16384 packets, which bounds how many can wait), and the wrap epochs
 // of PES that may still be framed, not by the input length; see Stats. After a
 // framing failure nothing is retained for framing, so feeding on stays bounded.
 //

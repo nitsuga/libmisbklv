@@ -1,7 +1,7 @@
 ---
 type: Decision
 title: ADR 0045 — Incremental TS KLV extraction (issue #115)
-description: TsKlvStream reads a transport stream once in arbitrary chunks, with memory bounded by pending PES bytes, and matches extract_ts_klv_timed packet for packet.
+description: TsKlvStream reads a transport stream once in arbitrary chunks, with memory bounded by pending PES bytes, and matches extract_ts_klv_timed except for pts_ns and a bounded header window.
 decision_status: accepted
 tags: [decision, extraction, streaming, pts]
 generated:
@@ -25,8 +25,8 @@ multi-GiB local files (nitsuga/klvplayer#27).
 Add `TsKlvStream` (`feed()` in arbitrary chunks, `finish(TsTimeline*)`). The span overloads are unchanged.
 
 - **One pass.** The origin is the minimum PTS over the whole stream and is unknown until the end, so streamed
-  packets carry `pts_ns == kNoPts`; the raw `source_pts_90k`, `pts_epoch` and the final `TsTimeline` are exactly
-  what `extract_ts_klv_timed` reports, and callers compute offsets after `finish()` with `unrolled_offset_90k`.
+  packets carry `pts_ns == kNoPts`; the raw `source_pts_90k`, `pts_epoch` and the final `TsTimeline` are what
+  `extract_ts_klv_timed` reports (except in the header-window case below), and callers compute offsets after `finish()` with `unrolled_offset_90k`.
 - **Pre-pass becomes accumulators.** Each PID gathers the 14 PES header bytes the span version looked ahead for
   (same rules: non-sync slots skipped, payload-less packets skipped, the PID's next PES start ends the gather).
   Starts resolve out of order but are observed by the wrap unroller in file order, so epochs match.
@@ -58,8 +58,9 @@ incomplete PES, competing candidate PIDs, bad BER lengths, truncated tails), und
 payload-less start are still delivered before `finish()`), bounded epoch state over a 220,000-PES run that crosses
 a wrap, and the window difference above. Deliberate defects each failed the suite: running PES jobs without
 waiting for earlier starts, dropping an incomplete header at the next start, disabling the window, and never
-erasing epochs. On a 253 MiB synthetic stream (warm cache) the
-stream took 0.11 s to read and extract; this is one machine and one stream, not a benchmark.
+erasing epochs (found by hand during review, not recorded as a test). On one 253 MiB synthetic stream (warm cache)
+the stream took about 0.1 s to read and extract against about 2.6 s for reading it into memory and running the
+span overload; an ad hoc measurement on one machine, not recorded in the repo and not a benchmark.
 
 # Consequences
 
