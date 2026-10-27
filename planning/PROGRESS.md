@@ -8,7 +8,7 @@ chronological history (what landed when, milestone/decision detail) lives in
 
 ## Now
 
-No active implementation. #107 awaits an authorized VMTI source or profile;
+#115 (incremental `TsKlvStream`, ADR 0045) is in review. #107 awaits an authorized VMTI source or profile;
 #50 (benchmark) is parked.
 
 <!-- Keep this section about where the WORK is. A sentence that would still be

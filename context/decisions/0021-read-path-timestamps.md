@@ -129,7 +129,8 @@ specified for what it can actually see.
   raw PTS needed to unroll it.
 - **`extract_ts_klv` wants the whole stream.** Its origin is the minimum over
   the buffer it is handed, so extracting from a mid-file chunk re-anchors the
-  timeline to that chunk. Documented on the function.
+  timeline to that chunk. Documented on the function. For input fed in chunks,
+  `TsKlvStream` ([`0045`](./0045-incremental-ts-extraction.md)) reads once and reports the origin at the end.
 - Live sources report running time from when the demuxer's segment opened, which
   for `udp`/`srt` is the start of *reception*, not of the sender's file. Nothing
   else is knowable at the receiver.

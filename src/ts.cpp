@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <deque>
 #include <optional>
 #include <unordered_map>
 #include <vector>
@@ -352,6 +353,328 @@ Result<std::monostate> extract_ts_klv_timed(std::span<const std::byte> ts,
   if (frame_error) return Result<std::monostate>::err(*frame_error);
   return klv_pid >= 0 ? Result<std::monostate>::ok({})
                       : Result<std::monostate>::err(Error::Backend);
+}
+
+// ---------------------------------------------------------------------------
+// Incremental extraction. The logic below is deliberately the span overload's,
+// split so each step needs only the bytes seen so far: the timestamp pre-pass
+// becomes per-PID header accumulators resolved in PES-start order, and the PES
+// flush is deferred (in order) until the wrap epoch of its start is known.
+
+struct TsKlvStream::Impl {
+  // A PES start whose 14 header bytes have not arrived this many transport packets later is treated
+  // as untimed. The span overload waits for that PID's next packets however far away they are;
+  // waiting here would stall every later delivery behind one damaged packet.
+  static constexpr std::uint64_t kHeaderWindowPackets = 16384;
+
+  struct Head {
+    bool active = false;  // a PES start whose 14 header bytes are still being gathered
+    std::uint64_t seq = 0;
+    std::array<std::byte, 14> bytes{};
+    std::size_t n = 0;
+  };
+  struct Pending {
+    bool resolved = false;
+    std::int64_t pts = -1;
+    std::uint16_t pid = 0;
+    std::uint64_t start_slot = 0;
+    bool framed = true;  // extraction can own this start (it has payload bytes); otherwise no job
+                         // will use its epoch
+  };
+  struct EpochEntry {
+    std::int32_t epoch;
+    std::uint16_t pid;
+  };
+  struct Job {
+    std::uint16_t pid;
+    std::vector<std::byte> bytes;
+    std::uint64_t seq;
+  };
+
+  explicit Impl(TsPacketHandler handler) : on_packet(std::move(handler)) {}
+
+  TsPacketHandler on_packet;
+  std::array<std::byte, kPkt> carry{};
+  std::size_t carry_n = 0;
+
+  // Timestamp scan.
+  std::array<Head, 8192> heads;
+  std::deque<Pending> pending;  // PES starts [drained, started), oldest first
+  std::uint64_t started = 0;
+  std::uint64_t drained = 0;  // every start below this has been observed
+  PtsUnroller unroller;
+  // Nonzero epochs of PES starts that may still be framed (the open PES of a candidate or KLV PID,
+  // or a queued job); an entry is erased when its PES is framed or dropped. kUntimed marks a start
+  // that expired unresolved: its PES is framed with no PTS rather than with a PTS and a guessed
+  // epoch.
+  static constexpr std::int32_t kUntimed = INT32_MIN;
+  std::unordered_map<std::uint64_t, EpochEntry> epoch_at;
+  std::uint64_t slot = 0;
+  std::int64_t origin_90k = -1;
+  std::int32_t origin_epoch = 0;
+  bool any_pts = false;
+  bool discontinuity = false;
+
+  // Extraction.
+  std::unordered_map<std::uint16_t, std::vector<std::byte>> pes;
+  std::unordered_map<std::uint16_t, std::uint64_t> pes_seq;
+  std::deque<Job> jobs;
+  int klv_pid = -1;
+  detail::KlvFramer framer;
+  std::optional<Error> frame_error;
+  std::size_t pending_pes_bytes = 0;
+
+  // Extraction is terminal after a failure: release what it held. Timestamp scanning continues (so
+  // finish() still fills the whole-stream timeline) but retains nothing for framing, so state stays
+  // bounded however much is fed. A job running when this is called subtracts its own bytes when it
+  // returns.
+  void fail(Error e) {
+    if (!frame_error) frame_error = e;
+    for (const Job& job : jobs) pending_pes_bytes -= job.bytes.size();
+    jobs.clear();
+    for (auto& entry : pes) release(entry.second);
+    epoch_at.clear();
+  }
+
+  void resolve(std::uint64_t seq, std::int64_t pts) {
+    const auto index = static_cast<std::size_t>(seq - drained);
+    pending[index].resolved = true;
+    pending[index].pts = pts;
+    while (!pending.empty() && pending.front().resolved) {
+      const std::int64_t value = pending.front().pts;
+      const std::uint16_t pid = pending.front().pid;
+      const bool framed = pending.front().framed;
+      pending.pop_front();
+      if (value >= 0) {
+        any_pts = true;
+        const std::int32_t epoch = unroller.observe(value);
+        if (epoch != 0 && framed && !frame_error &&
+            (klv_pid < 0 || pid == static_cast<std::uint16_t>(klv_pid)))
+          epoch_at[drained] = {epoch, pid};
+        if (origin_90k < 0 || value < origin_90k) {
+          origin_90k = value;
+          origin_epoch = epoch;
+        }
+      }
+      ++drained;
+    }
+  }
+
+  void release(std::vector<std::byte>& bytes) {
+    pending_pes_bytes -= bytes.size();
+    std::vector<std::byte>().swap(bytes);
+  }
+
+  void run(Job& job) {
+    if (job.bytes.empty()) return;
+    const auto [cells, malformed] = unwrap_pes(job.bytes);
+    if (klv_pid < 0 && std::any_of(cells.begin(), cells.end(), starts_with_ul)) {
+      klv_pid = job.pid;
+      std::erase_if(epoch_at, [&](const auto& entry) { return entry.second.pid != job.pid; });
+      for (auto& [candidate, bytes] : pes) {
+        if (candidate == job.pid) continue;
+        release(bytes);
+      }
+    }
+    if (klv_pid >= 0 && job.pid == static_cast<std::uint16_t>(klv_pid) && !frame_error) {
+      std::int64_t pts90 = pes_pts_90k(job.bytes);
+      std::int32_t epoch = 0;
+      if (const auto e = epoch_at.find(job.seq); e != epoch_at.end()) {
+        if (e->second.epoch == kUntimed)
+          pts90 = -1;
+        else
+          epoch = e->second.epoch;
+      }
+      const PacketHandler deliver = [&](const KlvPacket& kp) {
+        const auto aux = framer.packet_aux();
+        on_packet(TsKlvPacket{kp, aux.source_pts_90k, aux.pts_epoch});
+      };
+      for (const auto cell : cells) {
+        const auto error = framer.feed(cell, kNoPts, deliver, {pts90, epoch});
+        if (error) {
+          fail(*error);
+          break;
+        }
+      }
+      if (!frame_error && malformed) fail(Error::BadLength);
+    }
+    epoch_at.erase(job.seq);
+    pending_pes_bytes -= job.bytes.size();
+  }
+
+  void run_ready() {
+    while (!jobs.empty() && !frame_error && jobs.front().seq < drained) {
+      Job job = std::move(jobs.front());
+      jobs.pop_front();
+      run(job);
+    }
+  }
+
+  void flush(std::uint16_t pid) {
+    auto it = pes.find(pid);
+    if (it == pes.end() || it->second.empty()) {
+      if (const auto seq = pes_seq.find(pid); seq != pes_seq.end()) epoch_at.erase(seq->second);
+      return;
+    }
+    Job job{pid, std::move(it->second), pes_seq[pid]};
+    it->second = std::vector<std::byte>();
+    if (!jobs.empty() || job.seq >= drained) {
+      jobs.push_back(std::move(job));
+    } else {
+      run(job);
+    }
+  }
+
+  // Resolves, as untimed, starts still waiting for header bytes long after they began.
+  void expire_stale_starts() {
+    while (!pending.empty() && !pending.front().resolved &&
+           slot - pending.front().start_slot >= kHeaderWindowPackets) {
+      const Pending& front = pending.front();
+      Head& head = heads[front.pid];
+      if (head.active && head.seq == drained) head.active = false;
+      if (front.framed && !frame_error &&
+          (klv_pid < 0 || front.pid == static_cast<std::uint16_t>(klv_pid)))
+        epoch_at[drained] = {kUntimed, front.pid};
+      resolve(drained, -1);
+    }
+  }
+
+  void packet(std::span<const std::byte> p) {
+    ++slot;
+    if (u8(p, 0) != 0x47) return;
+    const std::uint8_t b1 = u8(p, 1);
+    const std::uint16_t pid = ((b1 & 0x1f) << 8) | u8(p, 2);
+    const bool pusi = (b1 >> 6) & 1;
+    const std::uint8_t afc = (u8(p, 3) >> 4) & 3;
+    if ((afc & 2) && u8(p, 4) >= 1 && (u8(p, 5) & 0x80)) discontinuity = true;
+    std::size_t off = 4;
+    if (afc & 2) off += 1 + u8(p, 4);
+    const bool has_payload = (afc & 1) && off <= kPkt;
+
+    {
+      Head& head = heads[pid];
+      if (pusi) {
+        if (head.active) resolve(head.seq, -1);  // the next PES began before 14 bytes arrived
+        head = Head{};
+        head.active = true;
+        head.seq = started++;
+        pending.push_back({false, -1, pid, slot, has_payload && off < kPkt});
+      }
+      if (head.active && has_payload) {
+        const std::size_t take = std::min(head.bytes.size() - head.n, kPkt - off);
+        std::copy_n(p.begin() + off, take, head.bytes.begin() + head.n);
+        head.n += take;
+        if (head.n == head.bytes.size()) {
+          head.active = false;
+          const bool start_code =
+              u8(head.bytes, 0) == 0 && u8(head.bytes, 1) == 0 && u8(head.bytes, 2) == 1;
+          resolve(head.seq, start_code ? pes_pts_90k(head.bytes) : -1);
+        }
+      }
+      expire_stale_starts();
+    }
+
+    if (frame_error) return;
+    run_ready();
+    if (frame_error) return;
+    if (klv_pid >= 0 && pid != static_cast<std::uint16_t>(klv_pid)) return;
+    if (!has_payload) return;
+    const auto payload = p.subspan(off);
+    if (pusi) {
+      flush(pid);
+      if (frame_error) return;
+      if (payload.size() > kMaxPendingPesBytes - pending_pes_bytes) {
+        fail(Error::ResourceLimit);
+        return;
+      }
+      pes_seq[pid] = started - 1;
+      auto& current = pes[pid];
+      current.assign(payload.begin(), payload.end());
+      pending_pes_bytes += current.size();
+    } else {
+      auto it = pes.find(pid);
+      if (it != pes.end() && !it->second.empty()) {
+        if (payload.size() > kMaxPendingPesBytes - pending_pes_bytes) {
+          fail(Error::ResourceLimit);
+        } else {
+          // Same false -Wstringop-overflow as the span overload (issue #41): payload is at most
+          // 184 bytes and the destination is non-empty.
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
+          it->second.insert(it->second.end(), payload.begin(), payload.end());
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
+          pending_pes_bytes += payload.size();
+        }
+      }
+    }
+  }
+};
+
+TsKlvStream::TsKlvStream(TsPacketHandler on_packet)
+    : impl_(std::make_unique<Impl>(std::move(on_packet))) {}
+TsKlvStream::~TsKlvStream() = default;
+
+TsKlvStream::Stats TsKlvStream::stats() const {
+  const Impl& s = *impl_;
+  return {s.pending.size(), s.jobs.size(), s.epoch_at.size(), s.pending_pes_bytes};
+}
+
+Result<std::monostate> TsKlvStream::feed(std::span<const std::byte> ts) {
+  Impl& s = *impl_;
+  if (s.carry_n) {
+    const std::size_t take = std::min(kPkt - s.carry_n, ts.size());
+    std::copy_n(ts.begin(), take, s.carry.begin() + s.carry_n);
+    s.carry_n += take;
+    ts = ts.subspan(take);
+    if (s.carry_n < kPkt)
+      return s.frame_error ? Result<std::monostate>::err(*s.frame_error)
+                           : Result<std::monostate>::ok({});
+    s.packet(s.carry);
+    s.carry_n = 0;
+  }
+  while (ts.size() >= kPkt) {
+    s.packet(ts.first(kPkt));
+    ts = ts.subspan(kPkt);
+  }
+  std::copy(ts.begin(), ts.end(), s.carry.begin());
+  s.carry_n = ts.size();
+  return s.frame_error ? Result<std::monostate>::err(*s.frame_error)
+                       : Result<std::monostate>::ok({});
+}
+
+Result<std::monostate> TsKlvStream::finish(TsTimeline* timeline) {
+  Impl& s = *impl_;
+  for (std::size_t pid = 0; pid < s.heads.size(); ++pid) {
+    auto& head = s.heads[pid];
+    if (head.active) {
+      head.active = false;
+      s.resolve(head.seq, -1);
+    }
+  }
+  s.run_ready();
+  if (!s.frame_error) {
+    for (auto& [pid, _] : s.pes) s.flush(pid);
+    s.run_ready();
+    if (!s.frame_error && !s.framer.remainder().empty()) s.frame_error = Error::Truncated;
+  }
+  if (timeline) {
+    timeline->origin_pts_90k = s.origin_90k;
+    timeline->origin_pts_epoch = s.origin_epoch;
+    timeline->pts_wrap_observed = s.unroller.wrapped();
+    timeline->pts_regression_observed = s.unroller.regressed();
+    timeline->discontinuity_indicator_observed = s.discontinuity;
+    timeline->continuity = !s.any_pts ? TsTimeline::Continuity::NoTimestamps
+                           : (s.unroller.wrapped() || s.unroller.regressed() || s.discontinuity)
+                               ? TsTimeline::Continuity::Interrupted
+                               : TsTimeline::Continuity::Continuous;
+  }
+  if (s.frame_error) return Result<std::monostate>::err(*s.frame_error);
+  return s.klv_pid >= 0 ? Result<std::monostate>::ok({})
+                        : Result<std::monostate>::err(Error::Backend);
 }
 
 }  // namespace misbklv
