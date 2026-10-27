@@ -215,7 +215,8 @@ class TsKlvStream {
   // and fills `timeline` (may be null). Returns what extract_ts_klv_timed() would
   // for the same bytes: the first framing failure, Truncated for a final
   // incomplete frame, Backend when no KLV PID was found, else ok. Trailing bytes
-  // short of a packet are ignored, as in the span overloads. No further calls.
+  // short of a packet are ignored, as in the span overloads. No further feed() or finish() calls;
+  // stats() stays valid.
   Result<std::monostate> finish(TsTimeline* timeline);
 
   // Bookkeeping sizes, for tests and diagnostics: all but expired_starts are bounded
@@ -230,10 +231,10 @@ class TsKlvStream {
     // packets and were therefore resolved as untimed. A start whose header arrives later has a PTS
     // that never reached the wrap unroller, so a wrap or an earlier origin only it would show goes
     // unseen, the way the timeline can differ from the span overload. A caller that must fail
-    // closed rejects a non-zero count. The count is an upper bound on that divergence: it also
-    // counts a start whose header bytes never arrive (the next start on its PID or the end of the
-    // input comes first), which the span overload finds untimed too. A start cut off before the
-    // window expires is not counted.
+    // closed rejects a non-zero count. The count is an upper bound on that divergence: a start
+    // whose window expired and whose header bytes then never complete (its PID's next start or the
+    // end of the input comes first) is counted too, though the span overload finds it untimed as
+    // well. A start cut off before the window expires is not counted.
     std::size_t expired_starts;
   };
   Stats stats() const;

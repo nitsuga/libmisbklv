@@ -167,6 +167,7 @@ void compare(const std::vector<std::byte>& ts, const std::string& name) {
   const Out got = stream(ts, 0, &jitter);
   check(got.status == want.status && got.packets == want.packets && same_timeline(got.tl, want.tl),
         name + ": jittered chunks");
+  check(got.expired_starts == 0, name + ": jittered chunks: no start expired");
 }
 
 constexpr std::int64_t kMod = TsTimeline::kPtsModulus;
@@ -345,6 +346,21 @@ int main() {
     check(got.expired_starts == 1, "late header: the expired start is counted");
     check(got.status == want.status && got.packets == want.packets,
           "late header: packets and result still match");
+  }
+  // Two starts on different PIDs expire: each is counted.
+  {
+    std::vector<std::byte> a, b;
+    add(a, 0x103, pes(1000, {B(0)}), false, 5);
+    add(b, 0x104, pes(2000, {B(0)}), false, 5);
+    std::vector<std::byte> ts(a.begin(), a.begin() + 188);
+    ts.insert(ts.end(), b.begin(), b.begin() + 188);
+    for (int i = 0; i < 17000; ++i) add(ts, 0x100, pes(900'000 + 3000 * i, {B(0)}));
+    ts.insert(ts.end(), a.begin() + 188, a.end());
+    ts.insert(ts.end(), b.begin() + 188, b.end());
+    add(ts, 0x101, pes(950'000, klv(1)));
+    const Out got = stream(ts, 4096);
+    check(got.expired_starts == 2, "two late headers: both expired starts are counted (" +
+                                       std::to_string(got.expired_starts) + ")");
   }
   // The window can also change later epochs (a late PTS is never shown to the unroller) and the
   // wrap flag; and a KLV PES whose own header is late is framed untimed rather than with a PTS and
