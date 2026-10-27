@@ -165,8 +165,10 @@ Result<std::monostate> extract_ts_klv_timed(std::span<const std::byte> ts,
 // stream is fed in arbitrary chunks (a chunk need not be packet-aligned; the
 // 188-byte grid starts at the first byte fed, like the span overloads) and is read
 // once, front to back. Memory is bounded by the pending PES bytes (the same
-// allowance as the span overloads), at most 16384 unresolved PES starts, and the
-// wrap epochs of PES that may still be framed, not by the input length; see Stats.
+// allowance as the span overloads), at most 16384 PES starts awaiting a timestamp
+// (unresolved, or resolved but queued behind an older one), and the wrap epochs
+// of PES that may still be framed, not by the input length; see Stats. After a
+// framing failure nothing is retained for framing, so feeding on stays bounded.
 //
 // Same extraction as extract_ts_klv_timed() (identical framing, PID selection,
 // errors, raw `source_pts_90k` and `pts_epoch` per packet, and the same final
@@ -215,9 +217,11 @@ class TsKlvStream {
   // short of a packet are ignored, as in the span overloads. No further calls.
   Result<std::monostate> finish(TsTimeline* timeline);
 
-  // Bookkeeping sizes, for tests and diagnostics: all are bounded independently of the input length.
+  // Bookkeeping sizes, for tests and diagnostics: all are bounded independently of the input
+  // length.
   struct Stats {
-    std::size_t unresolved_starts;  // PES starts whose timestamp is not yet resolved
+    std::size_t unresolved_starts;  // PES starts not yet observed (unresolved, or queued behind an
+                                    // older start)
     std::size_t deferred_jobs;      // finished PES waiting for an earlier start to resolve
     std::size_t epoch_entries;      // wrap epochs retained for PES that may still be framed
     std::size_t pending_pes_bytes;

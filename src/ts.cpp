@@ -355,7 +355,6 @@ Result<std::monostate> extract_ts_klv_timed(std::span<const std::byte> ts,
                       : Result<std::monostate>::err(Error::Backend);
 }
 
-
 // ---------------------------------------------------------------------------
 // Incremental extraction. The logic below is deliberately the span overload's,
 // split so each step needs only the bytes seen so far: the timestamp pre-pass
@@ -363,9 +362,9 @@ Result<std::monostate> extract_ts_klv_timed(std::span<const std::byte> ts,
 // flush is deferred (in order) until the wrap epoch of its start is known.
 
 struct TsKlvStream::Impl {
-  // A PES start whose 14 header bytes have not arrived this many transport packets later is treated as untimed.
-  // The span overload waits for that PID's next packets however far away they are; waiting here would stall every
-  // later delivery behind one damaged packet.
+  // A PES start whose 14 header bytes have not arrived this many transport packets later is treated
+  // as untimed. The span overload waits for that PID's next packets however far away they are;
+  // waiting here would stall every later delivery behind one damaged packet.
   static constexpr std::uint64_t kHeaderWindowPackets = 16384;
 
   struct Head {
@@ -379,7 +378,8 @@ struct TsKlvStream::Impl {
     std::int64_t pts = -1;
     std::uint16_t pid = 0;
     std::uint64_t start_slot = 0;
-    bool framed = true;  // extraction can own this start (it has payload bytes); otherwise no job will use its epoch
+    bool framed = true;  // extraction can own this start (it has payload bytes); otherwise no job
+                         // will use its epoch
   };
   struct EpochEntry {
     std::int32_t epoch;
@@ -403,9 +403,10 @@ struct TsKlvStream::Impl {
   std::uint64_t started = 0;
   std::uint64_t drained = 0;  // every start below this has been observed
   PtsUnroller unroller;
-  // Nonzero epochs of PES starts that may still be framed (the open PES of a candidate or KLV PID, or a queued
-  // job); an entry is erased when its PES is framed or dropped. kUntimed marks a start that expired unresolved:
-  // its PES is framed with no PTS rather than with a PTS and a guessed epoch.
+  // Nonzero epochs of PES starts that may still be framed (the open PES of a candidate or KLV PID,
+  // or a queued job); an entry is erased when its PES is framed or dropped. kUntimed marks a start
+  // that expired unresolved: its PES is framed with no PTS rather than with a PTS and a guessed
+  // epoch.
   static constexpr std::int32_t kUntimed = INT32_MIN;
   std::unordered_map<std::uint64_t, EpochEntry> epoch_at;
   std::uint64_t slot = 0;
@@ -423,10 +424,16 @@ struct TsKlvStream::Impl {
   std::optional<Error> frame_error;
   std::size_t pending_pes_bytes = 0;
 
+  // Extraction is terminal after a failure: release what it held. Timestamp scanning continues (so
+  // finish() still fills the whole-stream timeline) but retains nothing for framing, so state stays
+  // bounded however much is fed. A job running when this is called subtracts its own bytes when it
+  // returns.
   void fail(Error e) {
     if (!frame_error) frame_error = e;
     for (const Job& job : jobs) pending_pes_bytes -= job.bytes.size();
     jobs.clear();
+    for (auto& entry : pes) release(entry.second);
+    epoch_at.clear();
   }
 
   void resolve(std::uint64_t seq, std::int64_t pts) {
@@ -441,7 +448,8 @@ struct TsKlvStream::Impl {
       if (value >= 0) {
         any_pts = true;
         const std::int32_t epoch = unroller.observe(value);
-        if (epoch != 0 && framed && (klv_pid < 0 || pid == static_cast<std::uint16_t>(klv_pid)))
+        if (epoch != 0 && framed && !frame_error &&
+            (klv_pid < 0 || pid == static_cast<std::uint16_t>(klv_pid)))
           epoch_at[drained] = {epoch, pid};
         if (origin_90k < 0 || value < origin_90k) {
           origin_90k = value;
@@ -472,8 +480,10 @@ struct TsKlvStream::Impl {
       std::int64_t pts90 = pes_pts_90k(job.bytes);
       std::int32_t epoch = 0;
       if (const auto e = epoch_at.find(job.seq); e != epoch_at.end()) {
-        if (e->second.epoch == kUntimed) pts90 = -1;
-        else epoch = e->second.epoch;
+        if (e->second.epoch == kUntimed)
+          pts90 = -1;
+        else
+          epoch = e->second.epoch;
       }
       const PacketHandler deliver = [&](const KlvPacket& kp) {
         const auto aux = framer.packet_aux();
@@ -481,7 +491,10 @@ struct TsKlvStream::Impl {
       };
       for (const auto cell : cells) {
         const auto error = framer.feed(cell, kNoPts, deliver, {pts90, epoch});
-        if (error) { fail(*error); break; }
+        if (error) {
+          fail(*error);
+          break;
+        }
       }
       if (!frame_error && malformed) fail(Error::BadLength);
     }
@@ -519,7 +532,8 @@ struct TsKlvStream::Impl {
       const Pending& front = pending.front();
       Head& head = heads[front.pid];
       if (head.active && head.seq == drained) head.active = false;
-      if (front.framed && (klv_pid < 0 || front.pid == static_cast<std::uint16_t>(klv_pid)))
+      if (front.framed && !frame_error &&
+          (klv_pid < 0 || front.pid == static_cast<std::uint16_t>(klv_pid)))
         epoch_at[drained] = {kUntimed, front.pid};
       resolve(drained, -1);
     }
@@ -552,7 +566,8 @@ struct TsKlvStream::Impl {
         head.n += take;
         if (head.n == head.bytes.size()) {
           head.active = false;
-          const bool start_code = u8(head.bytes, 0) == 0 && u8(head.bytes, 1) == 0 && u8(head.bytes, 2) == 1;
+          const bool start_code =
+              u8(head.bytes, 0) == 0 && u8(head.bytes, 1) == 0 && u8(head.bytes, 2) == 1;
           resolve(head.seq, start_code ? pes_pts_90k(head.bytes) : -1);
         }
       }
@@ -599,7 +614,8 @@ struct TsKlvStream::Impl {
   }
 };
 
-TsKlvStream::TsKlvStream(TsPacketHandler on_packet) : impl_(std::make_unique<Impl>(std::move(on_packet))) {}
+TsKlvStream::TsKlvStream(TsPacketHandler on_packet)
+    : impl_(std::make_unique<Impl>(std::move(on_packet))) {}
 TsKlvStream::~TsKlvStream() = default;
 
 TsKlvStream::Stats TsKlvStream::stats() const {
@@ -614,7 +630,9 @@ Result<std::monostate> TsKlvStream::feed(std::span<const std::byte> ts) {
     std::copy_n(ts.begin(), take, s.carry.begin() + s.carry_n);
     s.carry_n += take;
     ts = ts.subspan(take);
-    if (s.carry_n < kPkt) return s.frame_error ? Result<std::monostate>::err(*s.frame_error) : Result<std::monostate>::ok({});
+    if (s.carry_n < kPkt)
+      return s.frame_error ? Result<std::monostate>::err(*s.frame_error)
+                           : Result<std::monostate>::ok({});
     s.packet(s.carry);
     s.carry_n = 0;
   }
@@ -624,7 +642,8 @@ Result<std::monostate> TsKlvStream::feed(std::span<const std::byte> ts) {
   }
   std::copy(ts.begin(), ts.end(), s.carry.begin());
   s.carry_n = ts.size();
-  return s.frame_error ? Result<std::monostate>::err(*s.frame_error) : Result<std::monostate>::ok({});
+  return s.frame_error ? Result<std::monostate>::err(*s.frame_error)
+                       : Result<std::monostate>::ok({});
 }
 
 Result<std::monostate> TsKlvStream::finish(TsTimeline* timeline) {
@@ -654,7 +673,8 @@ Result<std::monostate> TsKlvStream::finish(TsTimeline* timeline) {
                                : TsTimeline::Continuity::Continuous;
   }
   if (s.frame_error) return Result<std::monostate>::err(*s.frame_error);
-  return s.klv_pid >= 0 ? Result<std::monostate>::ok({}) : Result<std::monostate>::err(Error::Backend);
+  return s.klv_pid >= 0 ? Result<std::monostate>::ok({})
+                        : Result<std::monostate>::err(Error::Backend);
 }
 
 }  // namespace misbklv
