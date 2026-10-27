@@ -232,9 +232,9 @@ class TsKlvStream {
     // that never reached the wrap unroller, so a wrap or an earlier origin only it would show goes
     // unseen, the way the timeline can differ from the span overload. A caller that must fail
     // closed rejects a non-zero count. The count is an upper bound on that divergence: a start
-    // whose window expired and whose header bytes then never complete (its PID's next start or the
-    // end of the input comes first) is counted too, though the span overload finds it untimed as
-    // well. A start cut off before the window expires is not counted.
+    // whose window expired and whose header bytes then never complete is counted too, at expiry,
+    // though the span overload finds it untimed as well. A start cut off before the window expires
+    // is not counted.
     std::size_t expired_starts;
   };
   Stats stats() const;
